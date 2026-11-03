@@ -16,6 +16,7 @@ def practice_facts(**changes):
         never_convicted=True, other_cases_pending=False, more_than_one_section=False,
         question_answered=False, delay_days_by_accused=0,
         lawyer="Legal aid lawyer", offence_name="",
+        offence_date=date(2024, 2, 15),  # case notes: "The offence was in February 2024"
     )
     values.update(changes)
     return UndertrialFacts(**values)
@@ -32,7 +33,7 @@ def practice_draft(**changes):
 def test_practice_case_draft():
     _, _, text = practice_draft()
     assert text.startswith(DRAFT_HEADER)
-    assert "- Sections charged: BNS 305 / IPC 380" in text
+    assert "- Sections charged: IPC 380 (now BNS 305)\n" in text
     assert "- Maximum punishment for the offence: 7 years (84 months) (as per BNS 305)" in text
     assert "- Date custody began: 15 March 2024" in text
     assert "- Period in custody as on today: 31 months 18 days (as on 2 November 2026)" in text
@@ -204,3 +205,145 @@ def test_case_file_has_no_personal_details(tmp_path):
     case = (tmp_path / "cases" / f"{case_id}.md").read_text(encoding="utf-8")
     assert not drafts.personal_details_found(case)
     assert "No names or personal details" in case
+
+
+# ---------- offence date decides the section wording ----------
+
+@pytest.mark.parametrize("offence_date, expected", [
+    (date(2024, 6, 30), "- Sections charged: IPC 325 (now BNS 117(2))\n"),
+    (date(2024, 7, 1), "- Sections charged: BNS 117(2) (earlier IPC 325)\n"),
+    (date(2025, 3, 1), "- Sections charged: BNS 117(2) (earlier IPC 325)\n"),
+])
+def test_section_wording_depends_on_offence_date(offence_date, expected):
+    _, _, text = practice_draft(section_typed="325", offence_date=offence_date)
+    assert expected in text
+
+
+def test_typing_the_bns_section_gives_the_same_wording():
+    _, _, text = practice_draft(law_typed="BNS", section_typed="305", offence_date=date(2024, 2, 15))
+    assert "- Sections charged: IPC 380 (now BNS 305)\n" in text
+
+
+def test_new_bns_offence_wording():
+    _, _, after = practice_draft(law_typed="BNS", section_typed="304(2)", offence_date=date(2025, 1, 1))
+    assert "BNS 304(2) (new offence, no single IPC equivalent)" in after
+    _, _, before = practice_draft(law_typed="BNS", section_typed="304(2)", offence_date=date(2024, 1, 1))
+    assert "IPC [___] (now BNS 304(2), a new offence in the BNS)" in before
+
+
+def test_dlsa_statement_and_case_file_use_same_wording(tmp_path):
+    _, _, text = practice_draft(lawyer="None")
+    assert "charged under IPC 380 (now BNS 305) (theft" in text
+    case_id = submit_practice(tmp_path)
+    store.approve(case_id, base=tmp_path)
+    case = (tmp_path / "cases" / f"{case_id}.md").read_text(encoding="utf-8")
+    assert "- Sections: IPC 380 (now BNS 305)" in case
+    assert "- Offence date: 15 February 2024" in case
+
+
+# ---------- ask_to_decide question in the note ----------
+
+QUESTION = "Was the person a clerk or employee, carrier or warehouse-keeper, or a public servant, banker or agent?"
+
+
+def lines_with(text, start):
+    return [line for line in text.splitlines() if line.startswith(start)]
+
+
+def test_unanswered_question_written_in_note_and_both_dates_flagged():
+    _, _, text = practice_draft(section_typed="406")
+    assert (f"- Question that decides the maximum term: {QUESTION} "
+            "Answer: not answered — to be checked by a lawyer") in text
+    [half] = lines_with(text, "- One-half of the maximum term:")
+    [third] = lines_with(text, "- One-third of the maximum term")
+    assert half.endswith("(to be checked by a lawyer)")
+    assert third.endswith("(to be checked by a lawyer)")
+
+
+def test_answered_and_confirmed_question():
+    _, _, text = practice_draft(section_typed="406", answer="No, none of these",
+                                question_answered=True)
+    assert f"{QUESTION} Answer: No, none of these\n" in text
+    assert "(to be checked by a lawyer)" not in text
+
+
+def test_answer_not_confirmed_still_flagged():
+    _, _, text = practice_draft(section_typed="406", answer="Not sure", question_answered=False)
+    assert "Answer: Not sure (not confirmed as the right offence — to be checked by a lawyer)" in text
+    [half] = lines_with(text, "- One-half of the maximum term:")
+    assert half.endswith("(to be checked by a lawyer)")
+
+
+def test_ticked_but_empty_answer_counts_as_unanswered():
+    facts, result, text = practice_draft(section_typed="406", answer="  ", question_answered=True)
+    assert facts.question_answered is False
+    assert result.lawyer_check
+
+
+def test_question_line_sits_in_case_details():
+    _, _, text = practice_draft(section_typed="406")
+    lines = text.splitlines()
+    i = lines.index("- Other cases pending: none known")
+    assert lines[i + 1].startswith("- Question that decides the maximum term:")
+    assert lines[i + 3] == "Calculation (to be verified)"
+
+
+def test_no_question_line_when_row_has_no_question():
+    _, _, text = practice_draft()
+    assert "Question that decides" not in text
+
+
+def test_case_file_records_question_and_answer(tmp_path):
+    case_id = submit_practice(tmp_path, section_typed="406", answer="No", question_answered=True)
+    store.approve(case_id, base=tmp_path)
+    case = (tmp_path / "cases" / f"{case_id}.md").read_text(encoding="utf-8")
+    assert f"{QUESTION} Answer: No" in case
+    assert "Answer to:" not in case  # not listed as missing
+
+
+def test_old_saved_record_without_new_fields_still_loads():
+    old = practice_facts().to_dict()
+    del old["offence_date"], old["answer"]
+    facts = UndertrialFacts.from_dict(old)
+    assert facts.offence_date is None
+    assert "[offence date not given: which law applies?]" in drafts.make_undertrial_draft(
+        facts, drafts.recalculate(facts))
+
+
+# ---------- fix and resend ----------
+
+def test_fix_and_resend(tmp_path):
+    case_id = submit_practice(tmp_path)
+    store.reject(case_id, "Please add the court.", base=tmp_path)
+    fixed = store.get_pending(case_id, base=tmp_path)["draft"].replace("[court, CNR]", "Saket Court, CNR DLST010000012024")
+    store.resend(case_id, fixed, base=tmp_path)
+
+    record = store.get_pending(case_id, base=tmp_path)
+    assert record["status"] == "waiting" and record["reason"] == ""
+    assert record["history"][0]["sent_back_reason"] == "Please add the court."
+    assert [r["id"] for r in store.list_pending(tmp_path)] == [case_id]  # back with the supervisor
+
+    store.approve(case_id, base=tmp_path)
+    assert "Saket Court" in (tmp_path / "drafts" / f"{case_id}.md").read_text(encoding="utf-8")
+
+
+def test_resend_only_for_sent_back_drafts(tmp_path):
+    case_id = submit_practice(tmp_path)
+    with pytest.raises(ValueError):
+        store.resend(case_id, DRAFT_HEADER + "\nfixed", base=tmp_path)
+
+
+@pytest.mark.parametrize("bad_text", ["No header here", DRAFT_HEADER + "\nCall 9876543210"])
+def test_resend_refuses_bad_drafts(tmp_path, bad_text):
+    case_id = submit_practice(tmp_path)
+    store.reject(case_id, "Fix it", base=tmp_path)
+    with pytest.raises(ValueError):
+        store.resend(case_id, bad_text, base=tmp_path)
+    assert store.get_pending(case_id, base=tmp_path)["status"] == "sent back"
+
+
+def test_case_numbers_never_look_like_aadhaar(tmp_path):
+    for _ in range(300):
+        case_id = store.new_case_id(tmp_path)
+        assert store.ID_PATTERN.match(case_id)
+        assert not drafts.personal_details_found(f"# Case {case_id}")

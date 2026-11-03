@@ -52,6 +52,9 @@ def undertrial_form():
     law = col1.selectbox("Law", ["IPC", "BNS"])
     section = col2.text_input("Section number", placeholder="for example 380 or 117(2)")
 
+    offence_date = st.date_input("Date of the offence", value=None, format="DD/MM/YYYY",
+                                 min_value=date(1990, 1, 1), max_value=date.today(),
+                                 help="Before 1 July 2024 the IPC applies; from 1 July 2024 the BNS.")
     custody_began = st.date_input("Date custody began", value=None, format="DD/MM/YYYY",
                                   min_value=date(1990, 1, 1), max_value=date.today())
     today = st.date_input("Today's date", value=date.today(), format="DD/MM/YYYY")
@@ -82,11 +85,17 @@ def undertrial_form():
         offence = matches[0]
 
     question_answered = False
+    answer = ""
     if offence.ask_to_decide:
         st.markdown(f"**Question that decides the maximum term:** {offence.ask_to_decide}")
         if offence.notes:
             st.caption(offence.notes)
-        question_answered = st.checkbox("This has been answered, and the offence above is the right one")
+        answer = st.text_input("Answer (leave empty if not known)", max_chars=200,
+                               placeholder="for example: No, no one was hurt")
+        confirmed = st.checkbox("With this answer, the offence above is the right one")
+        question_answered = bool(answer.strip()) and confirmed
+        if not question_answered:
+            st.caption("Until the question is answered and confirmed, the dates are to be checked by a lawyer.")
 
     if custody_began is None:
         st.info("Pick the date custody began to see the dates.")
@@ -122,6 +131,8 @@ def undertrial_form():
                 question_answered=question_answered,
                 delay_days_by_accused=int(delay_days),
                 offence_name=offence.offence,
+                offence_date=offence_date,
+                answer=answer.strip(),
             ),
             result,
         )
@@ -130,6 +141,10 @@ def undertrial_form():
 def draft_section(known: dict, result: section479.Result):
     st.divider()
     st.subheader("Draft")
+    if known["offence_date"] is None:
+        st.info("Pick the date of the offence (at the top) to make the draft. "
+                "It decides whether the note names the IPC or the BNS section first.")
+        return
     lawyer = st.radio("Does the person have a lawyer?", drafts.LAWYER_OPTIONS, index=None)
     if lawyer is None:
         st.info("Answer the question above to make the draft.")
@@ -226,6 +241,7 @@ def my_cases_screen():
             st.markdown(f"**Case {c['id']}** · {c['case_type']}  \n{STATUS_LABELS[c['status']]}")
             if c["status"] == store.SENT_BACK:
                 st.warning(f"Supervisor's reason: {c['reason']}")
+                fix_and_resend(c["id"])
             if c["status"] == store.APPROVED:
                 with st.expander("Case file"):
                     st.markdown(c["file"].read_text(encoding="utf-8"))
@@ -233,6 +249,31 @@ def my_cases_screen():
                 if draft_file.exists():
                     with st.expander("Approved draft"):
                         st.code(draft_file.read_text(encoding="utf-8"), language=None, wrap_lines=True)
+
+
+def fix_and_resend(case_id: str):
+    flag = f"fixing-{case_id}"
+    if not st.session_state.get(flag):
+        if st.button("Fix and resend", key=f"fix-{case_id}"):
+            st.session_state[flag] = True
+            st.rerun()
+        return
+    record = store.get_pending(case_id)
+    fixed = st.text_area("Fix the draft", value=record["draft"], height=500, key=f"fixtext-{case_id}")
+    st.caption("Do not add names, phone numbers, Aadhaar numbers, addresses or prisoner IDs. "
+               "To change the facts (dates, sections, answers), make a new draft on \"New case\" instead.")
+    col1, col2 = st.columns(2)
+    if col1.button("Resend to supervisor", type="primary", key=f"resend-{case_id}"):
+        try:
+            store.resend(case_id, fixed)
+        except ValueError as err:
+            st.error(str(err))
+            return
+        st.session_state[flag] = False
+        st.rerun()
+    if col2.button("Cancel", key=f"cancel-{case_id}"):
+        st.session_state[flag] = False
+        st.rerun()
 
 
 def learn_screen():
@@ -290,6 +331,9 @@ def review_one(record: dict):
     case_id = record["id"]
     with st.expander(f"Case {case_id} · {record['case_type']} · sent {record['submitted'].replace('T', ' ')}",
                      expanded=True):
+        for h in record.get("history", []):
+            st.caption(f"Sent back earlier, then fixed and resent ({h['resent'].replace('T', ' ')}). "
+                       f"Your reason then: {h['sent_back_reason']}")
         st.code(record["draft"], language=None, wrap_lines=True)
         action = st.radio("Your decision", ["Approve", "Edit then Approve", "Reject with a reason"],
                           index=None, horizontal=True, key=f"action-{case_id}")

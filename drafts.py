@@ -38,11 +38,19 @@ class UndertrialFacts:
     delay_days_by_accused: int
     lawyer: str  # one of LAWYER_OPTIONS
     offence_name: str = ""  # the sentence-table row picked, when a section has several
+    offence_date: Optional[date] = None
+    answer: str = ""  # answer to the row's ask_to_decide question, if any
+
+    def __post_init__(self):
+        # The question counts as answered only when an answer is written down.
+        if not self.answer.strip():
+            self.question_answered = False
 
     def to_dict(self) -> dict:
         d = dict(self.__dict__)
         d["custody_began"] = self.custody_began.isoformat()
         d["today"] = self.today.isoformat()
+        d["offence_date"] = self.offence_date.isoformat() if self.offence_date else None
         return d
 
     @classmethod
@@ -50,6 +58,8 @@ class UndertrialFacts:
         d = dict(d)
         d["custody_began"] = date.fromisoformat(d["custody_began"])
         d["today"] = date.fromisoformat(d["today"])
+        if d.get("offence_date"):
+            d["offence_date"] = date.fromisoformat(d["offence_date"])
         return cls(**d)
 
 
@@ -105,6 +115,35 @@ def remaining_blanks(text: str) -> List[str]:
     return blanks
 
 
+BNS_START = date(2024, 7, 1)  # the BNS replaced the IPC for offences from this date
+
+
+def describe_sections(offence: section479.Offence, offence_date: Optional[date]) -> str:
+    """Before 1 July 2024: 'IPC 325 (now BNS 117(2))'. From 1 July 2024: 'BNS 117(2) (earlier IPC 325)'."""
+    bns, ipc = offence.bns_section, offence.ipc_section
+    if offence_date is None:
+        return f"BNS {bns} / IPC {ipc} [offence date not given: which law applies?]"
+    if ipc == "new":  # an offence that did not exist as such in the IPC
+        if offence_date < BNS_START:
+            return f"IPC [___] (now BNS {bns}, a new offence in the BNS)"
+        return f"BNS {bns} (new offence, no single IPC equivalent)"
+    if offence_date < BNS_START:
+        return f"IPC {ipc} (now BNS {bns})"
+    return f"BNS {bns} (earlier IPC {ipc})"
+
+
+def question_line(facts: "UndertrialFacts", offence: section479.Offence) -> str:
+    """Case-details line for the row's ask_to_decide question, or '' if it has none."""
+    if not offence.ask_to_decide:
+        return ""
+    answer = facts.answer.strip()
+    if not answer:
+        answer = "not answered — to be checked by a lawyer"
+    elif not facts.question_answered:
+        answer += " (not confirmed as the right offence — to be checked by a lawyer)"
+    return f"- Question that decides the maximum term: {offence.ask_to_decide} Answer: {answer}"
+
+
 def _status(m) -> str:
     return "reached" if m.reached else "not yet reached"
 
@@ -115,7 +154,7 @@ def section479_replacements(facts: UndertrialFacts, result: Result) -> List[Tupl
     o = result.offence
     check = " (to be checked by a lawyer)" if result.lawyer_check else ""
 
-    sections = f"BNS {o.bns_section} / IPC {o.ipc_section}"
+    sections = describe_sections(o, facts.offence_date)
     if facts.more_than_one_section:
         sections += ", and other sections [___]"
 
@@ -136,7 +175,8 @@ def section479_replacements(facts: UndertrialFacts, result: Result) -> List[Tupl
         ("- Previous convictions: [none known / ___]",
          "- Previous convictions: " + ("none known" if facts.never_convicted else "yes, details [___]")),
         ("- Other cases pending: [none known / ___]",
-         "- Other cases pending: " + ("yes, details [___]" if facts.other_cases_pending else "none known")),
+         "- Other cases pending: " + ("yes, details [___]" if facts.other_cases_pending else "none known")
+         + ("\n" + question_line(facts, o) if o.ask_to_decide else "")),
         ("- One-half of the maximum term: [date] [reached / not yet reached]",
          f"- One-half of the maximum term: {half}"),
         ("- One-third of the maximum term (first-time offender only): [date] [reached / not yet reached]",
@@ -150,7 +190,7 @@ def dlsa_replacements(facts: UndertrialFacts, result: Result) -> List[Tuple[str,
     o = result.offence
     statement = (
         f"   The applicant is an undertrial prisoner, in custody since {show_date(facts.custody_began)}, "
-        f"charged under BNS {o.bns_section} / IPC {o.ipc_section} ({o.offence.lower()}). "
+        f"charged under {describe_sections(o, facts.offence_date)} ({o.offence.lower()}). "
         "The applicant has no lawyer and needs one to apply for release under Section 479 BNSS. "
         "Court and case or FIR number: [court, case / FIR number]."
     )
@@ -218,6 +258,8 @@ def facts_missing(facts: UndertrialFacts, result: Result) -> List[str]:
         missing.append("The other sections charged, and whether Section 479(2) bars release")
     if result.offence.ask_to_decide and not facts.question_answered:
         missing.append(f"Answer to: {result.offence.ask_to_decide}")
+    if facts.offence_date is None:
+        missing.append("Offence date (decides whether the IPC or the BNS applies)")
     if facts.lawyer == "Don't know":
         missing.append("Whether the person has a lawyer")
     return missing
@@ -236,7 +278,8 @@ def make_case_file(case_id: str, facts: UndertrialFacts, result: Result, approve
         "",
         "## Facts known",
         f"- Offence: {o.offence}",
-        f"- Sections: BNS {o.bns_section} / IPC {o.ipc_section}",
+        f"- Sections: {describe_sections(o, facts.offence_date)}",
+        "- Offence date: " + (show_date(facts.offence_date) if facts.offence_date else "not given"),
         f"- Maximum prison term: {describe_term(o.max_months)}",
         f"- Date custody began: {show_date(facts.custody_began)}",
         f"- Dates worked out as on: {show_date(facts.today)}",
@@ -246,6 +289,8 @@ def make_case_file(case_id: str, facts: UndertrialFacts, result: Result, approve
         f"- Delay caused by the accused: {facts.delay_days_by_accused} days",
         f"- Lawyer: {facts.lawyer}",
     ]
+    if o.ask_to_decide:
+        lines.append(question_line(facts, o))
     for m in (result.one_third, result.one_half):
         if m.when:
             lines.append(f"- {m.name}: {show_date(m.when)} — {_status(m)}")

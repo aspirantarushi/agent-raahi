@@ -19,7 +19,9 @@ import drafts
 from drafts import UndertrialFacts
 
 HERE = Path(__file__).resolve().parent
-ID_PATTERN = re.compile(r"^U-\d{8}-[0-9a-f]{4}$")
+# The random part starts with a letter, so a case number never looks like a
+# 12-digit Aadhaar number. Older numbers (4 hex characters) are still accepted.
+ID_PATTERN = re.compile(r"^U-\d{8}-[0-9a-z]{4}$")
 
 WAITING = "waiting"
 SENT_BACK = "sent back"
@@ -47,7 +49,7 @@ def new_case_id(base: Path = HERE, today: Optional[date] = None) -> str:
     today = today or date.today()
     pending, drafts_dir, cases = _dirs(base)
     while True:
-        case_id = f"U-{today:%Y%m%d}-{secrets.token_hex(2)}"
+        case_id = f"U-{today:%Y%m%d}-{secrets.choice('abcdefghjkmnpqrstuvwxyz')}{secrets.token_hex(2)[:3]}"
         if not any((d / f"{case_id}{ext}").exists()
                    for d, ext in ((pending, ".json"), (drafts_dir, ".md"), (cases, ".md"))):
             return case_id
@@ -125,6 +127,29 @@ def reject(case_id: str, reason: str, base: Path = HERE) -> None:
     record["reason"] = reason
     pending, _, _ = _dirs(base)
     _write(pending / f"{case_id}.json", json.dumps(record, indent=2, ensure_ascii=False))
+
+
+def resend(case_id: str, fixed_text: str, base: Path = HERE) -> None:
+    """Fix a sent-back draft and send it to the supervisor again (same case number)."""
+    record = _load(case_id, base)
+    if record["status"] != SENT_BACK:
+        raise ValueError("Only drafts that were sent back can be fixed and resent.")
+    text = fixed_text.replace("\r\n", "\n")
+    if not text.startswith(drafts.DRAFT_HEADER):
+        raise ValueError(f"A draft must start with '{drafts.DRAFT_HEADER}'.")
+    found = drafts.personal_details_found(text)
+    if found:
+        raise ValueError("The draft seems to contain " + " and ".join(found) + ". Remove it first.")
+    record.setdefault("history", []).append(
+        {"sent_back_reason": record["reason"], "resent": datetime.now().isoformat(timespec="minutes")}
+    )
+    record.update(status=WAITING, reason="", draft=text)
+    pending, _, _ = _dirs(base)
+    _write(pending / f"{case_id}.json", json.dumps(record, indent=2, ensure_ascii=False))
+
+
+def get_pending(case_id: str, base: Path = HERE) -> dict:
+    return _load(case_id, base)
 
 
 def list_cases(base: Path = HERE) -> List[dict]:
