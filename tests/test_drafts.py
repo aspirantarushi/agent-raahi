@@ -34,7 +34,8 @@ def test_practice_case_draft():
     _, _, text = practice_draft()
     assert text.startswith(DRAFT_HEADER)
     assert "- Sections charged: IPC 380 (now BNS 305)\n" in text
-    assert "- Maximum punishment for the offence: 7 years (84 months) (as per BNS 305)" in text
+    assert "- Maximum punishment for the offence: 7 years (84 months) (as per IPC 380)\n" in text
+    assert "- Why this maximum: The offence happened before 1 July 2024, so the IPC maximum is used" in text
     assert "- Date custody began: 15 March 2024" in text
     assert "- Period in custody as on today: 31 months 18 days (as on 2 November 2026)" in text
     assert "- Previous convictions: none known" in text
@@ -58,11 +59,10 @@ def test_template_copied_exactly_except_filled_blanks():
     facts, result, text = practice_draft()
     template = (TEMPLATES / "section479_note.md").read_text(encoding="utf-8")
     targets = [old for old, _ in drafts.section479_replacements(facts, result)]
-    t_lines, d_lines = template.splitlines(), text.splitlines()
-    assert len(t_lines) == len(d_lines)
-    for t, d in zip(t_lines, d_lines):
-        if not any(old in t for old in targets):
-            assert t == d
+    untouched = [t for t in template.splitlines() if not any(old in t for old in targets)]
+    d_lines = iter(text.splitlines())
+    for t in untouched:  # every untouched template line appears unchanged, in the same order
+        assert any(d == t for d in d_lines), t
 
 
 def test_no_lawyer_adds_dlsa_application():
@@ -215,7 +215,8 @@ def test_case_file_has_no_personal_details(tmp_path):
     (date(2025, 3, 1), "- Sections charged: BNS 117(2) (earlier IPC 325)\n"),
 ])
 def test_section_wording_depends_on_offence_date(offence_date, expected):
-    _, _, text = practice_draft(section_typed="325", offence_date=offence_date)
+    _, _, text = practice_draft(section_typed="325", offence_date=offence_date,
+                                custody_began=date(2025, 3, 2))
     assert expected in text
 
 
@@ -225,7 +226,8 @@ def test_typing_the_bns_section_gives_the_same_wording():
 
 
 def test_new_bns_offence_wording():
-    _, _, after = practice_draft(law_typed="BNS", section_typed="304(2)", offence_date=date(2025, 1, 1))
+    _, _, after = practice_draft(law_typed="BNS", section_typed="304(2)", offence_date=date(2025, 1, 1),
+                                 custody_began=date(2025, 1, 2))
     assert "BNS 304(2) (new offence, no single IPC equivalent)" in after
     _, _, before = practice_draft(law_typed="BNS", section_typed="304(2)", offence_date=date(2024, 1, 1))
     assert "IPC [___] (now BNS 304(2), a new offence in the BNS)" in before
@@ -347,3 +349,38 @@ def test_case_numbers_never_look_like_aadhaar(tmp_path):
         case_id = store.new_case_id(tmp_path)
         assert store.ID_PATTERN.match(case_id)
         assert not drafts.personal_details_found(f"# Case {case_id}")
+
+
+# ---------- which maximum, written in the note ----------
+
+def test_note_says_which_maximum_and_why_for_old_ipc_384():
+    _, _, text = practice_draft(section_typed="384", offence_date=date(2023, 5, 20),
+                                custody_began=date(2023, 6, 1))
+    assert "- Maximum punishment for the offence: 3 years (36 months) (as per IPC 384)\n" in text
+    assert ("- Why this maximum: The offence happened before 1 July 2024, so the IPC maximum is used: "
+            "Article 20(1) of the Constitution bars a heavier penalty than the law in force when the "
+            "offence happened. (The BNS maximum, 84 months, is higher and does not apply.)") in text
+
+
+def test_note_says_which_maximum_and_why_for_bns_308_2():
+    _, _, text = practice_draft(law_typed="BNS", section_typed="308(2)", offence_date=date(2025, 1, 20),
+                                custody_began=date(2025, 2, 1))
+    assert "- Maximum punishment for the offence: 7 years (84 months) (as per BNS 308(2))\n" in text
+    assert "- Why this maximum: The offence happened on or after 1 July 2024" in text
+
+
+def test_note_flags_both_dates_when_ipc_maximum_blank():
+    _, _, text = practice_draft(law_typed="BNS", section_typed="304(2)", offence_date=date(2024, 4, 1),
+                                custody_began=date(2024, 5, 1))
+    assert "our sentence table has no IPC maximum" in text
+    [half] = lines_with(text, "- One-half of the maximum term:")
+    assert half.endswith("(to be checked by a lawyer)")
+
+
+def test_case_file_says_which_maximum(tmp_path):
+    case_id = submit_practice(tmp_path, section_typed="384", offence_date=date(2023, 5, 20),
+                              custody_began=date(2023, 6, 1))
+    store.approve(case_id, base=tmp_path)
+    case = (tmp_path / "cases" / f"{case_id}.md").read_text(encoding="utf-8")
+    assert "- Maximum prison term: 3 years (36 months), as per IPC 384" in case
+    assert "- Why this maximum: The offence happened before 1 July 2024" in case

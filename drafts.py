@@ -152,6 +152,7 @@ def _status(m) -> str:
 
 def section479_replacements(facts: UndertrialFacts, result: Result) -> List[Tuple[str, str]]:
     o = result.offence
+    m = result.maximum
     check = " (to be checked by a lawyer)" if result.lawyer_check else ""
 
     sections = describe_sections(o, facts.offence_date)
@@ -168,7 +169,9 @@ def section479_replacements(facts: UndertrialFacts, result: Result) -> List[Tupl
 
     return [
         ("- Sections charged: [BNS ___ / IPC ___]", f"- Sections charged: {sections}"),
-        ("[___ years] (as per [section])", f"{describe_term(o.max_months)} (as per BNS {o.bns_section})"),
+        ("- Maximum punishment for the offence: [___ years] (as per [section])",
+         f"- Maximum punishment for the offence: {describe_term(m.months)} (as per {m.section})\n"
+         f"- Why this maximum: {m.reason}"),
         ("- Date custody began: [date]", f"- Date custody began: {show_date(facts.custody_began)}"),
         ("- Period in custody as on today: [___ months ___ days]",
          f"- Period in custody as on today: {months} months {days} days (as on {show_date(facts.today)})"),
@@ -280,7 +283,8 @@ def make_case_file(case_id: str, facts: UndertrialFacts, result: Result, approve
         f"- Offence: {o.offence}",
         f"- Sections: {describe_sections(o, facts.offence_date)}",
         "- Offence date: " + (show_date(facts.offence_date) if facts.offence_date else "not given"),
-        f"- Maximum prison term: {describe_term(o.max_months)}",
+        f"- Maximum prison term: {describe_term(result.maximum.months)}, as per {result.maximum.section}",
+        f"- Why this maximum: {result.maximum.reason}",
         f"- Date custody began: {show_date(facts.custody_began)}",
         f"- Dates worked out as on: {show_date(facts.today)}",
         f"- Never convicted: {'yes' if facts.never_convicted else 'no'}",
@@ -334,4 +338,5 @@ def recalculate(facts: UndertrialFacts) -> Result:
         more_than_one_section=facts.more_than_one_section,
         question_answered=facts.question_answered,
         delay_days_by_accused=facts.delay_days_by_accused,
+        offence_date=facts.offence_date,
     )

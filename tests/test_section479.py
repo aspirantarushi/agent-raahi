@@ -120,7 +120,8 @@ def test_unanswered_question_needs_lawyer():
 
 def test_answered_question_no_lawyer_flag():
     offence = one("IPC", "406")
-    r = calculate(offence, date(2024, 1, 1), date(2026, 11, 2), True, False, False, question_answered=True)
+    r = calculate(offence, date(2024, 1, 1), date(2026, 11, 2), True, False, False, question_answered=True,
+                  offence_date=date(2023, 12, 1))
     assert not r.lawyer_check
 
 
@@ -175,3 +176,91 @@ def test_source_line_is_read_from_knowledge():
     src = knowledge_source("How to work out the Section 479 dates")
     assert "Section 479" in src["source"]
     assert src["link"].startswith("https://")
+
+
+# ---------- which maximum: IPC before 1 July 2024, BNS from then ----------
+
+def test_ipc_384_offence_in_2023_uses_36_months():
+    r = calculate(one("IPC", "384"), date(2023, 6, 1), date(2026, 11, 2), True, False, False,
+                  offence_date=date(2023, 5, 20))
+    assert r.maximum.law == "IPC" and r.maximum.months == 36
+    assert r.maximum.section == "IPC 384"
+    assert r.one_third.when == date(2024, 6, 1)  # 12 months
+    assert r.one_half.when == date(2024, 12, 1)  # 18 months
+    assert not r.lawyer_check
+    assert "Article 20(1)" in r.maximum.reason
+    assert "The BNS maximum, 84 months, is higher and does not apply." in r.maximum.reason
+
+
+def test_bns_308_2_offence_in_2025_uses_84_months():
+    r = calculate(one("BNS", "308(2)"), date(2025, 2, 1), date(2026, 11, 2), True, False, False,
+                  offence_date=date(2025, 1, 20))
+    assert r.maximum.law == "BNS" and r.maximum.months == 84
+    assert r.maximum.section == "BNS 308(2)"
+    assert r.one_third.when == date(2027, 6, 1)  # 28 months
+    assert not r.lawyer_check
+
+
+@pytest.mark.parametrize("offence_date, law, months", [
+    (date(2024, 6, 30), "IPC", 36),  # last day of the IPC
+    (date(2024, 7, 1), "BNS", 84),   # first day of the BNS
+])
+def test_switch_on_1_july_2024(offence_date, law, months):
+    r = calculate(one("IPC", "384"), date(2024, 7, 2), date(2026, 11, 2), True, False, False,
+                  offence_date=offence_date)
+    assert (r.maximum.law, r.maximum.months) == (law, months)
+
+
+@pytest.mark.parametrize("section, ipc_months, bns_months", [
+    ("304A", 24, 60), ("384", 36, 84), ("406", 36, 60), ("417", 12, 36),
+])
+def test_four_rows_where_ipc_maximum_is_lower(section, ipc_months, bns_months):
+    offence = one("IPC", section)
+    old = calculate(offence, date(2023, 2, 1), date(2026, 11, 2), True, False, False,
+                    question_answered=True, offence_date=date(2023, 1, 1))
+    new = calculate(offence, date(2025, 2, 1), date(2026, 11, 2), True, False, False,
+                    question_answered=True, offence_date=date(2025, 1, 1))
+    assert old.maximum.months == ipc_months
+    assert new.maximum.months == bns_months
+
+
+def test_old_offence_with_blank_ipc_maximum_needs_lawyer():
+    offence = one("BNS", "304(2)")  # snatching: new in the BNS
+    r = calculate(offence, date(2024, 5, 1), date(2026, 11, 2), True, False, False,
+                  offence_date=date(2024, 4, 1))
+    assert r.maximum.law == "BNS" and r.maximum.lawyer_check
+    assert r.lawyer_check
+    assert any("no IPC maximum" in reason for reason in r.reasons)
+
+
+def test_new_offence_after_july_2024_is_fine():
+    r = calculate(one("BNS", "304(2)"), date(2025, 5, 1), date(2026, 11, 2), True, False, False,
+                  offence_date=date(2025, 4, 1))
+    assert r.maximum.law == "BNS" and not r.lawyer_check
+
+
+def test_no_offence_date_same_maximum_no_flag():
+    r = calculate(one("IPC", "380"), date(2024, 3, 15), date(2026, 11, 2), True, False, False)
+    assert r.maximum.months == 84 and not r.lawyer_check
+
+
+def test_no_offence_date_different_maximum_needs_lawyer():
+    r = calculate(one("IPC", "384"), date(2024, 3, 15), date(2026, 11, 2), True, False, False)
+    assert r.lawyer_check
+    assert any("offence date is not given" in reason for reason in r.reasons)
+
+
+def test_offence_after_custody_is_refused():
+    with pytest.raises(ValueError):
+        calculate(one("IPC", "380"), date(2024, 3, 15), date(2026, 11, 2), True, False, False,
+                  offence_date=date(2024, 3, 16))
+
+
+def test_ipc_column_is_consistent():
+    for o in load_offences():
+        if o.ipc_section == "new":
+            assert o.ipc_max_prison == "", o.offence
+        else:
+            assert o.ipc_max_prison, o.offence
+        if o.death_or_life_possible and o.ipc_max_prison:
+            assert o.ipc_max_prison in ("life", "death"), o.offence

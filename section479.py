@@ -48,10 +48,63 @@ class Offence:
     ask_to_decide: str
     notes: str
     source_url: str
+    ipc_max_prison: str = ""  # IPC maximum (months, "life" or "death"); blank for offences new in the BNS
 
     @property
     def max_months(self) -> Optional[int]:
+        """The BNS maximum in months (None if life or death)."""
         return int(self.max_prison) if self.max_prison.isdigit() else None
+
+
+BNS_START = date(2024, 7, 1)  # the BNS replaced the IPC for offences from this date
+
+
+@dataclass
+class Maximum:
+    """Which maximum prison term was used, and why."""
+
+    value: str  # months as digits, or "life" / "death"
+    law: str  # "IPC" or "BNS"
+    section: str  # for example "IPC 384"
+    reason: str
+    lawyer_check: bool = False
+
+    @property
+    def months(self) -> Optional[int]:
+        return int(self.value) if self.value.isdigit() else None
+
+
+def choose_maximum(offence: Offence, offence_date: Optional[date]) -> Maximum:
+    """Before 1 July 2024 the IPC maximum applies; from 1 July 2024 the BNS maximum."""
+    bns = Maximum(offence.max_prison, "BNS", f"BNS {offence.bns_section}", "")
+    ipc_known = offence.ipc_max_prison != "" and offence.ipc_section != "new"
+
+    if offence_date is None:
+        if ipc_known and offence.ipc_max_prison == offence.max_prison:
+            bns.reason = "The offence date is not given, but the IPC and BNS maximums are the same."
+            return bns
+        bns.reason = ("The offence date is not given. The maximum is different under the IPC "
+                      "(offences before 1 July 2024), so the dates are " + LAWYER_CHECK + ".")
+        bns.lawyer_check = True
+        return bns
+
+    if offence_date >= BNS_START:
+        bns.reason = ("The offence happened on or after 1 July 2024, when the BNS came into force, "
+                      "so the BNS maximum is used.")
+        return bns
+
+    if not ipc_known:
+        bns.reason = ("The offence happened before 1 July 2024, but our sentence table has no IPC "
+                      "maximum for this offence, so the BNS maximum is shown and the dates are "
+                      + LAWYER_CHECK + ".")
+        bns.lawyer_check = True
+        return bns
+
+    reason = ("The offence happened before 1 July 2024, so the IPC maximum is used: Article 20(1) "
+              "of the Constitution bars a heavier penalty than the law in force when the offence happened.")
+    if offence.ipc_max_prison != offence.max_prison:
+        reason += f" (The BNS maximum, {offence.max_prison} months, is higher and does not apply.)"
+    return Maximum(offence.ipc_max_prison, "IPC", f"IPC {offence.ipc_section}", reason)
 
 
 @dataclass
@@ -66,6 +119,7 @@ class MilestoneDate:
 @dataclass
 class Result:
     offence: Offence
+    maximum: Maximum
     applies: bool  # False = Section 479 release is not available
     lawyer_check: bool  # True = show dates as "to be checked by a lawyer"
     reasons: List[str] = field(default_factory=list)
@@ -88,6 +142,7 @@ def load_offences(path: Path = SENTENCE_TABLE) -> List[Offence]:
                 ask_to_decide=row["ask_to_decide"].strip(),
                 notes=row["notes"].strip(),
                 source_url=row["source_url"].strip(),
+                ipc_max_prison=(row.get("ipc_max_prison_months") or "").strip().lower(),
             )
             for row in csv.DictReader(f)
         ]
@@ -162,6 +217,7 @@ def calculate(
     more_than_one_section: bool,
     question_answered: bool = False,
     delay_days_by_accused: int = 0,
+    offence_date: Optional[date] = None,
 ) -> Result:
     """Work out the Section 479 dates for one offence.
 
@@ -173,10 +229,14 @@ def calculate(
     if custody_began > today:
         raise ValueError("The date custody began can't be after today's date.")
 
-    result = Result(offence=offence, applies=True, lawyer_check=False)
+    if offence_date is not None and offence_date > custody_began:
+        raise ValueError("The offence date can't be after the date custody began.")
+
+    maximum = choose_maximum(offence, offence_date)
+    result = Result(offence=offence, maximum=maximum, applies=True, lawyer_check=False)
 
     # Rules that rule Section 479 out completely.
-    if offence.death_or_life_possible or offence.max_months is None:
+    if offence.death_or_life_possible or maximum.months is None:
         result.applies = False
         result.reasons.append(
             "This offence can be punished with death or life imprisonment, "
@@ -215,11 +275,15 @@ def calculate(
             + ". These dates are " + LAWYER_CHECK + "."
         )
 
-    maximum = Fraction(offence.max_months)
+    if maximum.lawyer_check:
+        result.lawyer_check = True
+        result.reasons.append(maximum.reason)
+
+    max_months = Fraction(maximum.months)
     delay = timedelta(days=delay_days_by_accused)
 
     def milestone(name: str, share: Fraction) -> MilestoneDate:
-        months = maximum * share
+        months = max_months * share
         when = add_fraction_of_months(custody_began, months) + delay
         note = ""
         if months.denominator != 1:
@@ -232,7 +296,7 @@ def calculate(
     else:
         result.one_third = MilestoneDate(
             name="One-third (personal bond)",
-            months=maximum / 3,
+            months=max_months / 3,
             when=None,
             reached=None,
             note="Only for a person never convicted of any offence before.",

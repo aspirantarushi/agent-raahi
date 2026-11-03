@@ -111,6 +111,7 @@ def undertrial_form():
             more_than_one_section=many_sections,
             question_answered=question_answered,
             delay_days_by_accused=int(delay_days),
+            offence_date=offence_date,
         )
     except ValueError as err:
         st.error(str(err))
@@ -187,9 +188,12 @@ def show_result(result: section479.Result):
         f"- **Offence:** {o.offence}\n"
         f"- **BNS section:** {o.bns_section}\n"
         f"- **IPC section:** {o.ipc_section}\n"
-        f"- **Maximum prison term:** "
-        + (f"{o.max_months} months" if o.max_months is not None else o.max_prison)
+        f"- **Maximum prison term used:** "
+        + (f"{result.maximum.months} months, as per {result.maximum.section}"
+           if result.maximum.months is not None else result.maximum.value)
     )
+    if result.maximum.reason:
+        st.caption(result.maximum.reason)
 
     if not result.applies:
         for reason in result.reasons:
