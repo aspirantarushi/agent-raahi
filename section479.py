@@ -29,6 +29,7 @@ SENTENCE_TABLE = HERE / "knowledge" / "sentence_table.csv"
 BAIL_KNOWLEDGE = HERE / "knowledge" / "undertrial_bail.md"
 
 LAWYER_CHECK = "to be checked by a lawyer"
+OLD_MAXIMUM_ENTRY = "Old offences use the old maximum"  # heading in knowledge/undertrial_bail.md
 NOT_AUTOMATIC = (
     "Release is not automatic. The jail superintendent must apply to the court "
     "(the person or their lawyer can also apply), and the court decides."
@@ -68,6 +69,16 @@ class Maximum:
     section: str  # for example "IPC 384"
     reason: str
     lawyer_check: bool = False
+    source: Optional[dict] = None  # Source / Link / Checked lines from knowledge/ backing the reason
+
+    @property
+    def source_line(self) -> str:
+        if not self.source:
+            return ""
+        line = "Source: " + self.source["source"]
+        if self.source.get("link"):
+            line += f" ({self.source['link']})"
+        return line
 
     @property
     def months(self) -> Optional[int]:
@@ -75,7 +86,12 @@ class Maximum:
 
 
 def choose_maximum(offence: Offence, offence_date: Optional[date]) -> Maximum:
-    """Before 1 July 2024 the IPC maximum applies; from 1 July 2024 the BNS maximum."""
+    """Before 1 July 2024 the IPC maximum applies; from 1 July 2024 the BNS maximum.
+
+    Reasons that rely on that rule carry the Source line of the knowledge entry
+    "Old offences use the old maximum" (knowledge/undertrial_bail.md).
+    """
+    old_max_source = knowledge_source(OLD_MAXIMUM_ENTRY)
     bns = Maximum(offence.max_prison, "BNS", f"BNS {offence.bns_section}", "")
     ipc_known = offence.ipc_max_prison != "" and offence.ipc_section != "new"
 
@@ -86,6 +102,7 @@ def choose_maximum(offence: Offence, offence_date: Optional[date]) -> Maximum:
         bns.reason = ("The offence date is not given. The maximum is different under the IPC "
                       "(offences before 1 July 2024), so the dates are " + LAWYER_CHECK + ".")
         bns.lawyer_check = True
+        bns.source = old_max_source
         return bns
 
     if offence_date >= BNS_START:
@@ -98,13 +115,15 @@ def choose_maximum(offence: Offence, offence_date: Optional[date]) -> Maximum:
                       "maximum for this offence, so the BNS maximum is shown and the dates are "
                       + LAWYER_CHECK + ".")
         bns.lawyer_check = True
+        bns.source = old_max_source
         return bns
 
     reason = ("The offence happened before 1 July 2024, so the IPC maximum is used: Article 20(1) "
               "of the Constitution bars a heavier penalty than the law in force when the offence happened.")
     if offence.ipc_max_prison != offence.max_prison:
         reason += f" (The BNS maximum, {offence.max_prison} months, is higher and does not apply.)"
-    return Maximum(offence.ipc_max_prison, "IPC", f"IPC {offence.ipc_section}", reason)
+    return Maximum(offence.ipc_max_prison, "IPC", f"IPC {offence.ipc_section}", reason,
+                   source=old_max_source)
 
 
 @dataclass

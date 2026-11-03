@@ -100,6 +100,12 @@ Source: BNSS, 2023, Section 479; BNS, 2023, Section 305
 Link: https://blog.ipleaders.in/maximum-detention-of-an-undertrial-and-release-section-479-bnss/
 Checked: 2026-11-02 · Lawyer checked: no
 
+### Old offences use the old maximum
+For an offence committed before 1 July 2024, the maximum prison term is the one in the Indian Penal Code (IPC), not the BNS. The Constitution says no one can be given a penalty greater than the law allowed when the offence was committed. For most offences the two maximums are the same, but some differ: for example, cheating under IPC 417 was up to 1 year, while BNS 318(2) allows up to 3 years. The ipc_max_prison_months column of sentence_table.csv gives the IPC maximum.
+Source: Constitution of India, Article 20(1); Indian Penal Code, 1860 (section texts)
+Link: https://www.constitutionofindia.net/articles/article-20-protection-in-respect-of-conviction-for-offences/
+Checked: 2026-11-03 · Lawyer checked: no
+
 ### When the maximum depends on the facts
 Some offences have different maximums depending on what happened. For example, attempt to murder is up to 10 years, but life imprisonment if hurt was caused; theft is up to 3 years for a first conviction but up to 5 years for a later one. The calculator must ask the questions that decide which row applies. If unsure, use the higher maximum and tell the volunteer to confirm with a lawyer.
 Source: BNS, 2023, Sections 109 and 303(2)

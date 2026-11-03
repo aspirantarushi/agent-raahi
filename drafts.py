@@ -171,7 +171,8 @@ def section479_replacements(facts: UndertrialFacts, result: Result) -> List[Tupl
         ("- Sections charged: [BNS ___ / IPC ___]", f"- Sections charged: {sections}"),
         ("- Maximum punishment for the offence: [___ years] (as per [section])",
          f"- Maximum punishment for the offence: {describe_term(m.months)} (as per {m.section})\n"
-         f"- Why this maximum: {m.reason}"),
+         f"- Why this maximum: {m.reason}"
+         + (f"\n  {m.source_line}" if m.source_line else "")),
         ("- Date custody began: [date]", f"- Date custody began: {show_date(facts.custody_began)}"),
         ("- Period in custody as on today: [___ months ___ days]",
          f"- Period in custody as on today: {months} months {days} days (as on {show_date(facts.today)})"),
@@ -285,6 +286,7 @@ def make_case_file(case_id: str, facts: UndertrialFacts, result: Result, approve
         "- Offence date: " + (show_date(facts.offence_date) if facts.offence_date else "not given"),
         f"- Maximum prison term: {describe_term(result.maximum.months)}, as per {result.maximum.section}",
         f"- Why this maximum: {result.maximum.reason}",
+    ] + ([f"  {result.maximum.source_line}"] if result.maximum.source_line else []) + [
         f"- Date custody began: {show_date(facts.custody_began)}",
         f"- Dates worked out as on: {show_date(facts.today)}",
         f"- Never convicted: {'yes' if facts.never_convicted else 'no'}",

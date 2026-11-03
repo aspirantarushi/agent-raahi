@@ -193,7 +193,8 @@ def show_result(result: section479.Result):
            if result.maximum.months is not None else result.maximum.value)
     )
     if result.maximum.reason:
-        st.caption(result.maximum.reason)
+        st.caption(result.maximum.reason
+                   + (f"  \n{result.maximum.source_line}" if result.maximum.source_line else ""))
 
     if not result.applies:
         for reason in result.reasons:

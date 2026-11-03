@@ -384,3 +384,50 @@ def test_case_file_says_which_maximum(tmp_path):
     case = (tmp_path / "cases" / f"{case_id}.md").read_text(encoding="utf-8")
     assert "- Maximum prison term: 3 years (36 months), as per IPC 384" in case
     assert "- Why this maximum: The offence happened before 1 July 2024" in case
+
+
+# ---------- Source line for "Why this maximum" ----------
+
+def old_maximum_source_line():
+    src = section479.knowledge_source("Old offences use the old maximum")
+    return f"Source: {src['source']} ({src['link']})"
+
+
+def test_source_line_comes_from_knowledge_entry():
+    line = old_maximum_source_line()
+    assert line.startswith("Source: Constitution of India, Article 20(1)")
+    assert "https://www.constitutionofindia.net/articles/article-20" in line
+
+
+def test_note_shows_source_line_under_why_this_maximum():
+    _, _, text = practice_draft(section_typed="384", offence_date=date(2023, 5, 20),
+                                custody_began=date(2023, 6, 1))
+    lines = text.splitlines()
+    i = next(n for n, l in enumerate(lines) if l.startswith("- Why this maximum:"))
+    assert lines[i + 1] == "  " + old_maximum_source_line()
+
+
+def test_practice_case_note_shows_source_line():
+    _, _, text = practice_draft()  # IPC 380, offence February 2024
+    assert "  " + old_maximum_source_line() + "\n" in text
+
+
+def test_source_line_shown_when_ipc_maximum_blank():
+    _, _, text = practice_draft(law_typed="BNS", section_typed="304(2)", offence_date=date(2024, 4, 1),
+                                custody_began=date(2024, 5, 1))
+    assert old_maximum_source_line() in text
+
+
+def test_no_old_maximum_source_line_for_offence_after_july_2024():
+    _, _, text = practice_draft(law_typed="BNS", section_typed="308(2)", offence_date=date(2025, 1, 20),
+                                custody_began=date(2025, 2, 1))
+    assert old_maximum_source_line() not in text
+
+
+def test_case_file_shows_source_line(tmp_path):
+    case_id = submit_practice(tmp_path, section_typed="384", offence_date=date(2023, 5, 20),
+                              custody_began=date(2023, 6, 1))
+    store.approve(case_id, base=tmp_path)
+    case = (tmp_path / "cases" / f"{case_id}.md").read_text(encoding="utf-8").splitlines()
+    i = next(n for n, l in enumerate(case) if l.startswith("- Why this maximum:"))
+    assert case[i + 1] == "  " + old_maximum_source_line()
