@@ -1,0 +1,274 @@
+"""Section 479 BNSS calculator.
+
+Plain code, no AI. Reads knowledge/sentence_table.csv and works out the
+one-third (personal bond) and one-half (bail) dates from the date custody began.
+
+The rules come from CLAUDE.md and knowledge/undertrial_bail.md:
+- If death or life imprisonment is possible, Section 479 does not apply.
+- One-half of the maximum term from the date custody began = bail date.
+- One-third = personal bond date, only if the person was never convicted.
+- More than one case pending: Section 479 release is not available.
+- More than one section charged, or an ask_to_decide question not answered:
+  the dates are shown as "to be checked by a lawyer".
+- Delay caused by the accused does not count, so it pushes the dates later.
+Release is never automatic: the jail superintendent must apply and the court decides.
+"""
+
+import calendar
+import csv
+import math
+import re
+from dataclasses import dataclass, field
+from datetime import date, timedelta
+from fractions import Fraction
+from pathlib import Path
+from typing import List, Optional
+
+HERE = Path(__file__).resolve().parent
+SENTENCE_TABLE = HERE / "knowledge" / "sentence_table.csv"
+BAIL_KNOWLEDGE = HERE / "knowledge" / "undertrial_bail.md"
+
+LAWYER_CHECK = "to be checked by a lawyer"
+NOT_AUTOMATIC = (
+    "Release is not automatic. The jail superintendent must apply to the court "
+    "(the person or their lawyer can also apply), and the court decides."
+)
+
+
+@dataclass
+class Offence:
+    """One row of knowledge/sentence_table.csv."""
+
+    offence: str
+    bns_section: str
+    ipc_section: str
+    max_prison: str  # a number of months, or "life" or "death"
+    death_or_life_possible: bool
+    section_479_applies: str  # "yes", "no" or "check"
+    ask_to_decide: str
+    notes: str
+    source_url: str
+
+    @property
+    def max_months(self) -> Optional[int]:
+        return int(self.max_prison) if self.max_prison.isdigit() else None
+
+
+@dataclass
+class MilestoneDate:
+    name: str  # "One-third (personal bond)" or "One-half (bail)"
+    months: Fraction
+    when: Optional[date]  # None when this date does not apply
+    reached: Optional[bool]
+    note: str = ""
+
+
+@dataclass
+class Result:
+    offence: Offence
+    applies: bool  # False = Section 479 release is not available
+    lawyer_check: bool  # True = show dates as "to be checked by a lawyer"
+    reasons: List[str] = field(default_factory=list)
+    one_third: Optional[MilestoneDate] = None
+    one_half: Optional[MilestoneDate] = None
+
+
+# ---------- reading the sentence table ----------
+
+def load_offences(path: Path = SENTENCE_TABLE) -> List[Offence]:
+    with open(path, newline="", encoding="utf-8") as f:
+        return [
+            Offence(
+                offence=row["offence"].strip(),
+                bns_section=row["bns_section"].strip(),
+                ipc_section=row["ipc_section"].strip(),
+                max_prison=row["max_prison_months"].strip().lower(),
+                death_or_life_possible=row["death_or_life_possible"].strip().lower() == "yes",
+                section_479_applies=row["section_479_applies"].strip().lower(),
+                ask_to_decide=row["ask_to_decide"].strip(),
+                notes=row["notes"].strip(),
+                source_url=row["source_url"].strip(),
+            )
+            for row in csv.DictReader(f)
+        ]
+
+
+def _clean(section: str) -> str:
+    """'IPC 380', ' 380 ', 'Sec. 380' -> '380'; lower case, no spaces."""
+    s = section.strip().lower()
+    s = re.sub(r"^(ipc|bns|section|sec\.?|s\.?)\s*", "", s)
+    return re.sub(r"\s+", "", s)
+
+
+def _base(section: str) -> str:
+    """The section number without sub-section or part: '117(2)' -> '117', '506 (first part)' -> '506'."""
+    return re.split(r"[\s(]", section.strip().lower(), maxsplit=1)[0]
+
+
+def find_offences(law: str, section: str, offences: Optional[List[Offence]] = None) -> List[Offence]:
+    """Find rows for an IPC or BNS section. May return several rows (the user then picks one).
+
+    An exact match (for example BNS '117(2)') wins. Otherwise every row with the same
+    section number is returned (for example BNS '117' gives 117(2) and 117(3)).
+    """
+    if offences is None:
+        offences = load_offences()
+    law = law.strip().upper()
+    if law not in ("IPC", "BNS"):
+        raise ValueError("law must be 'IPC' or 'BNS'")
+    wanted = _clean(section)
+    if not wanted:
+        return []
+
+    def column(o: Offence) -> str:
+        return o.ipc_section if law == "IPC" else o.bns_section
+
+    exact = [o for o in offences if _clean(column(o)) == wanted and column(o) != "new"]
+    if exact:
+        return exact
+    return [o for o in offences if _base(column(o)) == _base(wanted) and column(o) != "new"]
+
+
+# ---------- date arithmetic ----------
+
+def add_months(start: date, months: int) -> date:
+    """Calendar months: 15 March 2024 + 28 months = 15 July 2026.
+    If the day doesn't exist (31 Jan + 1 month) use the last day of that month."""
+    total = start.month - 1 + months
+    year, month = start.year + total // 12, total % 12 + 1
+    day = min(start.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day)
+
+
+def add_fraction_of_months(start: date, months: Fraction) -> date:
+    """Whole months on the calendar; any part month counted as 30 days, rounded up
+    (so the date is never earlier than it should be)."""
+    whole = math.floor(months)
+    part = months - whole
+    result = add_months(start, whole)
+    if part:
+        result += timedelta(days=math.ceil(part * 30))
+    return result
+
+
+# ---------- the calculator ----------
+
+def calculate(
+    offence: Offence,
+    custody_began: date,
+    today: date,
+    never_convicted: bool,
+    other_cases_pending: bool,
+    more_than_one_section: bool,
+    question_answered: bool = False,
+    delay_days_by_accused: int = 0,
+) -> Result:
+    """Work out the Section 479 dates for one offence.
+
+    question_answered: True once the row's ask_to_decide question has been answered
+    and this row is confirmed as the right one. Ignored for rows with no question.
+    """
+    if delay_days_by_accused < 0:
+        raise ValueError("Delay caused by the accused can't be negative.")
+    if custody_began > today:
+        raise ValueError("The date custody began can't be after today's date.")
+
+    result = Result(offence=offence, applies=True, lawyer_check=False)
+
+    # Rules that rule Section 479 out completely.
+    if offence.death_or_life_possible or offence.max_months is None:
+        result.applies = False
+        result.reasons.append(
+            "This offence can be punished with death or life imprisonment, "
+            "so Section 479 does not apply. Ordinary bail can still be sought."
+        )
+    if offence.section_479_applies == "no" and not offence.death_or_life_possible:
+        result.applies = False
+        result.reasons.append("The sentence table says Section 479 does not apply to this offence.")
+    if other_cases_pending:
+        result.applies = False
+        result.reasons.append(
+            "More than one case is pending, so Section 479 release is not available "
+            "(Section 479(2)). Ordinary bail can still be sought."
+        )
+    if not result.applies:
+        return result
+
+    # Rules that mean the dates must be checked by a lawyer.
+    if more_than_one_section:
+        result.lawyer_check = True
+        result.reasons.append(
+            "More than one section is charged. Section 479(2) may bar release, "
+            "so these dates are " + LAWYER_CHECK + "."
+        )
+    if offence.ask_to_decide and not question_answered:
+        result.lawyer_check = True
+        result.reasons.append(
+            "This question is not answered yet: \"" + offence.ask_to_decide + "\" "
+            "The maximum term may be different, so these dates are " + LAWYER_CHECK + "."
+        )
+    if offence.section_479_applies == "check":
+        result.lawyer_check = True
+        result.reasons.append(
+            "The sentence table flags this offence for checking"
+            + (": " + offence.notes if offence.notes else "")
+            + ". These dates are " + LAWYER_CHECK + "."
+        )
+
+    maximum = Fraction(offence.max_months)
+    delay = timedelta(days=delay_days_by_accused)
+
+    def milestone(name: str, share: Fraction) -> MilestoneDate:
+        months = maximum * share
+        when = add_fraction_of_months(custody_began, months) + delay
+        note = ""
+        if months.denominator != 1:
+            result.lawyer_check = True
+            note = "Part of a month is counted as 30 days; " + LAWYER_CHECK + "."
+        return MilestoneDate(name=name, months=months, when=when, reached=today >= when, note=note)
+
+    if never_convicted:
+        result.one_third = milestone("One-third (personal bond)", Fraction(1, 3))
+    else:
+        result.one_third = MilestoneDate(
+            name="One-third (personal bond)",
+            months=maximum / 3,
+            when=None,
+            reached=None,
+            note="Only for a person never convicted of any offence before.",
+        )
+    result.one_half = milestone("One-half (bail)", Fraction(1, 2))
+    if delay_days_by_accused:
+        result.reasons.append(
+            f"{delay_days_by_accused} days of delay caused by the accused are not counted, "
+            "so both dates move later by that many days."
+        )
+    return result
+
+
+# ---------- source lines from knowledge/ ----------
+
+def knowledge_source(heading: str, path: Path = BAIL_KNOWLEDGE) -> dict:
+    """Return the Source, Link and Checked lines under a '### heading' in a knowledge file."""
+    lines = path.read_text(encoding="utf-8").splitlines()
+    found = {}
+    inside = False
+    for line in lines:
+        if line.startswith("### "):
+            if inside:
+                break
+            inside = line[4:].strip() == heading
+            continue
+        if inside:
+            for key in ("Source", "Link", "Checked"):
+                if line.startswith(key + ":"):
+                    found[key.lower()] = line[len(key) + 1:].strip()
+    if not found:
+        raise KeyError(f"No entry '{heading}' with a Source line in {path.name}")
+    return found
+
+
+def format_months(months: Fraction) -> str:
+    if months.denominator == 1:
+        return f"{months.numerator} months"
+    return f"{float(months):.1f} months"
