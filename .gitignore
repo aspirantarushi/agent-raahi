@@ -12,3 +12,6 @@ __pycache__/
 # Mac and tool files
 .DS_Store
 .understand-anything/
+
+# Drafts waiting for the supervisor, or sent back
+pending/

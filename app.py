@@ -4,12 +4,15 @@ Run with:  streamlit run app.py
 """
 
 import hmac
+import json
 import os
 from datetime import date
 
 import streamlit as st
 
+import drafts
 import section479
+import store
 
 st.set_page_config(page_title="Legal aid agent", page_icon="⚖️", layout="centered")
 
@@ -106,6 +109,60 @@ def undertrial_form():
 
     show_result(result)
 
+    if result.applies:
+        draft_section(
+            dict(
+                law_typed=law,
+                section_typed=section,
+                custody_began=custody_began,
+                today=today,
+                never_convicted=never_convicted,
+                other_cases_pending=other_cases,
+                more_than_one_section=many_sections,
+                question_answered=question_answered,
+                delay_days_by_accused=int(delay_days),
+                offence_name=offence.offence,
+            ),
+            result,
+        )
+
+
+def draft_section(known: dict, result: section479.Result):
+    st.divider()
+    st.subheader("Draft")
+    lawyer = st.radio("Does the person have a lawyer?", drafts.LAWYER_OPTIONS, index=None)
+    if lawyer is None:
+        st.info("Answer the question above to make the draft.")
+        return
+    facts = drafts.UndertrialFacts(lawyer=lawyer, **known)
+    signature = json.dumps(facts.to_dict(), sort_keys=True)
+
+    if st.button("Make draft", type="primary"):
+        st.session_state["draft"] = {"sig": signature,
+                                     "text": drafts.make_undertrial_draft(facts, result)}
+
+    draft = st.session_state.get("draft")
+    if not draft or draft["sig"] != signature:
+        return  # no draft yet, or the facts changed since it was made
+
+    if lawyer == "None":
+        st.caption("The person has no lawyer, so a DLSA application for free legal aid is added after the note.")
+    st.code(draft["text"], language=None, wrap_lines=True)
+    st.caption("Blanks in [square brackets] are left for a person to fill. "
+               "Names, phone numbers, Aadhaar numbers and addresses are filled by hand, never in this app.")
+
+    sent = st.session_state.get("sent")
+    if sent and sent["sig"] == signature:
+        st.success(f"Sent to the supervisor as case {sent['id']}. See its status on \"My cases\".")
+    elif st.button("Send to supervisor"):
+        try:
+            case_id = store.submit(draft["text"], facts)
+        except ValueError as err:
+            st.error(str(err))
+            return
+        st.session_state["sent"] = {"sig": signature, "id": case_id}
+        st.rerun()
+
 
 def show_result(result: section479.Result):
     o = result.offence
@@ -151,9 +208,31 @@ def show_result(result: section479.Result):
 
 # ---------- other screens ----------
 
+STATUS_LABELS = {
+    store.WAITING: "⏳ Waiting for the supervisor",
+    store.APPROVED: "✅ Approved",
+    store.SENT_BACK: "↩️ Sent back",
+}
+
+
 def my_cases_screen():
     st.title("My cases")
-    st.info("Cases appear here after a supervisor approves them. None yet.")
+    cases = store.list_cases()
+    if not cases:
+        st.info("No cases yet. Make a draft on \"New case\" and send it to the supervisor.")
+        return
+    for c in cases:
+        with st.container(border=True):
+            st.markdown(f"**Case {c['id']}** · {c['case_type']}  \n{STATUS_LABELS[c['status']]}")
+            if c["status"] == store.SENT_BACK:
+                st.warning(f"Supervisor's reason: {c['reason']}")
+            if c["status"] == store.APPROVED:
+                with st.expander("Case file"):
+                    st.markdown(c["file"].read_text(encoding="utf-8"))
+                draft_file = c["file"].parent.parent / "drafts" / c["file"].name
+                if draft_file.exists():
+                    with st.expander("Approved draft"):
+                        st.code(draft_file.read_text(encoding="utf-8"), language=None, wrap_lines=True)
 
 
 def learn_screen():
@@ -188,11 +267,54 @@ def supervisor_screen():
             else:
                 st.error("Wrong password.")
         return
-    st.success("Signed in as supervisor.")
-    st.info("Coming soon: drafts waiting for approval.")
-    if st.button("Sign out"):
+    top1, top2 = st.columns([3, 1])
+    top1.success("Signed in as supervisor.")
+    if top2.button("Sign out"):
         st.session_state["supervisor_ok"] = False
         st.rerun()
+
+    flash = st.session_state.pop("supervisor_flash", None)
+    if flash:
+        st.success(flash)
+
+    waiting = store.list_pending()
+    if not waiting:
+        st.info("No drafts are waiting for approval.")
+        return
+    st.subheader(f"Drafts waiting for approval: {len(waiting)}")
+    for record in waiting:
+        review_one(record)
+
+
+def review_one(record: dict):
+    case_id = record["id"]
+    with st.expander(f"Case {case_id} · {record['case_type']} · sent {record['submitted'].replace('T', ' ')}",
+                     expanded=True):
+        st.code(record["draft"], language=None, wrap_lines=True)
+        action = st.radio("Your decision", ["Approve", "Edit then Approve", "Reject with a reason"],
+                          index=None, horizontal=True, key=f"action-{case_id}")
+        try:
+            if action == "Approve":
+                if st.button("Approve and save", type="primary", key=f"approve-{case_id}"):
+                    store.approve(case_id)
+                    st.session_state["supervisor_flash"] = f"Case {case_id} approved and saved."
+                    st.rerun()
+            elif action == "Edit then Approve":
+                edited = st.text_area("Edit the draft", value=record["draft"], height=500,
+                                      key=f"edit-{case_id}")
+                st.caption("Do not add names, phone numbers, Aadhaar numbers, addresses or prisoner IDs.")
+                if st.button("Save edits and approve", type="primary", key=f"edit-approve-{case_id}"):
+                    store.approve(case_id, edited_text=edited)
+                    st.session_state["supervisor_flash"] = f"Case {case_id} edited, approved and saved."
+                    st.rerun()
+            elif action == "Reject with a reason":
+                reason = st.text_area("Reason (shown on \"My cases\")", key=f"reason-{case_id}")
+                if st.button("Send back", key=f"reject-{case_id}"):
+                    store.reject(case_id, reason)
+                    st.session_state["supervisor_flash"] = f"Case {case_id} sent back."
+                    st.rerun()
+        except ValueError as err:
+            st.error(str(err))
 
 
 # ---------- navigation ----------
