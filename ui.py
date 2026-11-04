@@ -1,9 +1,11 @@
 """Small building blocks for the look and feel: header, safety bar, step progress, status chips.
 
-Plain HTML and CSS (assets/app.css); no images, no animations, no extra libraries.
+Plain HTML and CSS (assets/app.css); the logo files in assets/brand/ are drawn inline; no animations,
+no extra libraries.
 """
 
 import html
+import re
 from pathlib import Path
 from typing import List
 
@@ -16,19 +18,35 @@ def style() -> str:
     return f"<style>{CSS_FILE.read_text(encoding='utf-8')}</style>"
 
 
-LOGO_FILE = HERE / "assets" / "logo-mark.svg"
+BRAND = HERE / "assets" / "brand"
+LOGO_FILE = BRAND / "raahi-mark.svg"            # on light backgrounds
+LOGO_ON_DARK_FILE = BRAND / "raahi-mark-on-dark.svg"  # on navy
+FAVICON_FILE = BRAND / "favicon.svg"            # browser tab icon
+APP_ICON_FILE = BRAND / "raahi-app-icon.svg"    # home-screen icon (Streamlit has no setting for it yet)
+
+
+def inline_svg(path: Path, size: int) -> str:
+    """The logo file drawn inline (no extra download). The files are used exactly as given; only the
+    hidden <metadata> block (a content signature, about 8 KB, not part of the drawing) is left out
+    of the page to keep it light on 3G."""
+    svg = re.sub(r"<metadata>.*?</metadata>", "", path.read_text(encoding="utf-8").strip(), flags=re.S)
+    return svg.replace("<svg ", f'<svg width="{size}" height="{size}" ', 1)
 
 
 def logo_mark(size: int = 40) -> str:
-    """The lamp-and-path mark: a tiny inline SVG (about 0.5 KB), no image download."""
-    svg = LOGO_FILE.read_text(encoding="utf-8").strip()
-    return svg.replace('width="40" height="40"', f'width="{size}" height="{size}"', 1)
+    """The R whose leg becomes a road, with an amber light (assets/brand/raahi-mark.svg)."""
+    return inline_svg(LOGO_FILE, size)
+
+
+def logo_on_dark(size: int = 40) -> str:
+    return inline_svg(LOGO_ON_DARK_FILE, size)
 
 
 def wordmark(name: str) -> str:
-    """'Agent Raahi' with the last word in the accent colour (also 'एजेंट राही')."""
+    """'AGENT Raahi': the first word small in capitals, the last in the accent colour (also 'एजेंट राही')."""
     first, _, last = name.rpartition(" ")
-    return f"{html.escape(first)} <span>{html.escape(last)}</span>" if first else f"<span>{html.escape(name)}</span>"
+    return (f'<small class="agent">{html.escape(first)}</small> <span>{html.escape(last)}</span>' if first
+            else f"<span>{html.escape(name)}</span>")
 
 
 def header(name: str, tagline: str, description: str = "") -> str:
@@ -106,7 +124,8 @@ def facts_band(title: str, facts) -> str:
     """facts: [(sentence from knowledge/, its Source line)]."""
     rows = "".join(f'<div class="fact"><p>{html.escape(text)}</p><small>{html.escape(source)}</small></div>'
                    for text, source in facts)
-    return f'<section class="facts" id="facts"><h2>{html.escape(title)}</h2>{rows}</section>'
+    return (f'<section class="facts" id="facts"><h2><span class="facts-mark">{logo_on_dark(36)}</span>'
+            f'{html.escape(title)}</h2>{rows}</section>')
 
 
 def footer(name: str, tagline: str, text: str) -> str:

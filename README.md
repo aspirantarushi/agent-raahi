@@ -1,4 +1,4 @@
-<img src="assets/logo-mark.svg" width="48" height="48" alt="">
+<img src="assets/brand/raahi-mark.svg" width="48" height="48" alt="">
 
 # Agent Raahi
 

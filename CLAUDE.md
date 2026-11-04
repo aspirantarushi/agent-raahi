@@ -2,7 +2,7 @@
 
 Name: Agent Raahi (Hindi: एजेंट राही). Tagline: "Lighting the way to legal aid" (Hindi: "क़ानूनी मदद तक,
 रोशन राह", Hindi translation checked: no). Description: "An AI casework agent for legal aid clinics and NGOs".
-The name, tagline and logo (assets/logo-mark.svg) come from i18n/en.json, i18n/hi.json and ui.py.
+The name, tagline and logo (assets/brand/: raahi-mark.svg, raahi-mark-on-dark.svg, favicon.svg, raahi-app-icon.svg) come from i18n/en.json, i18n/hi.json and ui.py.
 
 ## Who you are working with
 Arushi is building this for the Code for a Billion hackathon (Code for India; submissions close

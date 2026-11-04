@@ -35,7 +35,7 @@ import timeline
 import ui
 
 st.set_page_config(page_title=lang.t("app.name", st.session_state.get("ui_lang", lang.DEFAULT)),
-                   page_icon="\U0001FA94", layout="wide", initial_sidebar_state="collapsed")  # 🪔 lamp
+                   page_icon=str(ui.FAVICON_FILE), layout="wide", initial_sidebar_state="collapsed")
 # The first screen: Home for everyone. The tests start on "New case" (set in tests/conftest.py).
 START_SCREEN = os.environ.get("RAAHI_START_SCREEN", "Home")
 
@@ -1673,7 +1673,7 @@ def home_screen():
 
 def top_bar(current: str):
     """Logo, section links (Home) or Home / Learn, the language pill, "Start a case" and a menu."""
-    c1, c2, c3, c4 = st.columns([1.9, 2.2, 2.6, 3.3], vertical_alignment="center")
+    c1, c2, c3, c4 = st.columns([1.9, 2.7, 2.2, 3.2], vertical_alignment="center")
     c1.markdown(ui.brand(t("app.name")), unsafe_allow_html=True)
     with c2:
         if current == "Home":

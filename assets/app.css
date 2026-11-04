@@ -13,8 +13,11 @@ h1, h2, h3 { letter-spacing: -0.02em; font-weight: 650 !important; color: var(--
 .brand { display: flex; align-items: center; gap: .55rem; }
 .brand .word { font-weight: 750; font-size: 1.3rem; letter-spacing: -.01em; color: var(--ink); }
 .brand .word span, .app-name span { color: var(--teal); }
+.brand .word small.agent, .app-name small.agent, .footer small.agent { font-size: .62em; font-weight: 700;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--ink); vertical-align: .12em; }
+.facts h2 { display: flex; align-items: center; gap: .6rem; } .facts-mark { line-height: 0; flex: 0 0 auto; }
 .topnav { white-space: nowrap; }
-.topnav a { color: var(--ink); text-decoration: none; margin-right: 1.1rem; font-weight: 500; white-space: nowrap; }
+.topnav a { color: var(--ink); text-decoration: none; margin-right: .9rem; font-weight: 500; white-space: nowrap; }
 .topnav a:hover { color: var(--teal); }
 .st-key-nav-start button, [data-testid="stPopover"] button, .st-key-ui_lang label { white-space: nowrap; }
 .st-key-ui_lang [role="radiogroup"] { flex-wrap: nowrap !important; gap: .9rem; background: var(--card); border: 1px solid var(--line); border-radius: 999px;
@@ -86,6 +89,14 @@ h1, h2, h3 { letter-spacing: -0.02em; font-weight: 650 !important; color: var(--
 .chip.waiting { background: #E0F2FE; color: #0C4A6E; } .chip.sent-back { background: var(--amber-bg); color: var(--amber-ink); }
 .chip.approved { background: #DCFCE7; color: #14532D; } .chip.submitted { background: #E0E7FF; color: #312E81; }
 .chip.acknowledged { background: #CCFBF1; color: #134E4A; }
+
+/* ---------- narrower laptops and tablets: keep the top bar on one line ---------- */
+@media (min-width: 641px) and (max-width: 1180px) {
+  .topnav, [data-testid="stColumn"]:has(.topnav), [data-testid="stColumn"]:has(.st-key-nav-home) { display: none; }
+  .brand .word { white-space: nowrap; font-size: 1.15rem; }
+  .st-key-ui_lang [role="radiogroup"] { gap: .35rem; padding: .15rem .45rem; }
+  .st-key-nav-start button { padding-left: .8rem; padding-right: .8rem; }
+}
 
 /* ---------- phones: one column, full-width buttons, no sideways scrolling ---------- */
 @media (max-width: 640px) {
