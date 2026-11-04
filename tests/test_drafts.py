@@ -418,10 +418,15 @@ def test_source_line_shown_when_ipc_maximum_blank():
     assert old_maximum_source_line() in text
 
 
-def test_no_old_maximum_source_line_for_offence_after_july_2024():
+def test_offence_after_july_2024_reason_and_source_line():
     _, _, text = practice_draft(law_typed="BNS", section_typed="308(2)", offence_date=date(2025, 1, 20),
                                 custody_began=date(2025, 2, 1))
-    assert old_maximum_source_line() not in text
+    lines = text.splitlines()
+    i = next(n for n, l in enumerate(lines) if l.startswith("- Why this maximum:"))
+    assert lines[i] == ("- Why this maximum: The offence happened on or after 1 July 2024, so the BNS "
+                        "maximum is used: only offences committed before 1 July 2024 use the old IPC maximum.")
+    assert lines[i + 1] == "  " + old_maximum_source_line()
+    assert "came into force" not in text
 
 
 def test_case_file_shows_source_line(tmp_path):

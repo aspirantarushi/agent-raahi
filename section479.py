@@ -106,8 +106,9 @@ def choose_maximum(offence: Offence, offence_date: Optional[date]) -> Maximum:
         return bns
 
     if offence_date >= BNS_START:
-        bns.reason = ("The offence happened on or after 1 July 2024, when the BNS came into force, "
-                      "so the BNS maximum is used.")
+        bns.reason = ("The offence happened on or after 1 July 2024, so the BNS maximum is used: "
+                      "only offences committed before 1 July 2024 use the old IPC maximum.")
+        bns.source = old_max_source
         return bns
 
     if not ipc_known:

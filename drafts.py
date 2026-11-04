@@ -13,6 +13,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+import privacy
 import section479
 from section479 import Result, add_months
 
@@ -312,16 +313,10 @@ def make_case_file(case_id: str, facts: UndertrialFacts, result: Result, approve
 
 # ---------- checks before saving ----------
 
-PERSONAL_NUMBER_PATTERNS = [
-    (re.compile(r"(?<![\w])(?:\+?91[\s-]?)?[6-9]\d{9}(?![\w])"), "a phone number"),
-    (re.compile(r"(?<![\w])\d{4}[\s-]?\d{4}[\s-]?\d{4}(?![\w])"), "an Aadhaar number"),
-]
-
-
 def personal_details_found(text: str) -> List[str]:
-    """Simple check for phone or Aadhaar numbers typed into a draft. Names can't be
-    detected reliably, so the supervisor is also reminded not to add them."""
-    return [label for pattern, label in PERSONAL_NUMBER_PATTERNS if pattern.search(text)]
+    """Simple check for phone numbers, Aadhaar numbers or emails typed into a draft.
+    Names can't be detected reliably, so the supervisor is also reminded not to add them."""
+    return privacy.personal_details_found(text)
 
 
 def recalculate(facts: UndertrialFacts) -> Result:

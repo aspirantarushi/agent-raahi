@@ -11,6 +11,8 @@ from datetime import date
 import streamlit as st
 
 import drafts
+import intake
+import llm
 import section479
 import store
 
@@ -35,6 +37,35 @@ def show_date(d: date) -> str:
 
 # ---------- New case ----------
 
+# Form fields are kept in session state, so the AI (or the missing-fact questions)
+# can fill them in before the form is drawn.
+FORM_DEFAULTS = {
+    "f_law": "IPC", "f_section": "", "f_offence_date": None, "f_custody": None,
+    "f_today": None, "f_never": False, "f_other": False, "f_many": False, "f_delay": 0,
+    "f_answer": "", "f_confirm": False, "f_lawyer": None, "f_checked": False,
+}
+FACT_TO_KEY = {
+    "law": "f_law", "section": "f_section", "offence_date": "f_offence_date",
+    "custody_began": "f_custody", "today": "f_today", "never_convicted": "f_never",
+    "other_cases_pending": "f_other", "more_than_one_section": "f_many",
+    "delay_days_by_accused": "f_delay", "answer": "f_answer", "lawyer": "f_lawyer",
+}
+FACT_LABELS = {
+    "custody_began": "Date custody began", "offence_date": "Date of the offence", "today": "Today's date",
+    "section": "Section", "law": "Law", "more_than_one_section": "More than one section charged",
+    "never_convicted": "Never convicted", "other_cases_pending": "Other cases pending",
+    "delay_days_by_accused": "Days of delay caused by the accused", "lawyer": "Lawyer",
+    "answer": "Answer to the deciding question",
+}
+
+
+def init_form():
+    for key, value in FORM_DEFAULTS.items():
+        st.session_state.setdefault(key, value)
+    if st.session_state["f_today"] is None:
+        st.session_state["f_today"] = date.today()
+
+
 def new_case_screen():
     st.title("New case")
     st.caption("Use only case numbers (CNR, FIR). Do not type names, phone numbers, "
@@ -42,28 +73,233 @@ def new_case_screen():
 
     case_type = st.radio("What kind of case is it?", ["Undertrial"], horizontal=True)
     if case_type == "Undertrial":
+        init_form()
+        notes_box()
+        if ask_missing_facts():
+            return  # still asking questions one at a time
         undertrial_form()
+
+
+# ----- reading pasted case notes with the AI -----
+
+def show_value(value) -> str:
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    if isinstance(value, date):
+        return show_date(value)
+    return str(value)
+
+
+def apply_to_form(values: dict):
+    for fact, value in values.items():
+        key = FACT_TO_KEY.get(fact)
+        if key and value is not None:
+            st.session_state[key] = value
+    if values.get("answer"):
+        st.session_state["f_confirm"] = False  # the volunteer confirms the row on the form
+
+
+def read_notes():
+    """Runs when "Read notes" is clicked, before the page is drawn again."""
+    st.session_state.pop("ai_error", None)
+    try:
+        raw, clean, removed = llm.read_undertrial_notes(st.session_state.get("f_notes", ""))
+    except llm.AIUnavailable as err:
+        st.session_state["ai_error"] = str(err)
+        return
+    reading = intake.check_ai_answer(raw, clean)
+    for key, value in FORM_DEFAULTS.items():  # start from an empty form
+        st.session_state[key] = value
+    st.session_state["f_today"] = date.today()
+    st.session_state["ai"] = {"reading": reading, "removed": removed, "skipped": set(),
+                              "values": dict(reading.values)}
+    st.session_state.pop("draft", None)
+    if not intake.missing_facts(reading.values):
+        apply_to_form(reading.values)
+
+
+def clear_notes():
+    for key in list(FORM_DEFAULTS) + ["ai", "ai_error", "f_notes", "draft"]:
+        st.session_state.pop(key, None)
+
+
+def notes_box():
+    ai = st.session_state.get("ai")
+    with st.expander("Paste case notes (optional): the AI fills in the form for you", expanded=ai is None):
+        st.warning("**Do not type names**, phone numbers, Aadhaar numbers, addresses or prisoner IDs. "
+                   "Phone numbers, Aadhaar numbers and email addresses are removed before the notes are "
+                   "sent to the AI (Google Gemini), but names cannot be removed automatically.")
+        if not llm.available():
+            st.info("AI reading is not set up on this computer, so please fill in the form below by hand.")
+            return
+        st.text_area("Case notes", key="f_notes", height=220,
+                     placeholder="For example: He was arrested on 15 March 2024 and is charged under IPC 380 ...")
+        col1, col2 = st.columns(2)
+        col1.button("Read notes", type="primary", on_click=read_notes)
+        if ai:
+            col2.button("Clear notes and start again", on_click=clear_notes)
+    if st.session_state.get("ai_error"):
+        st.error(st.session_state["ai_error"] + " You can fill in the form below by hand.")
+
+
+# ----- asking for missing facts, one at a time -----
+
+def answer_fact(fact: str, skip: bool = False):
+    """Runs when Next or Don't know is clicked. Reads the answer at click time."""
+    ai = st.session_state["ai"]
+    value = None if skip else read_answer(fact)
+    if value is None and st.session_state.get(f"q-{fact}") == "Not sure":
+        skip = True  # "Not sure" counts as "Don't know"
+    if fact == "never_convicted" and st.session_state.get("q-never") == "Not sure":
+        skip = True
+    if value is None:
+        if not skip:
+            return  # nothing given yet: stay on this question
+        ai["skipped"].add(fact)
+    else:
+        ai["values"][fact] = value
+        if fact == "section":
+            ai["values"]["law"] = st.session_state.get("q-law", "IPC")
+            ai["values"]["more_than_one_section"] = bool(st.session_state.get("q-many"))
+    if not intake.missing_facts(ai["values"], ai["skipped"]):
+        apply_to_form(ai["values"])
+
+
+def skip_all():
+    ai = st.session_state["ai"]
+    ai["skipped"].update(intake.missing_facts(ai["values"], ai["skipped"]))
+    apply_to_form(ai["values"])
+
+
+def ask_missing_facts() -> bool:
+    """Ask the first missing fact. Returns True while questions remain."""
+    ai = st.session_state.get("ai")
+    if not ai:
+        return False
+    missing = intake.missing_facts(ai["values"], ai["skipped"])
+    if not missing:
+        return False
+
+    fact = missing[0]
+    questions = intake.intake_questions()
+    number = dict(intake.FACT_QUESTIONS)[fact]
+    st.subheader(f"A few facts are missing ({len(missing)} to go)")
+    if ai["removed"]:
+        st.caption("Removed before sending: " + ", ".join(f"{n} × {k}" for k, n in ai["removed"].items()))
+    found = {f: v for f, v in ai["values"].items() if f in FACT_LABELS}
+    if found:
+        st.caption("Found in the notes so far: "
+                   + "; ".join(f"{FACT_LABELS[f]}: {show_value(v)}" for f, v in found.items()))
+
+    with st.container(border=True):
+        question = questions[number]
+        if fact == "answer":
+            question = intake.offence_question(ai["values"])
+        st.markdown(f"**{question}**")
+        if fact in ai["reading"].notes_say:
+            st.caption(f"The notes say: “{ai['reading'].notes_say[fact]}”")
+        question_widget(fact)
+        col1, col2, col3 = st.columns([1, 1, 2])
+        col1.button("Next", type="primary", key=f"next-{fact}", on_click=answer_fact, args=(fact,))
+        col2.button("Don't know", key=f"skip-{fact}", on_click=answer_fact, args=(fact, True))
+        col3.button("Skip the rest and check the form", key="skip-all", on_click=skip_all)
+    return True
+
+
+def question_widget(fact: str):
+    """Draw one input for one missing fact."""
+    if fact in ("custody_began", "offence_date"):
+        st.date_input("Date", value=None, format="DD/MM/YYYY", key=f"q-{fact}",
+                      min_value=date(1990, 1, 1), max_value=date.today())
+    elif fact == "section":
+        col1, col2 = st.columns([1, 2])
+        col1.selectbox("Law", ["IPC", "BNS"], key="q-law")
+        col2.text_input("Section number", key="q-section", placeholder="for example 380")
+        st.checkbox("More than one section is charged in this case", key="q-many")
+    elif fact == "never_convicted":
+        st.radio("Answer", ["Never", "Yes", "Not sure"], index=None, key="q-never", horizontal=True)
+    elif fact in ("other_cases_pending", "delay_days_by_accused"):
+        st.radio("Answer", ["No", "Yes", "Not sure"], index=None, key=f"q-{fact}", horizontal=True)
+        if fact == "delay_days_by_accused" and st.session_state.get("q-delay_days_by_accused") == "Yes":
+            st.number_input("About how many days of delay?", min_value=1, step=1, value=None,
+                            key="q-delay-days")
+    elif fact == "answer":
+        st.text_input("Answer", key="q-answer", max_chars=200)
+    elif fact == "lawyer":
+        st.radio("Answer", drafts.LAWYER_OPTIONS, index=None, key="q-lawyer")
+
+
+def read_answer(fact: str):
+    """The answer given to a missing-fact question, or None if none (or "Not sure")."""
+    get = st.session_state.get
+    if fact in ("custody_began", "offence_date"):
+        return get(f"q-{fact}")
+    if fact == "section":
+        return (get("q-section") or "").strip() or None
+    if fact == "never_convicted":
+        return {"Never": True, "Yes": False}.get(get("q-never"))
+    if fact == "other_cases_pending":
+        return {"No": False, "Yes": True}.get(get("q-other_cases_pending"))
+    if fact == "delay_days_by_accused":
+        choice = get("q-delay_days_by_accused")
+        if choice == "No":
+            return 0
+        if choice == "Yes" and get("q-delay-days"):
+            return int(get("q-delay-days"))
+        return None
+    if fact == "answer":
+        return (get("q-answer") or "").strip() or None
+    if fact == "lawyer":
+        return get("q-lawyer")
+    return None
+
+
+# ----- the undertrial form -----
+
+def checked_by_volunteer() -> bool:
+    """After an AI reading, the volunteer must check every field before the calculator runs."""
+    ai = st.session_state.get("ai")
+    if not ai:
+        return True
+    reading = ai["reading"]
+    with st.container(border=True):
+        st.markdown("**Filled in from the notes. Check every field above against the notes and correct "
+                    "anything wrong before going on.**")
+        rows = [f"- {FACT_LABELS[f]}: {show_value(v)} — notes: “{reading.evidence[f]}”"
+                for f, v in reading.values.items() if f in FACT_LABELS and f in reading.evidence]
+        asked = [f for f in ai["values"] if f not in reading.values and f in FACT_LABELS]
+        if rows:
+            st.markdown("Found in the notes:\n" + "\n".join(rows))
+        if asked:
+            st.markdown("You answered: " + ", ".join(FACT_LABELS[f] for f in asked))
+        unknown = [FACT_LABELS[f] for f in ai["skipped"] if f in FACT_LABELS]
+        if unknown:
+            st.warning("Still not known: " + ", ".join(unknown) + ".")
+        if reading.values.get("all_sections"):
+            st.warning("The notes name more than one section: " + ", ".join(reading.values["all_sections"])
+                       + ". The form uses the first; a lawyer must check whether Section 479(2) bars release.")
+        return st.checkbox("I have checked every field against the notes", key="f_checked")
 
 
 def undertrial_form():
     st.header("Undertrial: Section 479 BNSS dates")
 
     col1, col2 = st.columns([1, 2])
-    law = col1.selectbox("Law", ["IPC", "BNS"])
-    section = col2.text_input("Section number", placeholder="for example 380 or 117(2)")
+    law = col1.selectbox("Law", ["IPC", "BNS"], key="f_law")
+    section = col2.text_input("Section number", placeholder="for example 380 or 117(2)", key="f_section")
 
-    offence_date = st.date_input("Date of the offence", value=None, format="DD/MM/YYYY",
+    offence_date = st.date_input("Date of the offence", format="DD/MM/YYYY", key="f_offence_date",
                                  min_value=date(1990, 1, 1), max_value=date.today(),
                                  help="Before 1 July 2024 the IPC applies; from 1 July 2024 the BNS.")
-    custody_began = st.date_input("Date custody began", value=None, format="DD/MM/YYYY",
+    custody_began = st.date_input("Date custody began", format="DD/MM/YYYY", key="f_custody",
                                   min_value=date(1990, 1, 1), max_value=date.today())
-    today = st.date_input("Today's date", value=date.today(), format="DD/MM/YYYY")
+    today = st.date_input("Today's date", format="DD/MM/YYYY", key="f_today")
 
-    never_convicted = st.checkbox("Never convicted of any offence before")
-    other_cases = st.checkbox("Other cases pending against the person")
-    many_sections = st.checkbox("More than one section charged in this case")
+    never_convicted = st.checkbox("Never convicted of any offence before", key="f_never")
+    other_cases = st.checkbox("Other cases pending against the person", key="f_other")
+    many_sections = st.checkbox("More than one section charged in this case", key="f_many")
     delay_days = st.number_input("Days of delay caused by the accused (0 if none or not known)",
-                                 min_value=0, step=1, value=0)
+                                 min_value=0, step=1, key="f_delay")
 
     if not section.strip():
         st.info("Type the IPC or BNS section to see the dates.")
@@ -91,11 +327,15 @@ def undertrial_form():
         if offence.notes:
             st.caption(offence.notes)
         answer = st.text_input("Answer (leave empty if not known)", max_chars=200,
-                               placeholder="for example: No, no one was hurt")
-        confirmed = st.checkbox("With this answer, the offence above is the right one")
+                               placeholder="for example: No, no one was hurt", key="f_answer")
+        confirmed = st.checkbox("With this answer, the offence above is the right one", key="f_confirm")
         question_answered = bool(answer.strip()) and confirmed
         if not question_answered:
             st.caption("Until the question is answered and confirmed, the dates are to be checked by a lawyer.")
+
+    if not checked_by_volunteer():
+        st.info("Tick the box above once you have checked every field. Then the dates are worked out.")
+        return
 
     if custody_began is None:
         st.info("Pick the date custody began to see the dates.")
@@ -146,7 +386,7 @@ def draft_section(known: dict, result: section479.Result):
         st.info("Pick the date of the offence (at the top) to make the draft. "
                 "It decides whether the note names the IPC or the BNS section first.")
         return
-    lawyer = st.radio("Does the person have a lawyer?", drafts.LAWYER_OPTIONS, index=None)
+    lawyer = st.radio("Does the person have a lawyer?", drafts.LAWYER_OPTIONS, key="f_lawyer")
     if lawyer is None:
         st.info("Answer the question above to make the draft.")
         return
