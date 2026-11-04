@@ -24,8 +24,7 @@ AI_SENTENCE = (f"How this draft was prepared: facts were read from case notes wi
                "court, AI assistance must be declared as the court requires.")
 NO_AI_SENTENCE = ("How this draft was prepared: facts were entered by a volunteer; dates were calculated "
                   "by rule-based code from the statute; the draft was reviewed and approved by the "
-                  "supervisor on [date]. If this is filed in any court, AI assistance must be declared "
-                  "as the court requires.")
+                  "supervisor on [date].")
 
 
 def make(ai_model=None, **changes):
@@ -55,6 +54,7 @@ def test_disclosure_without_ai():
     _, text = make()
     assert text.rstrip().endswith(NO_AI_SENTENCE)
     assert "gemini" not in text
+    assert "AI assistance must be declared" not in text
 
 
 def test_disclosure_comes_after_the_dlsa_application():

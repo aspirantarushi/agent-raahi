@@ -225,9 +225,11 @@ def disclosure_block(ai_model: Optional[str], approved_on: Optional[date] = None
     else:
         how = "facts were entered by a volunteer"
     approved = show_date(approved_on) if approved_on else "[date]"
-    return (f"{DISCLOSURE_START} {how}; dates were calculated by rule-based code from the statute; "
-            f"the draft was reviewed and approved by the supervisor on {approved}. "
-            "If this is filed in any court, AI assistance must be declared as the court requires.")
+    block = (f"{DISCLOSURE_START} {how}; dates were calculated by rule-based code from the statute; "
+             f"the draft was reviewed and approved by the supervisor on {approved}.")
+    if ai_model:
+        block += " If this is filed in any court, AI assistance must be declared as the court requires."
+    return block
 
 
 def add_disclosure(text: str, ai_model: Optional[str], approved_on: Optional[date] = None) -> str:
