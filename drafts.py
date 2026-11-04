@@ -13,12 +13,14 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+import lang
 import privacy
 import section479
 from section479 import Result, add_months
 
 HERE = Path(__file__).resolve().parent
 TEMPLATES = HERE / "templates"
+TEMPLATES_HI = HERE / "templates_hi"
 DRAFT_HEADER = "DRAFT — to be checked by a lawyer"
 
 LAWYER_OPTIONS = ["Legal aid lawyer", "Private lawyer", "None", "Don't know"]
@@ -219,9 +221,21 @@ RULES_DATES = "dates were calculated by rule-based code from the statute"
 APPROVAL_BLANK = "approved by the supervisor on [date]."
 
 
+RULE_KEYS = {RULES_DATES: "disclosure.rules_dates",
+             "free legal aid eligibility was checked by rule-based code from our verified files":
+                 "disclosure.rules_eligibility"}
+DISCLOSURE_STARTS = [DISCLOSURE_START, "\u092f\u0939 \u0921\u094d\u0930\u093e\u092b\u093c\u094d\u091f \u0915\u0948\u0938\u0947 \u092c\u0928\u093e:"]
+
+
 def disclosure_block(ai_model: Optional[str], approved_on: Optional[date] = None,
-                     rules: str = RULES_DATES) -> str:
+                     rules: str = RULES_DATES, code: str = "en") -> str:
     """The block added at the end of every draft. Names the AI model only if AI was used."""
+    if code != "en":
+        how = (lang.t("disclosure.ai", code, model=ai_model) if ai_model else lang.t("disclosure.no_ai", code))
+        approved = lang.show_date(approved_on, code) if approved_on else lang.t("disclosure.date_blank", code)
+        block = (f"{lang.t('disclosure.start', code)} {how}; {lang.t(RULE_KEYS.get(rules, 'disclosure.rules_dates'), code)}; "
+                 f"{lang.t('disclosure.approved', code, date=approved)}")
+        return block + (" " + lang.t("disclosure.court", code) if ai_model else "")
     if ai_model:
         how = f"facts were read from case notes with AI assistance ({ai_model}) and checked by a volunteer"
     else:
@@ -235,23 +249,144 @@ def disclosure_block(ai_model: Optional[str], approved_on: Optional[date] = None
 
 
 def add_disclosure(text: str, ai_model: Optional[str], approved_on: Optional[date] = None,
-                   rules: str = RULES_DATES) -> str:
-    return text.rstrip("\n") + "\n\n---\n\n" + disclosure_block(ai_model, approved_on, rules) + "\n"
+                   rules: str = RULES_DATES, code: str = "en") -> str:
+    return text.rstrip("\n") + "\n\n---\n\n" + disclosure_block(ai_model, approved_on, rules, code) + "\n"
 
 
-def fill_approval_date(text: str, approved_on: date, ai_model: Optional[str], rules: str = RULES_DATES) -> str:
+def fill_approval_date(text: str, approved_on: date, ai_model: Optional[str], rules: str = RULES_DATES,
+                       code: str = "en") -> str:
     """At approval: fill the date in the disclosure block, or add the block if it was removed."""
-    if APPROVAL_BLANK in text:
-        i = text.rindex(APPROVAL_BLANK)
-        return text[:i] + f"approved by the supervisor on {show_date(approved_on)}." + text[i + len(APPROVAL_BLANK):]
-    if DISCLOSURE_START not in text:
-        return add_disclosure(text, ai_model, approved_on, rules)
+    blanks = [(APPROVAL_BLANK, f"approved by the supervisor on {show_date(approved_on)}.")]
+    hi_blank = lang.t("disclosure.approved", "hi", date=lang.t("disclosure.date_blank", "hi"))
+    blanks.append((hi_blank, lang.t("disclosure.approved", "hi", date=lang.show_date(approved_on, "hi"))))
+    for blank, filled in blanks:
+        if blank in text:
+            i = text.rindex(blank)
+            return text[:i] + filled + text[i + len(blank):]
+    if not any(start in text for start in DISCLOSURE_STARTS):
+        return add_disclosure(text, ai_model, approved_on, rules, code)
     return text
 
 
+# ---------- Hindi drafts (templates_hi/) ----------
+
+def _hi_template(name: str) -> Tuple[str, bool]:
+    """A Hindi template without its marker line, and whether its translation was checked."""
+    lines = (TEMPLATES_HI / name).read_text(encoding="utf-8").splitlines()
+    checked = lines[0].strip().lower() == "<!-- hindi translation checked: yes -->"
+    return "\n".join(lines[1:]) + "\n", checked
+
+
+def _hi_line(template: str, prefix: str) -> str:
+    """The one template line that starts with this prefix (the line holds the blank to fill)."""
+    found = [l for l in template.splitlines() if l.startswith(prefix)]
+    if len(found) != 1:
+        raise ValueError(f"Hindi template line starting {prefix!r} found {len(found)} times (expected once).")
+    return found[0]
+
+
+def describe_term_in(months: int, code: str) -> str:
+    if code == "en":
+        return describe_term(months)
+    if months % 12 == 0:
+        years = months // 12
+        return lang.t("draft.term_years" if years != 1 else "draft.term_year", code, years=years, months=months)
+    return lang.t("draft.term_months" if months != 1 else "draft.term_month", code, months=months)
+
+
+def describe_sections_in(offence: section479.Offence, offence_date: Optional[date], code: str) -> str:
+    if code == "en":
+        return describe_sections(offence, offence_date)
+    bns, ipc = offence.bns_section, offence.ipc_section
+    if offence_date is None:
+        key = "sec.no_date"
+    elif ipc == "new":
+        key = "sec.new_before" if offence_date < BNS_START else "sec.new_after"
+    else:
+        key = "sec.before" if offence_date < BNS_START else "sec.after"
+    return lang.t(key, code, bns=bns, ipc=ipc)
+
+
+def hindi_note(facts: "UndertrialFacts", result: Result) -> Tuple[str, bool]:
+    code = "hi"
+    template, checked = _hi_template("section479_note.md")
+    o, m = result.offence, result.maximum
+    t = lambda key, **p: lang.t(key, code, **p)
+    check = t("draft.check_suffix") if result.lawyer_check else ""
+    status = lambda ms: t("draft.reached") if ms.reached else t("draft.not_reached")
+    sections = describe_sections_in(o, facts.offence_date, code)
+    if facts.more_than_one_section:
+        sections += t("draft.other_sections")
+    months, days = time_in_custody(facts.custody_began, facts.today)
+    if result.one_third and result.one_third.when:
+        third = f"{lang.show_date(result.one_third.when, code)} \u2014 {status(result.one_third)}{check}"
+    else:
+        third = t("draft.not_applicable_convicted")
+    half = f"{lang.show_date(result.one_half.when, code)} \u2014 {status(result.one_half)}{check}"
+    question = ""
+    if o.ask_to_decide:
+        answer = facts.answer.strip()
+        if not answer:
+            answer = t("draft.not_answered")
+        elif not facts.question_answered:
+            answer += t("draft.not_confirmed")
+        question = "\n" + t("draft.question_line", question=o.ask_to_decide, answer=answer)
+
+    def line(label_key: str) -> Tuple[str, str]:
+        full = _hi_line(template, t(label_key))
+        return full, t(label_key)
+
+    pairs = []
+    for key, value in [
+        ("draft.line.sections", sections),
+        ("draft.line.maximum", t("draft.max_value", term=describe_term_in(m.months, code), section=m.section)
+         + "\n" + t("draft.why_max", reason=section479.maximum_reason(m, code))
+         + (f"\n  {m.source_line}" if m.source_line else "")),
+        ("draft.line.custody", lang.show_date(facts.custody_began, code)),
+        ("draft.line.period", t("draft.period", months=months, days=days, date=lang.show_date(facts.today, code))),
+        ("draft.line.convictions", t("draft.none_known") if facts.never_convicted else t("draft.yes_details")),
+        ("draft.line.other_cases", (t("draft.yes_details") if facts.other_cases_pending else t("draft.none_known"))
+         + question),
+        ("draft.line.half", half),
+        ("draft.line.third", third),
+    ]:
+        full, prefix = line(key)
+        pairs.append((full, prefix + value))
+    return fill(template, pairs), checked
+
+
+def hindi_dlsa(facts: "UndertrialFacts", result: Result) -> Tuple[str, bool]:
+    code = "hi"
+    template, checked = _hi_template("dlsa_application.md")
+    t = lambda key, **p: lang.t(key, code, **p)
+    o = result.offence
+    statement = t("draft.dlsa_statement", date=lang.show_date(facts.custody_began, code),
+                  sections=describe_sections_in(o, facts.offence_date, code), offence=o.offence.lower())
+    return fill(template, [(t("draft.dlsa_groups_blank"), t("draft.dlsa_custody")),
+                           (t("draft.dlsa_need_blank"), t("draft.dlsa_need")),
+                           (t("draft.dlsa_statement_blank"), statement)]), checked
+
+
+def translation_label(checked: bool) -> str:
+    return lang.t("draft.translation_label", "hi", status=lang.t("yes" if checked else "no", "hi"),
+                  status_en="yes" if checked else "no")
+
+
 def make_undertrial_draft(facts: UndertrialFacts, result: Result, templates: Path = TEMPLATES,
-                          ai_model: Optional[str] = None) -> str:
-    """ai_model: the AI model that read the case notes, or None if the facts were typed in."""
+                          ai_model: Optional[str] = None, code: str = "en") -> str:
+    """ai_model: the AI model that read the case notes, or None if the facts were typed in.
+    code: the draft's language ("en" or "hi"). A Hindi draft keeps the English DRAFT line first."""
+    if code == "hi":
+        if not result.applies:
+            raise ValueError("Section 479 does not apply, so there is no Section 479 note to draft.")
+        note, checked = hindi_note(facts, result)
+        if facts.lawyer == "None":
+            dlsa, dlsa_checked = hindi_dlsa(facts, result)
+            note = note.rstrip("\n") + "\n\n---\n\n" + dlsa
+            checked = checked and dlsa_checked
+        first, second, rest = note.split("\n", 2)
+        note = f"{first}\n{second}\n{translation_label(checked)}\n{rest}"
+        return add_disclosure(note, ai_model, code="hi")
     if not result.applies:
         raise ValueError("Section 479 does not apply, so there is no Section 479 note to draft.")
     note = fill((templates / "section479_note.md").read_text(encoding="utf-8"),

@@ -58,7 +58,8 @@ def new_case_id(base: Path = HERE, today: Optional[date] = None) -> str:
             return case_id
 
 
-def submit(draft_text: str, facts: UndertrialFacts, base: Path = HERE, ai: Optional[dict] = None) -> str:
+def submit(draft_text: str, facts: UndertrialFacts, base: Path = HERE, ai: Optional[dict] = None,
+           draft_lang: str = "en") -> str:
     """Send a draft to the supervisor. Saved in pending/ only, plus its audit record.
 
     ai: what the AI did for this case ({"model", "read_at", "extracted", "not_accepted"}),
@@ -79,6 +80,7 @@ def submit(draft_text: str, facts: UndertrialFacts, base: Path = HERE, ai: Optio
         "draft": draft_text,
         "reason": "",
         "ai_model": (ai or {}).get("model"),
+        "draft_lang": draft_lang,
     }
     pending, _, _ = _dirs(base)
     _write(pending / f"{case_id}.json", json.dumps(record, indent=2, ensure_ascii=False))
@@ -112,7 +114,8 @@ def approve(case_id: str, edited_text: Optional[str] = None, base: Path = HERE,
     approved_on = approved_on or date.today()
     is_general = record.get("case_type") == general.CASE_TYPE
     text = drafts.fill_approval_date(text, approved_on, record.get("ai_model"),
-                                     general.RULES_USED if is_general else drafts.RULES_DATES)
+                                     general.RULES_USED if is_general else drafts.RULES_DATES,
+                                     record.get("draft_lang", "en"))
     if not text.startswith(drafts.DRAFT_HEADER):
         text = drafts.DRAFT_HEADER + "\n\n" + text.lstrip()
     found = drafts.personal_details_found(text)

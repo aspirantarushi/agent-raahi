@@ -22,7 +22,9 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from fractions import Fraction
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
+
+import lang
 
 HERE = Path(__file__).resolve().parent
 SENTENCE_TABLE = HERE / "knowledge" / "sentence_table.csv"
@@ -69,6 +71,7 @@ class Maximum:
     section: str  # for example "IPC 384"
     reason: str
     lawyer_check: bool = False
+    reason_code: Tuple[str, dict] = ("", {})  # the reason's key in i18n/*.json, for other languages
     source: Optional[dict] = None  # Source / Link / Checked lines from knowledge/ backing the reason
 
     @property
@@ -97,33 +100,30 @@ def choose_maximum(offence: Offence, offence_date: Optional[date]) -> Maximum:
 
     if offence_date is None:
         if ipc_known and offence.ipc_max_prison == offence.max_prison:
-            bns.reason = "The offence date is not given, but the IPC and BNS maximums are the same."
+            bns.reason, bns.reason_code = _text("s479.max.no_date_same")
             return bns
-        bns.reason = ("The offence date is not given. The maximum is different under the IPC "
-                      "(offences before 1 July 2024), so the dates are " + LAWYER_CHECK + ".")
+        bns.reason, bns.reason_code = _text("s479.max.no_date_differs")
         bns.lawyer_check = True
         bns.source = old_max_source
         return bns
 
     if offence_date >= BNS_START:
-        bns.reason = ("The offence happened on or after 1 July 2024, so the BNS maximum is used: "
-                      "only offences committed before 1 July 2024 use the old IPC maximum.")
+        bns.reason, bns.reason_code = _text("s479.max.after_july")
         bns.source = old_max_source
         return bns
 
     if not ipc_known:
-        bns.reason = ("The offence happened before 1 July 2024, but our sentence table has no IPC "
-                      "maximum for this offence, so the BNS maximum is shown and the dates are "
-                      + LAWYER_CHECK + ".")
+        bns.reason, bns.reason_code = _text("s479.max.before_no_ipc")
         bns.lawyer_check = True
         bns.source = old_max_source
         return bns
 
-    reason = ("The offence happened before 1 July 2024, so the IPC maximum is used: Article 20(1) "
-              "of the Constitution bars a heavier penalty than the law in force when the offence happened.")
+    params = {}
     if offence.ipc_max_prison != offence.max_prison:
-        reason += f" (The BNS maximum, {offence.max_prison} months, is higher and does not apply.)"
-    return Maximum(offence.ipc_max_prison, "IPC", f"IPC {offence.ipc_section}", reason,
+        params["bns_months"] = offence.max_prison
+    reason = lang.t("s479.max.before_ipc") + (
+        lang.t("s479.max.bns_higher", months=offence.max_prison) if params else "")
+    return Maximum(offence.ipc_max_prison, "IPC", f"IPC {offence.ipc_section}", reason, reason_code=("s479.max.before_ipc", params),
                    source=old_max_source)
 
 
@@ -134,6 +134,21 @@ class MilestoneDate:
     when: Optional[date]  # None when this date does not apply
     reached: Optional[bool]
     note: str = ""
+    key: str = ""        # "s479.third" or "s479.half"
+    note_key: str = ""   # i18n key of the note, if any
+
+
+class InputError(ValueError):
+    """A problem with the facts entered; .key is its i18n key."""
+
+    def __init__(self, key: str):
+        super().__init__(lang.t(key))
+        self.key = key
+
+
+def _text(key: str, **params):
+    """(English text, (key, params)) for a reason."""
+    return lang.t(key, **params), (key, params)
 
 
 @dataclass
@@ -143,8 +158,14 @@ class Result:
     applies: bool  # False = Section 479 release is not available
     lawyer_check: bool  # True = show dates as "to be checked by a lawyer"
     reasons: List[str] = field(default_factory=list)
+    reason_codes: List[Tuple[str, dict]] = field(default_factory=list)  # same reasons, as i18n keys
     one_third: Optional[MilestoneDate] = None
     one_half: Optional[MilestoneDate] = None
+
+    def say(self, key: str, **params) -> None:
+        """Add a reason (English text, plus its key for other languages)."""
+        self.reasons.append(lang.t(key, **params))
+        self.reason_codes.append((key, params))
 
 
 # ---------- reading the sentence table ----------
@@ -245,12 +266,11 @@ def calculate(
     and this row is confirmed as the right one. Ignored for rows with no question.
     """
     if delay_days_by_accused < 0:
-        raise ValueError("Delay caused by the accused can't be negative.")
+        raise InputError("s479.error.delay_negative")
     if custody_began > today:
-        raise ValueError("The date custody began can't be after today's date.")
-
+        raise InputError("s479.error.custody_after_today")
     if offence_date is not None and offence_date > custody_began:
-        raise ValueError("The offence date can't be after the date custody began.")
+        raise InputError("s479.error.offence_after_custody")
 
     maximum = choose_maximum(offence, offence_date)
     result = Result(offence=offence, maximum=maximum, applies=True, lawyer_check=False)
@@ -258,76 +278,70 @@ def calculate(
     # Rules that rule Section 479 out completely.
     if offence.death_or_life_possible or maximum.months is None:
         result.applies = False
-        result.reasons.append(
-            "This offence can be punished with death or life imprisonment, "
-            "so Section 479 does not apply. Ordinary bail can still be sought."
-        )
+        result.say("s479.reason.death_or_life")
     if offence.section_479_applies == "no" and not offence.death_or_life_possible:
         result.applies = False
-        result.reasons.append("The sentence table says Section 479 does not apply to this offence.")
+        result.say("s479.reason.table_no")
     if other_cases_pending:
         result.applies = False
-        result.reasons.append(
-            "More than one case is pending, so Section 479 release is not available "
-            "(Section 479(2)). Ordinary bail can still be sought."
-        )
+        result.say("s479.reason.other_cases")
     if not result.applies:
         return result
 
     # Rules that mean the dates must be checked by a lawyer.
     if more_than_one_section:
         result.lawyer_check = True
-        result.reasons.append(
-            "More than one section is charged. Section 479(2) may bar release, "
-            "so these dates are " + LAWYER_CHECK + "."
-        )
+        result.say("s479.reason.many_sections")
     if offence.ask_to_decide and not question_answered:
         result.lawyer_check = True
-        result.reasons.append(
-            "This question is not answered yet: \"" + offence.ask_to_decide + "\" "
-            "The maximum term may be different, so these dates are " + LAWYER_CHECK + "."
-        )
+        result.say("s479.reason.question", question=offence.ask_to_decide)
     if offence.section_479_applies == "check":
         result.lawyer_check = True
-        result.reasons.append(
-            "The sentence table flags this offence for checking"
-            + (": " + offence.notes if offence.notes else "")
-            + ". These dates are " + LAWYER_CHECK + "."
-        )
+        result.say("s479.reason.table_check", notes=(": " + offence.notes) if offence.notes else "")
 
     if maximum.lawyer_check:
         result.lawyer_check = True
         result.reasons.append(maximum.reason)
+        result.reason_codes.append(maximum.reason_code)
 
     max_months = Fraction(maximum.months)
     delay = timedelta(days=delay_days_by_accused)
 
-    def milestone(name: str, share: Fraction) -> MilestoneDate:
+    def milestone(key: str, share: Fraction) -> MilestoneDate:
         months = max_months * share
         when = add_fraction_of_months(custody_began, months) + delay
-        note = ""
+        note, note_key = "", ""
         if months.denominator != 1:
             result.lawyer_check = True
-            note = "Part of a month is counted as 30 days; " + LAWYER_CHECK + "."
-        return MilestoneDate(name=name, months=months, when=when, reached=today >= when, note=note)
+            note, note_key = lang.t("s479.note.part_month"), "s479.note.part_month"
+        return MilestoneDate(name=lang.t(key), months=months, when=when, reached=today >= when, note=note,
+                             key=key, note_key=note_key)
 
     if never_convicted:
-        result.one_third = milestone("One-third (personal bond)", Fraction(1, 3))
+        result.one_third = milestone("s479.third", Fraction(1, 3))
     else:
         result.one_third = MilestoneDate(
-            name="One-third (personal bond)",
-            months=max_months / 3,
-            when=None,
-            reached=None,
-            note="Only for a person never convicted of any offence before.",
-        )
-    result.one_half = milestone("One-half (bail)", Fraction(1, 2))
+            name=lang.t("s479.third"), months=max_months / 3, when=None, reached=None,
+            note=lang.t("s479.note.convicted"), key="s479.third", note_key="s479.note.convicted")
+    result.one_half = milestone("s479.half", Fraction(1, 2))
     if delay_days_by_accused:
-        result.reasons.append(
-            f"{delay_days_by_accused} days of delay caused by the accused are not counted, "
-            "so both dates move later by that many days."
-        )
+        result.say("s479.reason.delay", days=delay_days_by_accused)
     return result
+
+
+def texts(result: Result, code: str) -> List[str]:
+    """The result's reasons in a language."""
+    return [lang.t(k, code, **p) if k else r for (k, p), r in zip(result.reason_codes, result.reasons)]
+
+
+def maximum_reason(m: Maximum, code: str) -> str:
+    key, params = m.reason_code
+    if not key:
+        return m.reason
+    text = lang.t(key, code)
+    if params.get("bns_months"):
+        text += lang.t("s479.max.bns_higher", code, months=params["bns_months"])
+    return text
 
 
 # ---------- source lines from knowledge/ ----------
