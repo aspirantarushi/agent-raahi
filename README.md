@@ -1,4 +1,13 @@
-# Legal aid agent: content files
+<img src="assets/logo-mark.svg" width="48" height="48" alt="">
+
+# Agent Raahi
+
+**Lighting the way to legal aid** · *क़ानूनी मदद तक, रोशन राह*
+
+An AI casework agent for legal aid clinics and NGOs (Code for a Billion, Timely Justice track).
+Every draft is checked and approved by a supervising lawyer before it is used.
+
+## Content files
 
 Version 1 content for the legal aid agent (Code for a Billion, Timely Justice track). Researched on 2 November 2026. Nothing here has been checked by a lawyer yet: every entry says "Lawyer checked: no" until it is.
 

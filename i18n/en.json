@@ -576,8 +576,8 @@
  "imp.saved": "Added to the impact log.",
  "imp.export": "Download the impact log (CSV)",
  "imp.count": "{n} real case(s) logged.",
- "app.name": "Legal aid agent",
- "app.tagline": "Legal aid casework assistant for clinics and NGOs",
+ "app.name": "Agent Raahi",
+ "app.tagline": "Lighting the way to legal aid",
  "safety.bar112": "In danger? Call 112",
  "safety.bar15100": "Free legal aid: 15100",
  "flow.g.1": "Tell the story",
@@ -588,5 +588,8 @@
  "ui.general.story_done": "Step 1: the story (show or edit)",
  "ui.back_story": "← Back to the story",
  "ui.back_questions": "← Back to the questions",
- "ui.details": "Show details"
+ "ui.details": "Show details",
+ "app.description": "An AI casework agent for legal aid clinics and NGOs",
+ "disclosure.prepared_with": "Prepared with Agent Raahi.",
+ "meta.hi_checked.app.tagline": "not applicable (English)"
 }

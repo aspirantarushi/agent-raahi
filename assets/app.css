@@ -5,10 +5,12 @@ html, body, [class*="css"], .stMarkdown p, .stMarkdown li, label, input, textare
 .block-container { padding-top: 3.75rem; max-width: 52rem; }  /* room for Streamlit's top bar */
 
 /* Header and safety bar */
-.app-header { display: flex; align-items: baseline; gap: .75rem; flex-wrap: wrap; margin: 0 0 .25rem 0; }
+.app-header { display: flex; align-items: center; gap: .65rem; margin: 0 0 .25rem 0; }
+.app-logo { flex: 0 0 auto; line-height: 0; }
+.app-description { color: var(--muted); font-size: .85rem; }
 .app-name { font-weight: 800; font-size: 1.5rem; color: var(--ink); letter-spacing: -.01em; }
 .app-name span { color: var(--teal); }
-.app-tagline { color: var(--muted); font-size: .95rem; }
+.app-tagline { color: var(--ink); font-size: .95rem; font-weight: 600; }
 .safety-bar { position: sticky; top: 3.5rem; z-index: 999; display: flex; flex-wrap: wrap; gap: .5rem 1.25rem;
   background: var(--ink); color: #fff; padding: .55rem .9rem; border-radius: .6rem; margin: .25rem 0 1rem 0;
   font-size: 1rem; }

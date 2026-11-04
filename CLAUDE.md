@@ -1,4 +1,8 @@
-# Legal aid agent — project brief for Claude Code
+# Agent Raahi (legal aid agent) — project brief for Claude Code
+
+Name: Agent Raahi (Hindi: एजेंट राही). Tagline: "Lighting the way to legal aid" (Hindi: "क़ानूनी मदद तक,
+रोशन राह", Hindi translation checked: no). Description: "An AI casework agent for legal aid clinics and NGOs".
+The name, tagline and logo (assets/logo-mark.svg) come from i18n/en.json, i18n/hi.json and ui.py.
 
 ## Who you are working with
 Arushi is building this for the Code for a Billion hackathon (Code for India; submissions close

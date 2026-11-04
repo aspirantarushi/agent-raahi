@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40" role="img" aria-label="Agent Raahi">
+  <path d="M5 21 Q 20 33 35 21 Q 33 29.5 20 30 Q 7 29.5 5 21 Z" fill="#14213D"/>
+  <path d="M20 3 C 26 9, 26 15.5, 20 19.5 C 14 15.5, 14 9, 20 3 Z" fill="#B45309"/>
+  <path d="M20 9 C 22.6 11.5, 22.6 15, 20 17 C 17.4 15, 17.4 11.5, 20 9 Z" fill="#FDE68A"/>
+  <path d="M8 36.5 C 15 33.5, 25 33.5, 32 36.5" fill="none" stroke="#0F766E" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="0.1 4.6"/>
+</svg>

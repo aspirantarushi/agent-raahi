@@ -16,9 +16,27 @@ def style() -> str:
     return f"<style>{CSS_FILE.read_text(encoding='utf-8')}</style>"
 
 
-def header(name: str, tagline: str) -> str:
-    return (f'<header class="app-header" role="banner"><div class="app-name">{html.escape(name)}</div>'
-            f'<div class="app-tagline">{html.escape(tagline)}</div></header>')
+LOGO_FILE = HERE / "assets" / "logo-mark.svg"
+
+
+def logo_mark(size: int = 40) -> str:
+    """The lamp-and-path mark: a tiny inline SVG (about 0.5 KB), no image download."""
+    svg = LOGO_FILE.read_text(encoding="utf-8").strip()
+    return svg.replace('width="40" height="40"', f'width="{size}" height="{size}"', 1)
+
+
+def wordmark(name: str) -> str:
+    """'Agent Raahi' with the last word in the accent colour (also 'एजेंट राही')."""
+    first, _, last = name.rpartition(" ")
+    return f"{html.escape(first)} <span>{html.escape(last)}</span>" if first else f"<span>{html.escape(name)}</span>"
+
+
+def header(name: str, tagline: str, description: str = "") -> str:
+    return (f'<header class="app-header" role="banner"><div class="app-logo">{logo_mark()}</div>'
+            f'<div><div class="app-name">{wordmark(name)}</div>'
+            f'<div class="app-tagline">{html.escape(tagline)}</div>'
+            + (f'<div class="app-description">{html.escape(description)}</div>' if description else "")
+            + '</div></header>')
 
 
 def safety_bar(danger: str, legal_aid: str) -> str:

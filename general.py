@@ -447,6 +447,7 @@ _NOT_NAMES = {
     "january", "february", "march", "april", "may", "june", "july", "august", "september", "october",
     "november", "december", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
     "mr", "mrs", "ms", "dr", "shri", "smt",
+    "agent", "raahi",  # the app's own name, "Agent Raahi"
 }
 
 

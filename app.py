@@ -33,7 +33,8 @@ import store
 import timeline
 import ui
 
-st.set_page_config(page_title="Legal aid agent", page_icon="⚖️", layout="centered")
+st.set_page_config(page_title=lang.t("app.name", st.session_state.get("ui_lang", lang.DEFAULT)),
+                   page_icon="\U0001FA94", layout="centered")  # 🪔 lamp
 
 # Look and feel: .streamlit/config.toml (colours, fonts) plus a small stylesheet (assets/app.css).
 st.markdown(ui.style(), unsafe_allow_html=True)
@@ -1621,7 +1622,7 @@ st.sidebar.markdown("---")
 st.sidebar.markdown(f"**{t('ui.sidebar.danger')}**  \n{t('ui.sidebar.helpline')}")
 head_left, head_right = st.columns([3, 2])
 with head_left:
-    st.markdown(ui.header(t("app.name"), t("app.tagline")), unsafe_allow_html=True)
+    st.markdown(ui.header(t("app.name"), t("app.tagline"), t("app.description")), unsafe_allow_html=True)
 with head_right:
     language_switch()
 st.markdown(ui.safety_bar(t("safety.bar112"), t("safety.bar15100")), unsafe_allow_html=True)

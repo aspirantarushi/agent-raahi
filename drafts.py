@@ -250,7 +250,8 @@ def disclosure_block(ai_model: Optional[str], approved_on: Optional[date] = None
 
 def add_disclosure(text: str, ai_model: Optional[str], approved_on: Optional[date] = None,
                    rules: str = RULES_DATES, code: str = "en") -> str:
-    return text.rstrip("\n") + "\n\n---\n\n" + disclosure_block(ai_model, approved_on, rules, code) + "\n"
+    return (text.rstrip("\n") + "\n\n---\n\n" + lang.t("disclosure.prepared_with", code) + "\n"
+            + disclosure_block(ai_model, approved_on, rules, code) + "\n")
 
 
 def fill_approval_date(text: str, approved_on: date, ai_model: Optional[str], rules: str = RULES_DATES,

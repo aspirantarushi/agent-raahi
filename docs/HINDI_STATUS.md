@@ -33,7 +33,9 @@ When an entry or template is checked, change "Hindi translation checked: no" to 
    starting `s479.` (Section 479 reasons), `draft.` and `sec.` (draft phrases), `disclosure.`
    (AI disclosure), `elig.` and `group.` (free legal aid), `next:` (next steps), `doc:` (documents)
    and `intake.q.` (intake questions)
-7. `case_notes_hi.txt` and `practice_stories/upi_fraud_hinglish.txt` — fake practice stories (only
+7. The name and tagline in `i18n/hi.json`: "एजेंट राही" and "क़ानूनी मदद तक, रोशन राह"
+   (key `meta.hi_checked.app.tagline` is "no" until checked; change it to "yes")
+8. `case_notes_hi.txt` and `practice_stories/upi_fraud_hinglish.txt` — fake practice stories (only
    check that they read naturally)
 
 ## Known limits
