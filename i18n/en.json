@@ -564,5 +564,16 @@
  "eval.save_score": "Save score",
  "eval.saved": "Score saved.",
  "eval.export": "Download raw counts (CSV)",
- "eval.no_sessions": "No finished evaluation sessions yet."
+ "eval.no_sessions": "No finished evaluation sessions yet.",
+ "imp.title": "Impact log (real use, only with a partner's permission)",
+ "imp.caption": "Add a real case only when the partner organisation has given permission. Practice and evaluation cases are refused. The app fills in the dates, review outcome, referral and acknowledgement from its records.",
+ "imp.case": "Case",
+ "imp.partner": "Partner organisation",
+ "imp.permission": "The partner has given permission to log this case",
+ "imp.permission_ref": "How permission was given (for example, letter of 5 Nov 2026)",
+ "imp.feedback": "Reviewer feedback (short, no names)",
+ "imp.save": "Add to the impact log",
+ "imp.saved": "Added to the impact log.",
+ "imp.export": "Download the impact log (CSV)",
+ "imp.count": "{n} real case(s) logged."
 }

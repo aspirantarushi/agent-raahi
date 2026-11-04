@@ -35,10 +35,37 @@ Version 1 content for the legal aid agent (Code for a Billion, Timely Justice tr
   Supreme Court's draft "Regulations for Use of AI in Courts, 2026" (Regulations 16, 20(d),
   20(f) and 43), because drafts may later be filed in court.
 
+## Safeguards in every case
+- **Readiness checklist**: each draft type (Any-case summary, DLSA application, Section 479 note) has
+  required fields, each present, missing, uncertain, or "cannot obtain" (with a reason). The send
+  button says "Ready for review" or "Not ready: N items missing"; gaps are listed at the top of the draft.
+- **Evidence ledger**: every fact shows where it came from: told by the person (entered by the
+  volunteer), read from notes by AI and checked by the volunteer, calculated by rule-based code, or from
+  a verified source (with its Source line). A legal point without a verified source is "unresolved:
+  ask a lawyer", never a fact.
+- **Safe abstention**: contradictions (impossible dates, the AI and the volunteer disagreeing, "no
+  other cases" and then "another case") or a missing key fact give "Cannot conclude yet" and what is
+  needed, instead of a conclusion.
+- **Handoff stages**: Ready -> Approved by supervisor -> Submitted by an authorised worker (who, date,
+  how) -> Acknowledged (date, reference). A generated draft is never treated as a filing.
+- **Privacy**: see docs/PRIVACY.md. Supervisors can delete a case; the audit log then keeps only
+  "case deleted" and the date.
+
+## Measuring impact honestly
+- **Evaluation mode (practice)**: 10 fictional cases in `evaluation/cases/` with answer keys. Each can
+  be done "by hand" (a plain form, no AI) or "with the agent"; the app records the time. A reviewer
+  scores each attempt on the Supervisor screen; "Download raw counts (CSV)" gives case, method,
+  reviewer, minutes, missing fields, material errors, major corrections, accepted. No averages are
+  pre-filled and no results are invented.
+- **Impact log (real use)**: only for cases a partner organisation has given permission to log; practice
+  cases are refused. Dates, review outcome, referral and acknowledgement come from the app's records.
+
 ## Language support
 - **English and Hindi** are the checked languages. Their screen text is in `i18n/en.json` and
   `i18n/hi.json` (everyday Hindi). Hindi legal text is in `knowledge_hi/` and `templates_hi/`, marked
   "Hindi translation checked: no" until a Hindi speaker who knows the law has checked it.
+- **For the pilot, languages are frozen at English and Hindi** (`lang.PILOT_FREEZE`). The Bhashini code
+  below is kept for later.
 - **The other 21 scheduled languages** use Bhashini (MeitY). `scripts/translate_ui.py` translates
   the screen text once into `i18n/<code>.json`, marked "machine translated by Bhashini, not checked".
   {placeholders}, numbers, 112, 1930, 15100 and web addresses are never sent for translation, so they

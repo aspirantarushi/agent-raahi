@@ -19,6 +19,7 @@ import audit
 import consistency
 import drafts
 import evaluation
+import impact
 import general
 import intake
 import lang
@@ -1391,6 +1392,36 @@ def evaluation_scoring_box():
                            mime="text/csv", key="evs-export")
 
 
+def save_impact():
+    get = st.session_state.get
+    try:
+        impact.log(get("imp-case") or "", get("imp-partner", ""), bool(get("imp-permission")),
+                   get("imp-ref", ""), get("imp-feedback", ""))
+    except ValueError as err:
+        st.session_state["imp-msg"] = ("error", str(err))
+        return
+    st.session_state["imp-msg"] = ("ok", t("imp.saved"))
+
+
+def impact_box():
+    with st.expander(t("imp.title")):
+        st.caption(t("imp.caption"))
+        practice = impact.practice_case_ids()
+        cases = [c["id"] for c in store.list_cases() if c["status"] == store.APPROVED and c["id"] not in practice]
+        st.selectbox(t("imp.case"), cases, index=None, key="imp-case")
+        st.text_input(t("imp.partner"), max_chars=100, key="imp-partner")
+        st.checkbox(t("imp.permission"), key="imp-permission")
+        st.text_input(t("imp.permission_ref"), max_chars=100, key="imp-ref")
+        st.text_area(t("imp.feedback"), max_chars=300, key="imp-feedback", height=80)
+        st.button(t("imp.save"), key="imp-save", on_click=save_impact)
+        msg = st.session_state.pop("imp-msg", None)
+        if msg:
+            (st.success if msg[0] == "ok" else st.error)(msg[1])
+        st.caption(t("imp.count", n=len(impact.entries())))
+        st.download_button(t("imp.export"), impact.export_csv(), file_name="impact_log.csv", mime="text/csv",
+                           key="imp-export")
+
+
 def learn_screen():
     st.title(t("ui.learn.title"))
     st.info(t("ui.learn.soon"))
@@ -1442,6 +1473,7 @@ def supervisor_screen():
 
     delete_case_box()
     evaluation_scoring_box()
+    impact_box()
 
     st.subheader(t("ui.sup.problems"))
     problems = audit.list_problems()
