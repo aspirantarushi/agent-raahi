@@ -354,9 +354,9 @@ def test_screen_wages_questions_one_at_a_time_then_send(pretend_ai):
            "— Yes, on his phone" in draft
     assert "Questions still to ask\n- Were other workers also not paid?" in draft
     assert "Not covered by our verified files yet; ask NALSA's free helpline 15100." in draft
-    assert button(at, "Send to supervisor").disabled  # until the volunteer confirms
+    assert next(b for b in at.button if b.label.startswith("Send to supervisor")).disabled  # until the volunteer confirms
     at.checkbox(key="g_checked").check().run()
-    button(at, "Send to supervisor").click().run()
+    next(b for b in at.button if b.label.startswith("Send to supervisor")).click().run()
     ok(at)
     assert any("Sent to the supervisor as case" in s.value for s in at.success)
     [c] = store.list_cases(pretend_ai)

@@ -59,7 +59,7 @@ def new_case_id(base: Path = HERE, today: Optional[date] = None) -> str:
 
 
 def submit(draft_text: str, facts: UndertrialFacts, base: Path = HERE, ai: Optional[dict] = None,
-           draft_lang: str = "en") -> str:
+           draft_lang: str = "en", readiness: Optional[list] = None) -> str:
     """Send a draft to the supervisor. Saved in pending/ only, plus its audit record.
 
     ai: what the AI did for this case ({"model", "read_at", "extracted", "not_accepted"}),
@@ -81,10 +81,16 @@ def submit(draft_text: str, facts: UndertrialFacts, base: Path = HERE, ai: Optio
         "reason": "",
         "ai_model": (ai or {}).get("model"),
         "draft_lang": draft_lang,
+        "readiness": readiness or [],  # [{"key", "status", "note"}] when sent
     }
     pending, _, _ = _dirs(base)
     _write(pending / f"{case_id}.json", json.dumps(record, indent=2, ensure_ascii=False))
     audit.start_record(case_id, facts.to_dict(), ai, base=base)
+    if readiness is not None:
+        open_items = [r for r in readiness if r["status"] in ("missing", "uncertain")]
+        audit.add_event(case_id, "readiness when sent", audit.VOLUNTEER,
+                        "ready for review" if not open_items else f"not ready: {len(open_items)} items missing",
+                        base=base)
     return case_id
 
 

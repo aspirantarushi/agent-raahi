@@ -127,7 +127,7 @@ def test_hindi_practice_case_on_screen(monkeypatch, tmp_path):
     assert draft.startswith("DRAFT — to be checked by a lawyer\nड्राफ़्ट — वकील से जाँच करवाना ज़रूरी है\n"
                             "हिंदी अनुवाद की जाँच: नहीं (Hindi translation checked: no)")
     assert "तथ्य केस नोट्स से AI की मदद (gemini-3.5-flash-lite) से पढ़े गए" in draft
-    next(b for b in at.button if b.label == "सुपरवाइज़र को भेजें").click().run()
+    next(b for b in at.button if b.label.startswith("सुपरवाइज़र को भेजें")).click().run()
     assert not at.exception
     [record] = store.list_pending(tmp_path)
     assert record["draft_lang"] == "hi"
@@ -144,7 +144,7 @@ def test_english_draft_from_hindi_screen(monkeypatch):
     at.radio(key="f_lawyer").set_value("Legal aid lawyer").run()
     at.radio(key="f_draft_lang").set_value("en").run()
     next(b for b in at.button if b.label == "ड्राफ़्ट बनाएँ").click().run()
-    assert at.code[0].value.startswith("DRAFT — to be checked by a lawyer\n\nTo,")
+    assert at.code[0].value.startswith("DRAFT — to be checked by a lawyer\n\nNOT READY FOR REVIEW")
 
 
 def test_general_screen_in_hindi_shows_1930_and_no_names_box(monkeypatch, tmp_path):

@@ -23,6 +23,7 @@ import lang
 import bhashini
 import llm
 import multilingual
+import readiness
 import section479
 import store
 import timeline
@@ -462,10 +463,15 @@ def general_summary(gen):
 
     st.subheader(t("ui.general.summary"))
     draft_lang = draft_language_choice("g_draft_lang")
-    draft = general.make_summary_draft(facts, gen["model"], draft_lang)
+    items = readiness.general_items(facts, eligibility, cannot_marks("g"))
+    draft = readiness.add_gaps_to_draft(general.make_summary_draft(facts, gen["model"], draft_lang), items, draft_lang)
     if draft_lang == "hi":
         st.caption(t("ui.hindi_label_note"))
-    st.code(draft, language=None, wrap_lines=True)
+    col_draft, col_check = st.columns([3, 2])
+    with col_draft:
+        st.code(draft, language=None, wrap_lines=True)
+    with col_check:
+        checklist_box(items, "g")
     reading_copy_box("summary", draft)
     names = general.possible_names(draft, st.session_state.get("g_notes", ""))
     if names:
@@ -477,13 +483,13 @@ def general_summary(gen):
         report_problem_box("gen-draft", "Any-case summary", sent)
         return
     checked = st.checkbox(t("ui.general.checked_no_names"), key="g_checked")
-    if st.button(t("ui.send_to_supervisor"), disabled=not checked):
+    if st.button(send_label(items), disabled=not checked, key="send-g"):
         ai = None
         if gen["model"]:
             ai = {"model": gen["model"], "read_at": gen["read_at"], "extracted": dict(reading.facts),
                   "not_accepted": sorted(set(reading.dropped))}
         try:
-            case_id = store.submit(draft, facts, ai=ai, draft_lang=draft_lang)
+            case_id = store.submit(draft, facts, ai=ai, draft_lang=draft_lang, readiness=readiness_rows(items))
         except ValueError as err:
             st.error(str(err))
             return
@@ -806,6 +812,51 @@ def undertrial_form():
         )
 
 
+# ----- readiness checklist -----
+
+def case_details_box(prefix: str) -> dict:
+    """Optional case numbers and places (never personal details), filled into the draft's blanks."""
+    with st.expander(t("ready.details_title"), expanded=True):
+        col1, col2 = st.columns(2)
+        values = {}
+        for i, field in enumerate(readiness.DETAIL_FIELDS):
+            values[field] = (col1 if i % 2 == 0 else col2).text_input(t(f"ready.detail.{field}"), max_chars=60,
+                                                                    key=f"{prefix}-detail-{field}")
+    return values
+
+
+def cannot_marks(prefix: str) -> dict:
+    """{item key: reason} for fields the volunteer marked "cannot obtain" (with a reason)."""
+    marks = {}
+    for key, value in st.session_state.items():
+        if isinstance(key, str) and key.startswith(f"cant-{prefix}-") and value:
+            item = key[len(f"cant-{prefix}-"):]
+            reason = (st.session_state.get(f"cantr-{prefix}-{item}") or "").strip()
+            if reason:
+                marks[item] = reason
+    return marks
+
+
+def checklist_box(items, prefix: str):
+    st.markdown(f"**{t('ready.title')}**")
+    icons = {readiness.PRESENT: "\u2705", readiness.MISSING: "\u274c", readiness.UNCERTAIN: "\u2753",
+             readiness.CANNOT: "\u26d4"}
+    for item in items:
+        st.markdown(f"{icons[item.status]} {item.label(code())}: {t('ready.status.' + item.status)}"
+                    + (f" \u2014 {item.note}" if item.note else ""))
+        if item.status in (readiness.MISSING, readiness.UNCERTAIN, readiness.CANNOT):
+            if st.checkbox(t("ready.cannot_box"), key=f"cant-{prefix}-{item.key}"):
+                st.text_input(t("ready.reason"), max_chars=120, key=f"cantr-{prefix}-{item.key}")
+
+
+def readiness_rows(items) -> list:
+    return [{"key": i.key, "status": i.status, "note": i.note} for i in items]
+
+
+def send_label(items) -> str:
+    return f"{t('ui.send_to_supervisor')} \u2014 {readiness.button_label(items, code())}"
+
+
 def draft_section(known: dict, result: section479.Result):
     st.divider()
     st.subheader(t("ui.draft.title"))
@@ -818,25 +869,38 @@ def draft_section(known: dict, result: section479.Result):
         st.info(t("ui.draft.answer_first"))
         return
     draft_lang = draft_language_choice("f_draft_lang")
+    details = case_details_box("f")
     facts = drafts.UndertrialFacts(lawyer=lawyer, **known)
     ai_info = ai_info_for_audit()
     ai_model = ai_info["model"] if ai_info else None
     signature = json.dumps({**facts.to_dict(), "ai_model": ai_model, "lang": draft_lang}, sort_keys=True)
 
     if st.button(t("ui.draft.make"), type="primary"):
-        st.session_state["draft"] = {"sig": signature, "text": drafts.make_undertrial_draft(
-            facts, result, ai_model=ai_model, code=draft_lang)}
-
+        st.session_state["draft"] = {"sig": signature}
     draft = st.session_state.get("draft")
     if not draft or draft["sig"] != signature:
         return  # no draft yet, or the facts changed since it was made
+
+    # The draft is rebuilt on every change, so case details and "cannot obtain" marks show at once.
+    skipped = st.session_state.get("ai", {}).get("skipped", set()) if st.session_state.get("ai") else set()
+    marks = cannot_marks("f")
+    items = readiness.section479_items(facts, result, details, skipped, marks)
+    if lawyer == "None":
+        items += readiness.dlsa_items(details, marks)
+    text = drafts.make_undertrial_draft(facts, result, ai_model=ai_model, code=draft_lang)
+    text = readiness.add_gaps_to_draft(readiness.fill_details(text, details, draft_lang), items, draft_lang)
+    draft["text"] = text
 
     if lawyer == "None":
         st.caption(t("ui.draft.dlsa_added"))
     if draft_lang == "hi":
         st.caption(t("ui.hindi_label_note"))
-    st.code(draft["text"], language=None, wrap_lines=True)
-    reading_copy_box("draft", draft["text"])
+    col_draft, col_check = st.columns([3, 2])
+    with col_draft:
+        st.code(text, language=None, wrap_lines=True)
+    with col_check:
+        checklist_box(items, "f")
+    reading_copy_box("draft", text)
     st.caption(t("ui.draft.blanks"))
 
     sent = st.session_state.get("sent")
@@ -844,9 +908,9 @@ def draft_section(known: dict, result: section479.Result):
                        sent["id"] if sent and sent["sig"] == signature else None)
     if sent and sent["sig"] == signature:
         st.success(t("ui.sent", case_id=sent["id"]))
-    elif st.button(t("ui.send_to_supervisor")):
+    elif st.button(send_label(items), key="send-f"):
         try:
-            case_id = store.submit(draft["text"], facts, ai=ai_info, draft_lang=draft_lang)
+            case_id = store.submit(text, facts, ai=ai_info, draft_lang=draft_lang, readiness=readiness_rows(items))
         except ValueError as err:
             st.error(str(err))
             return
@@ -1151,6 +1215,11 @@ def review_one(record: dict):
         for h in record.get("history", []):
             st.caption(t("ui.sup.resent", when=h["resent"].replace("T", " "), reason=h["sent_back_reason"]))
         st.code(record["draft"], language=None, wrap_lines=True)
+        if record.get("readiness"):
+            with st.expander(t("ready.sup_title")):
+                for r in record["readiness"]:
+                    st.markdown(f"- {t('ready.' + r['key'])}: {t('ready.status.' + r['status'])}"
+                                + (f" \u2014 {r['note']}" if r.get("note") else ""))
         audit_record = audit.read_record(case_id)
         with st.expander(t("ui.sup.audit_one")):
             st.markdown(audit.describe(audit_record) if audit_record else t("ui.sup.no_audit_one"))

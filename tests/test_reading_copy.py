@@ -85,7 +85,7 @@ def test_reading_copy_button_on_a_draft(tamil_screen, monkeypatch):
     assert not at.exception, at.exception[0].stack_trace
     copy = at.code[1].value
     assert copy.startswith("Machine translated, not checked. Rely on the English or Hindi version.")
-    assert at.code[0].value.startswith("DRAFT — to be checked by a lawyer\n\nTo,")  # the real draft: English
+    assert at.code[0].value.startswith("DRAFT — to be checked by a lawyer\n\nNOT READY FOR REVIEW")  # the real draft: English
 
 
 def test_no_reading_copy_in_english_or_hindi():
