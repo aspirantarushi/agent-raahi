@@ -60,7 +60,7 @@ def show_date(d: date) -> str:
 # Choice buttons (radios) and lists whose wording changes with the language. In Streamlit, a radio's
 # identity includes its label and option wording, so a new language would reset it to its default.
 # When the language is switched, these are saved again first, so the new-language widgets keep them.
-KEEP_ON_LANGUAGE_SWITCH = ("case_type", "screen", "f_lawyer", "f_draft_lang", "g_draft_lang", "f_offence_pick",
+KEEP_ON_LANGUAGE_SWITCH = ("ho-how-", "ho-by-", "case_type", "screen", "f_lawyer", "f_draft_lang", "g_draft_lang", "f_offence_pick",
                            "ge-", "q-never", "q-other_cases_pending", "q-delay_days_by_accused", "q-lawyer",
                            "tl-action-", "tl-step-", "action-")
 LANGUAGE_LABEL = "Language / \u092d\u093e\u0937\u093e"  # the same in every language, so the switch never resets
@@ -1154,6 +1154,63 @@ def timeline_box(case_id: str):
             (st.success if msg[0] == "ok" else st.error)(msg[1])
 
 
+def save_handoff(case_id: str, kind: str):
+    get = st.session_state.get
+    try:
+        if kind == "submitted":
+            timeline.record_submission(case_id, get(f"ho-who-{case_id}", ""), get(f"ho-date-{case_id}") or date.today(),
+                                       get(f"ho-how-{case_id}") or "")
+        else:
+            timeline.record_acknowledgement(case_id, get(f"ho-by-{case_id}") or "", get(f"ho-adate-{case_id}") or date.today(),
+                                            get(f"ho-ref-{case_id}", ""), get(f"ho-rec-{case_id}", ""))
+    except ValueError as err:
+        st.session_state[f"ho-msg-{case_id}"] = ("error", str(err))
+        return
+    st.session_state[f"ho-msg-{case_id}"] = ("ok", t("handoff.saved"))
+
+
+def handoff_box(case_id: str):
+    """Ready -> Approved -> Submitted by an authorised worker -> Acknowledged. A draft is not a filing."""
+    record = timeline.load(case_id)
+    if record is None:
+        return
+    current = timeline.stage(record)
+    order = ["ready", timeline.APPROVED_STAGE, timeline.SUBMITTED_STAGE, timeline.ACKNOWLEDGED_STAGE]
+    reached = order.index(current)
+    st.markdown(" \u2192 ".join(("\u2705 " if i <= reached else "\u25cb ") + t(f"handoff.stage.{s}")
+                                  for i, s in enumerate(order)))
+    st.caption(t("handoff.not_filing"))
+    handoff = record.get("handoff", {})
+    if handoff.get("submitted"):
+        sub = handoff["submitted"]
+        st.markdown(t("handoff.submitted_line", on=show_date(date.fromisoformat(sub["on"])), by=sub["by"],
+                      how=t("handoff.how." + sub["how"])))
+    if handoff.get("acknowledged"):
+        ack = handoff["acknowledged"]
+        st.markdown(t("handoff.ack_line", on=show_date(date.fromisoformat(ack["on"])), by=t("handoff.by." + ack["by"]),
+                      ref=f" ({ack['reference']})" if ack.get("reference") else ""))
+    if current == timeline.APPROVED_STAGE:
+        with st.expander(t("handoff.record_submission")):
+            st.text_input(t("handoff.who"), max_chars=60, key=f"ho-who-{case_id}")
+            st.date_input(t("handoff.date"), value=date.today(), format="DD/MM/YYYY", key=f"ho-date-{case_id}")
+            st.radio(t("handoff.how"), timeline.HANDOFF_METHODS, index=None, horizontal=True, key=f"ho-how-{case_id}",
+                     format_func=option_text("handoff.how."))
+            st.button(t("handoff.record_submission"), key=f"ho-save-{case_id}", on_click=save_handoff,
+                      args=(case_id, "submitted"))
+    elif current == timeline.SUBMITTED_STAGE:
+        with st.expander(t("handoff.record_ack")):
+            st.radio(t("handoff.by_whom"), timeline.ACKNOWLEDGED_BY, index=None, horizontal=True, key=f"ho-by-{case_id}",
+                     format_func=option_text("handoff.by."))
+            st.date_input(t("handoff.date"), value=date.today(), format="DD/MM/YYYY", key=f"ho-adate-{case_id}")
+            st.text_input(t("handoff.reference"), max_chars=60, key=f"ho-ref-{case_id}")
+            st.text_input(t("handoff.recorded_by"), max_chars=60, key=f"ho-rec-{case_id}")
+            st.button(t("handoff.record_ack"), key=f"ho-ack-{case_id}", on_click=save_handoff,
+                      args=(case_id, "acknowledged"))
+    msg = st.session_state.pop(f"ho-msg-{case_id}", None)
+    if msg:
+        (st.success if msg[0] == "ok" else st.error)(msg[1])
+
+
 def my_cases_screen():
     st.title(t("ui.cases.title"))
     due_this_week_box()
@@ -1163,12 +1220,18 @@ def my_cases_screen():
         return
     for c in cases:
         with st.container(border=True):
+            status_key = STATUS_KEYS[c["status"]]
+            if c["status"] == store.APPROVED:
+                stage = timeline.stage(timeline.load(c["id"]))
+                status_key = {timeline.SUBMITTED_STAGE: "ui.status.submitted",
+                              timeline.ACKNOWLEDGED_STAGE: "ui.status.acknowledged"}.get(stage, status_key)
             st.markdown(f"**{t('ui.case_title', case_id=c['id'])}** · {case_type_label(c['case_type'])}  \n"
-                        f"{t(STATUS_KEYS[c['status']])}")
+                        f"{t(status_key)}")
             if c["status"] == store.SENT_BACK:
                 st.warning(t("ui.cases.reason", reason=c["reason"]))
                 fix_and_resend(c["id"])
             if c["status"] == store.APPROVED:
+                handoff_box(c["id"])
                 timeline_box(c["id"])
                 with st.expander(t("ui.cases.case_file")):
                     st.markdown(c["file"].read_text(encoding="utf-8"))

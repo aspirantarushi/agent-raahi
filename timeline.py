@@ -120,8 +120,9 @@ def general_steps(next_steps: List[str]) -> List[Step]:
 
 
 def create(case_id: str, case_type: str, steps: List[Step], approved_on: date, base: Path = HERE) -> dict:
+    steps = list(steps) + handoff_steps()
     record = {"case_id": case_id, "case_type": case_type, "created": approved_on.isoformat(),
-              "steps": [asdict(s) for s in steps]}
+              "steps": [asdict(s) for s in steps], "handoff": {}}
     _save(record, base)
     audit.add_event(case_id, "timeline created", "app", f"{len(steps)} steps", base=base)
     return record
@@ -184,6 +185,8 @@ def mark_done(case_id: str, step_id: str, done_on: date, by: str, details: Optio
     record = load(case_id, base)
     steps = steps_of(record)
     step = _find(steps, step_id)
+    if step.id in (HANDOFF_SUBMITTED, HANDOFF_ACKNOWLEDGED):
+        raise ValueError("Use the Submitted / Acknowledged form for this step (who, date, how).")
     if step.status == NOT_NEEDED and step.id == "dlsa-appeal":
         raise ValueError("The appeal is only needed if the application is refused.")
     by = _clean_by(by)
@@ -217,6 +220,8 @@ def mark_not_needed(case_id: str, step_id: str, by: str, reason: str = "", base:
     record = load(case_id, base)
     steps = steps_of(record)
     step = _find(steps, step_id)
+    if step.id in (HANDOFF_SUBMITTED, HANDOFF_ACKNOWLEDGED):
+        raise ValueError("Use the Submitted / Acknowledged form for this step (who, date, how).")
     by = _clean_by(by)
     step.status, step.done_by = NOT_NEEDED, by
     _store_steps(record, steps, base)
@@ -300,3 +305,77 @@ def due_this_week(today: date, base: Path = HERE) -> List[Tuple[str, Step, str]]
                 else:
                     found.append((record["case_id"], s, OVERDUE if d < today else DUE))
     return sorted(found, key=lambda x: x[1].due)
+
+
+# ---------- handoff: Approved -> Submitted by an authorised worker -> Acknowledged ----------
+# A generated draft is never a filing. These two stages are recorded only through these functions,
+# with who, when and how, and each goes into the audit record.
+
+HANDOFF_SUBMITTED, HANDOFF_ACKNOWLEDGED = "handoff-submitted", "handoff-acknowledged"
+HANDOFF_METHODS = ["in person", "post", "email", "portal"]
+ACKNOWLEDGED_BY = ["DLSA", "legal aid clinic", "court", "other"]
+APPROVED_STAGE, SUBMITTED_STAGE, ACKNOWLEDGED_STAGE = "approved", "submitted", "acknowledged"
+
+
+def handoff_steps() -> List[Step]:
+    return [Step(HANDOFF_SUBMITTED, "Submitted by an authorised worker", kind=ENTERED,
+                 note="Only when an authorised worker has actually handed it in: who, date, and how."),
+            Step(HANDOFF_ACKNOWLEDGED, "Acknowledged by the DLSA, clinic or court", kind=ENTERED,
+                 note="Their date and reference number, if any.")]
+
+
+def stage(record: Optional[dict]) -> str:
+    handoff = (record or {}).get("handoff", {})
+    if handoff.get("acknowledged"):
+        return ACKNOWLEDGED_STAGE
+    if handoff.get("submitted"):
+        return SUBMITTED_STAGE
+    return APPROVED_STAGE
+
+
+def _ensure_handoff_steps(record: dict) -> List[Step]:
+    steps = steps_of(record)
+    for s in handoff_steps():
+        if s.id not in {x.id for x in steps}:
+            steps.append(s)
+    return steps
+
+
+def record_submission(case_id: str, who: str, on: date, how: str, base: Path = HERE) -> None:
+    record = load(case_id, base)
+    if record is None:
+        raise ValueError("Only an approved case can be submitted.")
+    if stage(record) != APPROVED_STAGE:
+        raise ValueError("This case is already recorded as submitted.")
+    if how not in HANDOFF_METHODS:
+        raise ValueError("Choose how it was submitted: in person, post, email or portal.")
+    who = _clean_by(who)
+    steps = _ensure_handoff_steps(record)
+    step = _find(steps, HANDOFF_SUBMITTED)
+    step.status, step.done_on, step.done_by, step.details = DONE, on.isoformat(), who, {"how": how}
+    record.setdefault("handoff", {})["submitted"] = {"by": who, "on": on.isoformat(), "how": how}
+    _store_steps(record, steps, base)
+    audit.add_event(case_id, "submitted by an authorised worker", who, f"on {on.isoformat()}, {how}", base=base)
+
+
+def record_acknowledgement(case_id: str, by_whom: str, on: date, reference: str = "", recorded_by: str = "",
+                           base: Path = HERE) -> None:
+    record = load(case_id, base)
+    if record is None or stage(record) != SUBMITTED_STAGE:
+        raise ValueError("Record the submission first; a case can only be acknowledged after it was submitted.")
+    if by_whom not in ACKNOWLEDGED_BY:
+        raise ValueError("Choose who acknowledged it: DLSA, legal aid clinic, court or other.")
+    submitted_on = date.fromisoformat(record["handoff"]["submitted"]["on"])
+    if on < submitted_on:
+        raise ValueError("The acknowledgement date can't be before the submission date.")
+    recorded_by = _clean_by(recorded_by)
+    reference = privacy.redact((reference or "").strip()[:60])[0]
+    steps = _ensure_handoff_steps(record)
+    step = _find(steps, HANDOFF_ACKNOWLEDGED)
+    step.status, step.done_on, step.done_by = DONE, on.isoformat(), recorded_by
+    step.details = {"by": by_whom, **({"reference": reference} if reference else {})}
+    record["handoff"]["acknowledged"] = {"by": by_whom, "on": on.isoformat(), "reference": reference,
+                                         "recorded_by": recorded_by}
+    _store_steps(record, steps, base)
+    audit.add_event(case_id, "acknowledged", recorded_by,
+                    f"by {by_whom} on {on.isoformat()}" + (f", reference {reference}" if reference else ""), base=base)

@@ -43,7 +43,8 @@ def source(entry):
 def test_practice_undertrial_timeline(tmp_path):
     case_id = approve_undertrial(tmp_path)  # has a legal aid lawyer: no DLSA steps
     s = steps(case_id, tmp_path)
-    assert list(s) == ["s479-note", "s479-third", "s479-half", "s479-ask", "s479-court"]
+    assert list(s) == ["s479-note", "s479-third", "s479-half", "s479-ask", "s479-court",
+                       "handoff-submitted", "handoff-acknowledged"]
 
     assert s["s479-note"].title == "Note given to the DLSA / jail legal aid clinic"
     assert (s["s479-note"].due, s["s479-note"].label()) == ("2026-11-10", timeline.SUGGESTED_LABEL)
@@ -149,6 +150,7 @@ def test_general_case_steps_are_its_next_steps_with_volunteer_dates(tmp_path):
     case_id = store.submit(text, facts, base=tmp_path)
     store.approve(case_id, base=tmp_path, approved_on=APPROVED_ON)
     s = timeline.steps_of(timeline.load(case_id, tmp_path))
+    s = [x for x in s if not x.id.startswith("handoff-")]
     assert [x.title for x in s] == general.case_next_steps(facts)
     assert all(x.due is None and x.kind == timeline.SUGGESTED for x in s)
     timeline.set_due(case_id, s[0].id, date(2026, 11, 6), "VA", base=tmp_path)
