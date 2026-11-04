@@ -182,11 +182,12 @@ def test_notes_are_redacted_before_they_reach_the_ai(monkeypatch):
 
     def fake_generate(prompt, schema):
         sent["prompt"] = prompt
-        return practice_answer()
+        return practice_answer(), "pretend-model"
 
     monkeypatch.setattr(llm, "_generate_json", fake_generate)
     notes = NOTES + "\nSister's phone: 98765 43210. Email: sis@example.com. Aadhaar 2345 6789 0123."
-    answer, clean, removed = llm.read_undertrial_notes(notes)
+    reading = llm.read_undertrial_notes(notes)
+    clean, removed = reading.notes_sent, reading.removed
     for secret in ("98765 43210", "sis@example.com", "2345 6789 0123"):
         assert secret not in sent["prompt"] and secret not in clean
     assert removed == {"a phone number": 1, "an email address": 1, "an Aadhaar number": 1}
@@ -247,9 +248,10 @@ def test_busy_main_model_falls_back_to_flash(fake_key, monkeypatch):
         return gemini_reply(practice_answer())
 
     monkeypatch.setattr(llm.urllib.request, "urlopen", urlopen)
-    answer, clean, removed = llm.read_undertrial_notes(NOTES)
+    reading = llm.read_undertrial_notes(NOTES)
     assert tried == ["gemini-3.5-flash-lite", "gemini-3.8-flash"]
-    assert answer["lawyer"]["value"] == "Legal aid lawyer"
+    assert reading.answer["lawyer"]["value"] == "Legal aid lawyer"
+    assert reading.model == "gemini-3.8-flash"  # the model that actually answered
 
 
 def test_slow_main_model_falls_back(fake_key, monkeypatch):
@@ -259,7 +261,7 @@ def test_slow_main_model_falls_back(fake_key, monkeypatch):
         return gemini_reply(practice_answer())
 
     monkeypatch.setattr(llm.urllib.request, "urlopen", urlopen)
-    assert llm.read_undertrial_notes(NOTES)[0]["sections"][0]["section"] == "380"
+    assert llm.read_undertrial_notes(NOTES).answer["sections"][0]["section"] == "380"
 
 
 def test_both_models_busy_gives_friendly_message(fake_key, monkeypatch):
@@ -335,11 +337,32 @@ def test_dotenv_file_is_read(tmp_path, monkeypatch):
 
 @pytest.mark.skipif(not llm.available(), reason="No GEMINI_API_KEY: live AI test skipped")
 def test_live_ai_reads_practice_case():
-    raw, clean, removed = llm.read_undertrial_notes(NOTES)
-    r = intake.check_ai_answer(raw, clean)
+    reading = llm.read_undertrial_notes(NOTES)
+    r = intake.check_ai_answer(reading.answer, reading.notes_sent)
+    assert reading.model in llm.models_to_try()
     assert r.values.get("custody_began") == date(2024, 3, 15)
     assert (r.values.get("law"), r.values.get("section")) == ("IPC", "380")
     assert r.values.get("never_convicted") is True
     assert r.values.get("other_cases_pending") is False
     assert r.values.get("lawyer") == "Legal aid lawyer"
     assert "offence_date" not in r.values  # only "February 2024" is given: no guessing
+
+
+# ---------- no risk scoring (draft SC AI Regulations 16, 20(d), 20(f)) ----------
+
+def test_prompt_forbids_judging_bail_risk_guilt_or_credibility():
+    prompt = " ".join(llm.UNDERTRIAL_PROMPT.split())
+    assert llm.NO_JUDGEMENT_RULE in prompt
+    assert "Only extract facts stated in the notes." in prompt
+
+
+def test_prompt_sent_to_the_ai_includes_the_rule(monkeypatch):
+    sent = {}
+
+    def fake_generate(prompt, schema):
+        sent["prompt"] = prompt
+        return {}, "pretend-model"
+
+    monkeypatch.setattr(llm, "_generate_json", fake_generate)
+    llm.read_undertrial_notes(NOTES)
+    assert llm.NO_JUDGEMENT_RULE in " ".join(sent["prompt"].split())

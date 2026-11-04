@@ -37,6 +37,19 @@ size of the problem, severity, quality of the solution, proven impact (real use 
   the last few days and 1930 not yet called, show "Call 1930 now."
 - Drafts and case files are saved only after the supervisor clicks Approve.
 
+## What this tool will never do
+- It never predicts the outcome of a case, the chances of bail, flight risk, the risk of
+  re-offending, or anyone's guilt or credibility, and it never scores or ranks people.
+- The Section 479 dates are statutory deadlines worked out by plain, tested code from the
+  statute and knowledge/sentence_table.csv. They are not an assessment of whether bail should
+  be granted: the jail superintendent must apply and the court decides.
+- AI is used only to extract facts stated in case notes. A volunteer checks every fact, and
+  the AI is told never to judge bail chances, risk, guilt or credibility.
+- Every draft ends with a note on how it was prepared (AI model used, if any; rule-based
+  dates; supervisor approval date), and every case has an audit record. This follows the
+  Supreme Court's draft "Regulations for Use of AI in Courts, 2026" (Regulations 16, 20(d),
+  20(f) and 43), because drafts may later be filed in court.
+
 ## How the code should work
 - Dates, eligibility and rule checks are plain code, never AI guesses, with tests:
   - Section 479: look up the offence in knowledge/sentence_table.csv (columns offence,

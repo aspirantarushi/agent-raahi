@@ -10,6 +10,7 @@ from datetime import date
 
 import streamlit as st
 
+import audit
 import drafts
 import intake
 import llm
@@ -66,6 +67,39 @@ def init_form():
         st.session_state["f_today"] = date.today()
 
 
+def save_problem(key: str, case_id, where: str):
+    text = st.session_state.get(f"problem-{key}", "")
+    try:
+        audit.report_problem(text, case_id, where)
+    except ValueError as err:
+        st.session_state[f"problem-msg-{key}"] = ("error", str(err))
+        return
+    st.session_state[f"problem-{key}"] = ""
+    st.session_state[f"problem-msg-{key}"] = ("ok", "Thank you. The problem was saved for the supervisor.")
+
+
+def report_problem_box(key: str, where: str, case_id=None):
+    """A small "Report a problem" box. Saved to the problems log with the case number and date."""
+    with st.expander("\u26a0\ufe0f Report a problem"):
+        st.caption("Describe the problem in a few words. Do not include names, phone numbers, "
+                   "Aadhaar numbers, addresses or prisoner IDs.")
+        st.text_area("What went wrong?", key=f"problem-{key}", max_chars=audit.MAX_PROBLEM_LENGTH, height=100)
+        st.button("Send report", key=f"problem-send-{key}", on_click=save_problem, args=(key, case_id, where))
+        msg = st.session_state.pop(f"problem-msg-{key}", None)
+        if msg:
+            (st.success if msg[0] == "ok" else st.error)(msg[1])
+
+
+def ai_info_for_audit():
+    """What the AI did for this form, for the audit record (None if no AI was used)."""
+    ai = st.session_state.get("ai")
+    if not ai:
+        return None
+    reading = ai["reading"]
+    return {"model": ai["model"], "read_at": ai["read_at"], "extracted": dict(reading.values),
+            "not_accepted": sorted({d.split(":")[0] for d in reading.dropped})}
+
+
 def new_case_screen():
     st.title("New case")
     st.caption("Use only case numbers (CNR, FIR). Do not type names, phone numbers, "
@@ -75,9 +109,10 @@ def new_case_screen():
     if case_type == "Undertrial":
         init_form()
         notes_box()
-        if ask_missing_facts():
-            return  # still asking questions one at a time
-        undertrial_form()
+        if not ask_missing_facts():  # while missing facts are asked one at a time, the form waits
+            undertrial_form()
+        sent = st.session_state.get("sent")
+        report_problem_box("new-case", "New case", sent["id"] if sent else None)
 
 
 # ----- reading pasted case notes with the AI -----
@@ -103,16 +138,18 @@ def read_notes():
     """Runs when "Read notes" is clicked, before the page is drawn again."""
     st.session_state.pop("ai_error", None)
     try:
-        raw, clean, removed = llm.read_undertrial_notes(st.session_state.get("f_notes", ""))
+        notes_reading = llm.read_undertrial_notes(st.session_state.get("f_notes", ""))
     except llm.AIUnavailable as err:
         st.session_state["ai_error"] = str(err)
         return
-    reading = intake.check_ai_answer(raw, clean)
+    reading = intake.check_ai_answer(notes_reading.answer, notes_reading.notes_sent)
+    removed = notes_reading.removed
     for key, value in FORM_DEFAULTS.items():  # start from an empty form
         st.session_state[key] = value
     st.session_state["f_today"] = date.today()
     st.session_state["ai"] = {"reading": reading, "removed": removed, "skipped": set(),
-                              "values": dict(reading.values)}
+                              "values": dict(reading.values), "model": notes_reading.model,
+                              "read_at": audit.now()}
     st.session_state.pop("draft", None)
     if not intake.missing_facts(reading.values):
         apply_to_form(reading.values)
@@ -391,11 +428,13 @@ def draft_section(known: dict, result: section479.Result):
         st.info("Answer the question above to make the draft.")
         return
     facts = drafts.UndertrialFacts(lawyer=lawyer, **known)
-    signature = json.dumps(facts.to_dict(), sort_keys=True)
+    ai_info = ai_info_for_audit()
+    ai_model = ai_info["model"] if ai_info else None
+    signature = json.dumps({**facts.to_dict(), "ai_model": ai_model}, sort_keys=True)
 
     if st.button("Make draft", type="primary"):
         st.session_state["draft"] = {"sig": signature,
-                                     "text": drafts.make_undertrial_draft(facts, result)}
+                                     "text": drafts.make_undertrial_draft(facts, result, ai_model=ai_model)}
 
     draft = st.session_state.get("draft")
     if not draft or draft["sig"] != signature:
@@ -405,14 +444,17 @@ def draft_section(known: dict, result: section479.Result):
         st.caption("The person has no lawyer, so a DLSA application for free legal aid is added after the note.")
     st.code(draft["text"], language=None, wrap_lines=True)
     st.caption("Blanks in [square brackets] are left for a person to fill. "
-               "Names, phone numbers, Aadhaar numbers and addresses are filled by hand, never in this app.")
+               "Names, phone numbers, Aadhaar numbers and addresses are filled by hand, never in this app. "
+               "The supervisor's approval date is filled in when the draft is approved.")
 
     sent = st.session_state.get("sent")
+    report_problem_box("draft", "Draft on New case",
+                       sent["id"] if sent and sent["sig"] == signature else None)
     if sent and sent["sig"] == signature:
         st.success(f"Sent to the supervisor as case {sent['id']}. See its status on \"My cases\".")
     elif st.button("Send to supervisor"):
         try:
-            case_id = store.submit(draft["text"], facts)
+            case_id = store.submit(draft["text"], facts, ai=ai_info)
         except ValueError as err:
             st.error(str(err))
             return
@@ -494,6 +536,7 @@ def my_cases_screen():
                 if draft_file.exists():
                     with st.expander("Approved draft"):
                         st.code(draft_file.read_text(encoding="utf-8"), language=None, wrap_lines=True)
+            report_problem_box(f"case-{c['id']}", "My cases", c["id"])
 
 
 def fix_and_resend(case_id: str):
@@ -566,10 +609,26 @@ def supervisor_screen():
     waiting = store.list_pending()
     if not waiting:
         st.info("No drafts are waiting for approval.")
-        return
-    st.subheader(f"Drafts waiting for approval: {len(waiting)}")
-    for record in waiting:
-        review_one(record)
+    else:
+        st.subheader(f"Drafts waiting for approval: {len(waiting)}")
+        for record in waiting:
+            review_one(record)
+
+    st.subheader("Problems reported")
+    problems = audit.list_problems()
+    if not problems:
+        st.caption("No problems reported.")
+    for p in problems:
+        st.markdown(f"- **{p['time'].replace('T', ' ')}** · case {p['case_id']} · {p['where']}: {p['text']}"
+                    + (f" _(removed: {p['removed']})_" if p.get("removed") else ""))
+
+    st.subheader("Audit records of all cases")
+    records = audit.list_records()
+    if not records:
+        st.caption("No audit records yet.")
+    for r in records:
+        with st.expander(f"Case {r['case_id']} · AI: {r['model']} · last: {r['events'][-1]['event']}"):
+            st.markdown(audit.describe(r))
 
 
 def review_one(record: dict):
@@ -580,6 +639,9 @@ def review_one(record: dict):
             st.caption(f"Sent back earlier, then fixed and resent ({h['resent'].replace('T', ' ')}). "
                        f"Your reason then: {h['sent_back_reason']}")
         st.code(record["draft"], language=None, wrap_lines=True)
+        audit_record = audit.read_record(case_id)
+        with st.expander("Audit record: what the AI and the volunteer did"):
+            st.markdown(audit.describe(audit_record) if audit_record else "No audit record for this case.")
         action = st.radio("Your decision", ["Approve", "Edit then Approve", "Reject with a reason"],
                           index=None, horizontal=True, key=f"action-{case_id}")
         try:

@@ -25,7 +25,7 @@ def pretend_ai(monkeypatch):
 
     def fake_read(notes):
         calls.append(notes)
-        return practice_answer(), notes, {}
+        return llm.NotesReading(practice_answer(), notes, {}, "pretend-model")
 
     monkeypatch.setattr(llm, "available", lambda: True)
     monkeypatch.setattr(llm, "read_undertrial_notes", fake_read)
@@ -108,7 +108,7 @@ def test_ai_failure_shows_message_and_form_works(monkeypatch):
 
 def test_empty_reading_asks_every_fact_in_intake_order(monkeypatch):
     monkeypatch.setattr(llm, "available", lambda: True)
-    monkeypatch.setattr(llm, "read_undertrial_notes", lambda notes: ({}, notes, {}))
+    monkeypatch.setattr(llm, "read_undertrial_notes", lambda notes: llm.NotesReading({}, notes, {}, "pretend-model"))
     at = AppTest.from_file(APP, default_timeout=20).run()
     at.text_area(key="f_notes").set_value("Nothing useful here.")
     button(at, "Read notes").click().run()
@@ -151,7 +151,7 @@ def test_empty_reading_asks_every_fact_in_intake_order(monkeypatch):
 
 def test_next_without_an_answer_stays_on_the_question(monkeypatch):
     monkeypatch.setattr(llm, "available", lambda: True)
-    monkeypatch.setattr(llm, "read_undertrial_notes", lambda notes: ({}, notes, {}))
+    monkeypatch.setattr(llm, "read_undertrial_notes", lambda notes: llm.NotesReading({}, notes, {}, "pretend-model"))
     at = AppTest.from_file(APP, default_timeout=20).run()
     at.text_area(key="f_notes").set_value("Nothing useful here.")
     button(at, "Read notes").click().run()

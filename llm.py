@@ -20,6 +20,7 @@ import socket
 import ssl
 import urllib.error
 import urllib.request
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
@@ -134,7 +135,8 @@ def _call_model(model: str, key: str, body: dict) -> dict:
         raise AIUnavailable("AI reading failed: could not reach the AI service (check the internet).") from None
 
 
-def _generate_json(prompt: str, schema: dict) -> dict:
+def _generate_json(prompt: str, schema: dict) -> Tuple[dict, str]:
+    """Returns (the JSON answer, the model that gave it)."""
     key = api_key()
     if not key:
         raise AIUnavailable("AI reading is not set up yet (no GEMINI_API_KEY).")
@@ -150,6 +152,7 @@ def _generate_json(prompt: str, schema: dict) -> dict:
     for model in models_to_try():
         try:
             data = _call_model(model, key, body)
+            used = model
             break
         except _Busy as busy:
             last_busy = busy
@@ -159,7 +162,7 @@ def _generate_json(prompt: str, schema: dict) -> dict:
     try:
         parts = data["candidates"][0]["content"]["parts"]
         text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
-        return json.loads(text)
+        return json.loads(text), used
     except (KeyError, IndexError, TypeError, ValueError):
         raise AIUnavailable("AI reading failed: the answer could not be read.") from None
 
@@ -206,6 +209,8 @@ UNDERTRIAL_PROMPT = """You help legal aid volunteers in India fill in a form fro
 undertrial prisoner. Read the notes and return only facts the notes state clearly.
 
 Rules:
+- Only extract facts stated in the notes. Never judge or predict bail chances, flight risk, the risk
+  of re-offending, guilt, innocence or anyone's credibility, and never give an opinion or a score.
 - Never guess or work anything out. If a fact is not clearly stated, return null for both value and quote.
 - For every value, "quote" must be the exact words copied from the notes that state it.
 - Dates: return YYYY-MM-DD only when the notes give the day, month and year. If only a month or a
@@ -229,16 +234,26 @@ Case notes:
 >>>"""
 
 
-def read_undertrial_notes(notes: str) -> Tuple[dict, str, Dict[str, int]]:
-    """Send case notes to the AI and return (its answer, the notes as sent, what was removed).
+# Must appear in every prompt (checked by a test; whitespace ignored).
+NO_JUDGEMENT_RULE = ("Never judge or predict bail chances, flight risk, the risk of re-offending, "
+                     "guilt, innocence or anyone's credibility")
 
-    Phone numbers, Aadhaar numbers and email addresses are removed before sending.
-    The answer must still be checked by intake.check_ai_answer before use.
-    """
+
+@dataclass
+class NotesReading:
+    answer: dict  # the AI's answer: check with intake.check_ai_answer before use
+    notes_sent: str  # the notes after personal numbers were removed
+    removed: Dict[str, int]  # what was removed, e.g. {"a phone number": 1}
+    model: str  # the model that answered (named in the draft's AI disclosure)
+
+
+def read_undertrial_notes(notes: str) -> NotesReading:
+    """Send case notes to the AI. Phone numbers, Aadhaar numbers and email addresses
+    are removed before sending."""
     clean, removed = privacy.redact(notes)
     if not clean.strip():
         raise AIUnavailable("There are no case notes to read.")
-    answer = _generate_json(UNDERTRIAL_PROMPT.format(notes=clean), UNDERTRIAL_SCHEMA)
+    answer, model = _generate_json(UNDERTRIAL_PROMPT.format(notes=clean), UNDERTRIAL_SCHEMA)
     if not isinstance(answer, dict):
         raise AIUnavailable("AI reading failed: the answer could not be read.")
-    return answer, clean, removed
+    return NotesReading(answer=answer, notes_sent=clean, removed=removed, model=model)

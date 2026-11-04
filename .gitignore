@@ -16,3 +16,7 @@ __pycache__/
 
 # Drafts waiting for the supervisor, or sent back
 pending/
+
+# Audit records and the problems log (stay on this computer / server)
+audit/
+problems/

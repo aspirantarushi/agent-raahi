@@ -15,6 +15,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import List, Optional
 
+import audit
 import drafts
 from drafts import UndertrialFacts
 
@@ -55,8 +56,12 @@ def new_case_id(base: Path = HERE, today: Optional[date] = None) -> str:
             return case_id
 
 
-def submit(draft_text: str, facts: UndertrialFacts, base: Path = HERE) -> str:
-    """Send a draft to the supervisor. Saved in pending/ only."""
+def submit(draft_text: str, facts: UndertrialFacts, base: Path = HERE, ai: Optional[dict] = None) -> str:
+    """Send a draft to the supervisor. Saved in pending/ only, plus its audit record.
+
+    ai: what the AI did for this case ({"model", "read_at", "extracted", "not_accepted"}),
+        or None if no AI was used.
+    """
     if not draft_text.startswith(drafts.DRAFT_HEADER):
         raise ValueError(f"A draft must start with '{drafts.DRAFT_HEADER}'.")
     found = drafts.personal_details_found(draft_text)
@@ -71,9 +76,11 @@ def submit(draft_text: str, facts: UndertrialFacts, base: Path = HERE) -> str:
         "facts": facts.to_dict(),
         "draft": draft_text,
         "reason": "",
+        "ai_model": (ai or {}).get("model"),
     }
     pending, _, _ = _dirs(base)
     _write(pending / f"{case_id}.json", json.dumps(record, indent=2, ensure_ascii=False))
+    audit.start_record(case_id, facts.to_dict(), ai, base=base)
     return case_id
 
 
@@ -99,6 +106,9 @@ def approve(case_id: str, edited_text: Optional[str] = None, base: Path = HERE,
         raise ValueError("Only waiting drafts can be approved.")
     text = edited_text if edited_text is not None else record["draft"]
     text = text.replace("\r\n", "\n")
+    edited = text.strip() != record["draft"].strip()
+    approved_on = approved_on or date.today()
+    text = drafts.fill_approval_date(text, approved_on, record.get("ai_model"))
     if not text.startswith(drafts.DRAFT_HEADER):
         text = drafts.DRAFT_HEADER + "\n\n" + text.lstrip()
     found = drafts.personal_details_found(text)
@@ -108,12 +118,14 @@ def approve(case_id: str, edited_text: Optional[str] = None, base: Path = HERE,
 
     facts = UndertrialFacts.from_dict(record["facts"])
     result = drafts.recalculate(facts)
-    case_text = drafts.make_case_file(case_id, facts, result, approved_on or date.today())
+    case_text = drafts.make_case_file(case_id, facts, result, approved_on)
 
     pending, drafts_dir, cases = _dirs(base)
     _write(drafts_dir / f"{case_id}.md", text if text.endswith("\n") else text + "\n")
     _write(cases / f"{case_id}.md", case_text)
     (pending / f"{case_id}.json").unlink()
+    audit.add_event(case_id, "approved", audit.SUPERVISOR,
+                    "edited by the supervisor before approval" if edited else "approved as sent", base=base)
 
 
 def reject(case_id: str, reason: str, base: Path = HERE) -> None:
@@ -127,6 +139,7 @@ def reject(case_id: str, reason: str, base: Path = HERE) -> None:
     record["reason"] = reason
     pending, _, _ = _dirs(base)
     _write(pending / f"{case_id}.json", json.dumps(record, indent=2, ensure_ascii=False))
+    audit.add_event(case_id, "sent back", audit.SUPERVISOR, f"reason: {reason}", base=base)
 
 
 def resend(case_id: str, fixed_text: str, base: Path = HERE) -> None:
@@ -146,6 +159,7 @@ def resend(case_id: str, fixed_text: str, base: Path = HERE) -> None:
     record.update(status=WAITING, reason="", draft=text)
     pending, _, _ = _dirs(base)
     _write(pending / f"{case_id}.json", json.dumps(record, indent=2, ensure_ascii=False))
+    audit.add_event(case_id, "fixed and resent", audit.VOLUNTEER, base=base)
 
 
 def get_pending(case_id: str, base: Path = HERE) -> dict:

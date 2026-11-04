@@ -21,6 +21,19 @@ Version 1 content for the legal aid agent (Code for a Billion, Timely Justice tr
 | learner/legal_aid.md, learner/undertrial_bail.md, learner/cyber_fraud.md | Explainer, 10-question quiz and 2 practice cases per module |
 | learner/case_law.md | 12 landmark judgments with one-line summaries |
 
+## What this tool will never do
+- It never predicts the outcome of a case, the chances of bail, flight risk, the risk of
+  re-offending, or anyone's guilt or credibility, and it never scores or ranks people.
+- The Section 479 dates are statutory deadlines worked out by plain, tested code from the
+  statute and knowledge/sentence_table.csv. They are not an assessment of whether bail should
+  be granted: the jail superintendent must apply and the court decides.
+- AI is used only to extract facts stated in case notes. A volunteer checks every fact, and
+  the AI is told never to judge bail chances, risk, guilt or credibility.
+- Every draft ends with a note on how it was prepared (AI model used, if any; rule-based
+  dates; supervisor approval date), and every case has an audit record. This follows the
+  Supreme Court's draft "Regulations for Use of AI in Courts, 2026" (Regulations 16, 20(d),
+  20(f) and 43), because drafts may later be filed in court.
+
 ## Before launch: checks for the reviewing lawyer
 1. sentence_table.csv: every maximum term, especially rows with an "ask_to_decide" question, and the status of BNS 106(2).
 2. undertrial_bail.md: the Section 479 rules and the worked example, and especially how Section 479(2) ("more than one offence") should be applied when one case charges several sections.

@@ -212,7 +212,41 @@ def dlsa_replacements(facts: UndertrialFacts, result: Result) -> List[Tuple[str,
     ]
 
 
-def make_undertrial_draft(facts: UndertrialFacts, result: Result, templates: Path = TEMPLATES) -> str:
+# ---------- AI disclosure (draft SC "Regulations for Use of AI in Courts, 2026", Reg. 43(3), 43(6)) ----------
+
+DISCLOSURE_START = "How this draft was prepared:"
+APPROVAL_BLANK = "approved by the supervisor on [date]."
+
+
+def disclosure_block(ai_model: Optional[str], approved_on: Optional[date] = None) -> str:
+    """The block added at the end of every draft. Names the AI model only if AI was used."""
+    if ai_model:
+        how = f"facts were read from case notes with AI assistance ({ai_model}) and checked by a volunteer"
+    else:
+        how = "facts were entered by a volunteer"
+    approved = show_date(approved_on) if approved_on else "[date]"
+    return (f"{DISCLOSURE_START} {how}; dates were calculated by rule-based code from the statute; "
+            f"the draft was reviewed and approved by the supervisor on {approved}. "
+            "If this is filed in any court, AI assistance must be declared as the court requires.")
+
+
+def add_disclosure(text: str, ai_model: Optional[str], approved_on: Optional[date] = None) -> str:
+    return text.rstrip("\n") + "\n\n---\n\n" + disclosure_block(ai_model, approved_on) + "\n"
+
+
+def fill_approval_date(text: str, approved_on: date, ai_model: Optional[str]) -> str:
+    """At approval: fill the date in the disclosure block, or add the block if it was removed."""
+    if APPROVAL_BLANK in text:
+        i = text.rindex(APPROVAL_BLANK)
+        return text[:i] + f"approved by the supervisor on {show_date(approved_on)}." + text[i + len(APPROVAL_BLANK):]
+    if DISCLOSURE_START not in text:
+        return add_disclosure(text, ai_model, approved_on)
+    return text
+
+
+def make_undertrial_draft(facts: UndertrialFacts, result: Result, templates: Path = TEMPLATES,
+                          ai_model: Optional[str] = None) -> str:
+    """ai_model: the AI model that read the case notes, or None if the facts were typed in."""
     if not result.applies:
         raise ValueError("Section 479 does not apply, so there is no Section 479 note to draft.")
     note = fill((templates / "section479_note.md").read_text(encoding="utf-8"),
@@ -223,7 +257,7 @@ def make_undertrial_draft(facts: UndertrialFacts, result: Result, templates: Pat
         note = note.rstrip("\n") + "\n\n---\n\n" + dlsa
     if not note.startswith(DRAFT_HEADER):  # safety net; both templates already start with it
         note = DRAFT_HEADER + "\n\n" + note
-    return note
+    return add_disclosure(note, ai_model)
 
 
 # ---------- case file ----------
