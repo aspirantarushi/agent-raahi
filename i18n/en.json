@@ -481,5 +481,21 @@
  "ledger.f.disability": "Disability",
  "ledger.f.state": "State",
  "ledger.f.annual_income": "Yearly income (₹)",
- "ledger.unresolved_warning": "{n} legal point(s) are unresolved: ask a lawyer. They are not facts."
+ "ledger.unresolved_warning": "{n} legal point(s) are unresolved: ask a lawyer. They are not facts.",
+ "abstain.title": "Cannot conclude yet: {reason}",
+ "abstain.offence_after_custody": "the offence date ({offence}) is after the date custody began ({custody}).",
+ "abstain.custody_future": "the date custody began ({custody}) is after today's date ({today}).",
+ "abstain.offence_future": "the offence date is after today's date.",
+ "abstain.ai_vs_volunteer": "the notes say {fact} is \"{ai}\", but the form says \"{form}\".",
+ "abstain.other_cases": "the form says there are no other cases, but the notes mention another case: \"{quote}\"",
+ "abstain.convictions": "the form says the person was never convicted, but the notes mention a conviction: \"{quote}\"",
+ "abstain.missing_custody": "the date custody began is not known.",
+ "abstain.general_unclear": "the problem is not clear from the notes.",
+ "abstain.needed.dates": "Needed: check the FIR, arrest memo or court order and correct the dates.",
+ "abstain.needed.confirm": "Needed: check which is right. If the form is right, tick the box below; if not, correct the form.",
+ "abstain.needed.other_cases": "Needed: find out whether another case is pending (ask the family or check eCourts), then correct the form.",
+ "abstain.needed.convictions": "Needed: find out about any earlier conviction, then correct the form.",
+ "abstain.needed.custody": "Needed: the date of arrest (from the arrest memo or the family).",
+ "abstain.needed.general": "Needed: ask the person what happened and add it to the notes.",
+ "abstain.confirm_box": "I checked: the form is right ({fact} = {form})"
 }

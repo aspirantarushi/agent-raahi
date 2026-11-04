@@ -16,6 +16,7 @@ from datetime import date
 import streamlit as st
 
 import audit
+import consistency
 import drafts
 import general
 import intake
@@ -454,6 +455,10 @@ def general_summary(gen):
     eligibility = general.check_eligibility(gen["facts"])
     still_to_ask = gen["unanswered"] + [general.ELIGIBILITY_QUESTIONS[m] for m in eligibility.missing]
     facts = general.build_facts(reading, gen["answers"], still_to_ask, gen["facts"], date.today())
+    problems = consistency.general_problems(facts, gen.get("translation", ""))
+    if problems:
+        cannot_conclude(problems)
+        return
 
     categories = [c for c, _ in reading.issues]
     if "arrest_or_custody" in categories:
@@ -716,6 +721,19 @@ def checked_by_volunteer() -> bool:
         return st.checkbox(t("ui.check.box"), key="f_checked")
 
 
+def cannot_conclude(problems) -> None:
+    """Show why the agent will not conclude yet, and what is needed."""
+    for p in problems:
+        params = dict(p.params)
+        if "fact" in params:
+            params["fact"] = fact_label(params["fact"])
+        st.error(t("abstain.title", reason=t("abstain." + p.reason, **params)))
+        st.caption(t("abstain.needed." + p.needed))
+        if p.confirm_fact:
+            st.checkbox(t("abstain.confirm_box", fact=fact_label(p.confirm_fact), form=p.params["form"]),
+                        key=f"confirm-{p.confirm_fact}")
+
+
 def undertrial_form():
     st.header(t("ui.form.header"))
     st.info(t("ui.form.aid_note"))
@@ -771,8 +789,19 @@ def undertrial_form():
         st.info(t("ui.check.tick_first"))
         return
 
-    if custody_began is None:
-        st.info(t("ui.form.pick_custody"))
+    # Safe abstention: contradictions or missing key facts stop here.
+    ai_state = st.session_state.get("ai")
+    form = {"custody_began": custody_began, "offence_date": offence_date, "today": today, "law": law,
+            "section": section.strip(), "never_convicted": never_convicted, "other_cases_pending": other_cases,
+            "delay_days_by_accused": int(delay_days), "answer": answer.strip(),
+            "lawyer": st.session_state.get("f_lawyer")}
+    confirmed = {k[len("confirm-"):] for k, v in st.session_state.items()
+                 if isinstance(k, str) and k.startswith("confirm-") and v}
+    problems = consistency.undertrial_problems(
+        form, dict(ai_state["reading"].values) if ai_state else {},
+        ai_state.get("translation", "") if ai_state else "", confirmed)
+    if problems:
+        cannot_conclude(problems)
         return
 
     try:

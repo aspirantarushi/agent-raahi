@@ -481,5 +481,21 @@
  "ledger.f.disability": "दिव्यांगता",
  "ledger.f.state": "राज्य",
  "ledger.f.annual_income": "सालाना आय (₹)",
- "ledger.unresolved_warning": "{n} क़ानूनी बातें तय नहीं हैं: वकील से पूछें। ये तथ्य नहीं हैं।"
+ "ledger.unresolved_warning": "{n} क़ानूनी बातें तय नहीं हैं: वकील से पूछें। ये तथ्य नहीं हैं।",
+ "abstain.title": "अभी नतीजा नहीं निकाल सकते: {reason}",
+ "abstain.offence_after_custody": "अपराध की तारीख़ ({offence}) हिरासत शुरू होने की तारीख़ ({custody}) के बाद है।",
+ "abstain.custody_future": "हिरासत शुरू होने की तारीख़ ({custody}) आज की तारीख़ ({today}) के बाद है।",
+ "abstain.offence_future": "अपराध की तारीख़ आज की तारीख़ के बाद है।",
+ "abstain.ai_vs_volunteer": "नोट्स में {fact} \"{ai}\" है, पर फ़ॉर्म में \"{form}\" है।",
+ "abstain.other_cases": "फ़ॉर्म में कोई दूसरा केस नहीं है, पर नोट्स में दूसरे केस की बात है: \"{quote}\"",
+ "abstain.convictions": "फ़ॉर्म में कभी सज़ा नहीं हुई लिखा है, पर नोट्स में सज़ा की बात है: \"{quote}\"",
+ "abstain.missing_custody": "हिरासत शुरू होने की तारीख़ पता नहीं है।",
+ "abstain.general_unclear": "नोट्स से समस्या साफ़ नहीं है।",
+ "abstain.needed.dates": "चाहिए: FIR, गिरफ़्तारी मेमो या अदालत का आदेश देखें और तारीख़ें ठीक करें।",
+ "abstain.needed.confirm": "चाहिए: देखें कि कौन सही है। फ़ॉर्म सही है तो नीचे का बॉक्स टिक करें; नहीं तो फ़ॉर्म ठीक करें।",
+ "abstain.needed.other_cases": "चाहिए: पता करें कि कोई दूसरा केस लंबित है या नहीं (परिवार से पूछें या eCourts देखें), फिर फ़ॉर्म ठीक करें।",
+ "abstain.needed.convictions": "चाहिए: पहले की किसी सज़ा के बारे में पता करें, फिर फ़ॉर्म ठीक करें।",
+ "abstain.needed.custody": "चाहिए: गिरफ़्तारी की तारीख़ (गिरफ़्तारी मेमो या परिवार से)।",
+ "abstain.needed.general": "चाहिए: व्यक्ति से पूछें कि क्या हुआ और नोट्स में जोड़ें।",
+ "abstain.confirm_box": "मैंने जाँच लिया: फ़ॉर्म सही है ({fact} = {form})"
 }
