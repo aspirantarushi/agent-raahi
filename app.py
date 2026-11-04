@@ -74,6 +74,8 @@ def language_switch():
     """English / हिंदी at the top of every screen, remembered for the session."""
     st.radio(LANGUAGE_LABEL, list(lang.LANGUAGES), format_func=lang.LANGUAGES.get, horizontal=True,
              key="ui_lang", on_change=keep_choices)
+    if lang.is_machine_translated(code()):
+        st.caption("\u2139\ufe0f " + t("ui.machine_note"))
 
 
 def option_text(prefix: str):
@@ -369,9 +371,12 @@ def general_screen():
     general_summary(gen)
 
 
+DRAFT_LANGUAGES = {"en": "English", "hi": lang.NATIVE_NAMES["hi"]}  # drafts for the DLSA or a court: only these
+
+
 def draft_language_choice(key: str) -> str:
-    st.session_state.setdefault(key, code())
-    return st.radio(t("ui.draft_language"), list(lang.LANGUAGES), format_func=lang.LANGUAGES.get,
+    st.session_state.setdefault(key, code() if code() in DRAFT_LANGUAGES else "en")
+    return st.radio(t("ui.draft_language"), list(DRAFT_LANGUAGES), format_func=DRAFT_LANGUAGES.get,
                     horizontal=True, key=key)
 
 

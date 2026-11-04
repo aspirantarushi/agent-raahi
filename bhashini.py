@@ -39,15 +39,13 @@ CONFIG_CACHE_SECONDS = 30 * 60
 MAX_AUDIO_BYTES = 15 * 1024 * 1024
 
 # The 22 languages of the Eighth Schedule: code -> (English name, name in its own script).
-LANGUAGES: Dict[str, Tuple[str, str]] = {
-    "as": ("Assamese", "অসমীয়া"), "bn": ("Bengali", "বাংলা"), "brx": ("Bodo", "बड़ो"),
-    "doi": ("Dogri", "डोगरी"), "gu": ("Gujarati", "ગુજરાતી"), "hi": ("Hindi", "हिंदी"),
-    "kn": ("Kannada", "ಕನ್ನಡ"), "ks": ("Kashmiri", "كٲشُر"), "gom": ("Konkani", "कोंकणी"),
-    "mai": ("Maithili", "मैथिली"), "ml": ("Malayalam", "മലയാളം"), "mni": ("Manipuri", "ꯃꯤꯇꯩꯂꯣꯟ"),
-    "mr": ("Marathi", "मराठी"), "ne": ("Nepali", "नेपाली"), "or": ("Odia", "ଓଡ଼ିଆ"),
-    "pa": ("Punjabi", "ਪੰਜਾਬੀ"), "sa": ("Sanskrit", "संस्कृतम्"), "sat": ("Santali", "ᱥᱟᱱᱛᱟᱲᱤ"),
-    "sd": ("Sindhi", "سنڌي"), "ta": ("Tamil", "தமிழ்"), "te": ("Telugu", "తెలుగు"), "ur": ("Urdu", "اردو"),
-}
+import lang as _lang  # noqa: E402
+
+_ENGLISH = {"as": "Assamese", "bn": "Bengali", "brx": "Bodo", "doi": "Dogri", "gu": "Gujarati", "hi": "Hindi",
+            "kn": "Kannada", "ks": "Kashmiri", "gom": "Konkani", "mai": "Maithili", "ml": "Malayalam",
+            "mni": "Manipuri", "mr": "Marathi", "ne": "Nepali", "or": "Odia", "pa": "Punjabi", "sa": "Sanskrit",
+            "sat": "Santali", "sd": "Sindhi", "ta": "Tamil", "te": "Telugu", "ur": "Urdu"}
+LANGUAGES: Dict[str, Tuple[str, str]] = {c: (name, _lang.NATIVE_NAMES[c]) for c, name in _ENGLISH.items()}
 
 
 class Secret(str):

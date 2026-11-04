@@ -399,5 +399,6 @@
  "intake.q.8": "Has the person ever been convicted of any offence before?",
  "intake.q.9": "Are any other cases pending against them?",
  "intake.q.11": "Has the case been delayed because of the accused (for example, their own adjournment requests)?",
- "intake.q.12": "Does the person have a lawyer?"
+ "intake.q.12": "Does the person have a lawyer?",
+ "ui.machine_note": "Screen text in this language is machine translated by Bhashini and has not been checked. Legal text and drafts stay in English or Hindi."
 }

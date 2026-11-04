@@ -14,8 +14,30 @@ from typing import Dict
 
 HERE = Path(__file__).resolve().parent
 FOLDER = HERE / "i18n"
-LANGUAGES: Dict[str, str] = {"en": "English", "hi": "हिंदी"}  # हिंदी
+# Every scheduled language, named in its own script (shown in the language switch).
+NATIVE_NAMES: Dict[str, str] = {
+    "en": "English", "hi": "हिंदी", "as": "অসমীয়া", "bn": "বাংলা", "brx": "बड़ो", "doi": "डोगरी",
+    "gu": "ગુજરાતી", "kn": "ಕನ್ನಡ", "ks": "كٲشُر", "gom": "कोंकणी", "mai": "मैथिली", "ml": "മലയാളം",
+    "mni": "ꯃꯤꯇꯩꯂꯣꯟ", "mr": "मराठी", "ne": "नेपाली", "or": "ଓଡ଼ିଆ", "pa": "ਪੰਜਾਬੀ", "sa": "संस्कृतम्",
+    "sat": "ᱥᱟᱱᱛᱟᱲᱤ", "sd": "سنڌي", "ta": "தமிழ்", "te": "తెలుగు", "ur": "اردو",
+}
+CHECKED_LANGUAGES = ("en", "hi")  # our own, checked wording; the others are machine translated
+MACHINE_STATUS = "machine translated by Bhashini, not checked"
 DEFAULT = "en"
+
+
+def _available() -> Dict[str, str]:
+    """English, Hindi, then every language with an i18n/<code>.json file, each in its own script."""
+    codes = ["en", "hi"] + sorted(p.stem for p in FOLDER.glob("*.json")
+                                  if p.stem in NATIVE_NAMES and p.stem not in ("en", "hi"))
+    return {c: NATIVE_NAMES[c] for c in codes}
+
+
+LANGUAGES: Dict[str, str] = _available()
+
+
+def is_machine_translated(code: str) -> bool:
+    return code not in CHECKED_LANGUAGES
 
 HINDI_MONTHS = ["जनवरी", "फ़रवरी", "मार्च",
                 "अप्रैल", "मई", "जून", "जुलाई",
