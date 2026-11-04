@@ -33,7 +33,18 @@ def _available() -> Dict[str, str]:
     return {c: NATIVE_NAMES[c] for c in codes}
 
 
-LANGUAGES: Dict[str, str] = _available()
+# Pilot: languages are frozen at English and Hindi. The Bhashini code stays; set this to False (and run
+# scripts/translate_ui.py) to offer the machine-translated languages again.
+PILOT_FREEZE = True
+PILOT_LANGUAGES = ("en", "hi")
+
+
+def _offered() -> Dict[str, str]:
+    found = _available()
+    return {c: n for c, n in found.items() if c in PILOT_LANGUAGES} if PILOT_FREEZE else found
+
+
+LANGUAGES: Dict[str, str] = _offered()
 
 
 def is_machine_translated(code: str) -> bool:

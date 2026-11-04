@@ -176,7 +176,7 @@
  "ui.draft_language": "Draft language",
  "ui.hindi_label_note": "Hindi legal text is shown with \"Hindi translation checked: no\" until a Hindi speaker who knows the law has checked it.",
  "case_type.Any case (start here)": "Any case (start here)",
- "case_type.Undertrial": "Undertrial",
+ "case_type.Undertrial": "Section 479 aid (undertrial)",
  "case_type.General": "Any case (general intake)",
  "opt.Yes": "Yes",
  "opt.No": "No",
@@ -266,7 +266,7 @@
  "ui.check.many_sections": "The notes name more than one section: {sections}. The form uses the first; a lawyer must check whether Section 479(2) bars release.",
  "ui.check.box": "I have checked every field against the notes",
  "ui.check.tick_first": "Tick the box above once you have checked every field. Then the dates are worked out.",
- "ui.form.header": "Undertrial: Section 479 BNSS dates",
+ "ui.form.header": "Section 479 BNSS dates: an aid for the reviewing lawyer",
  "ui.form.section": "Section number",
  "ui.form.section_example": "for example 380 or 117(2)",
  "ui.form.offence_date_help": "Before 1 July 2024 the IPC applies; from 1 July 2024 the BNS.",
@@ -408,5 +408,6 @@
  "ui.reading.title": "Reading copy in {language} (machine translated, not checked)",
  "ui.reading.make": "Make a reading copy",
  "ui.reading.down": "Bhashini is not available, so a reading copy can't be made. Use the English or Hindi version.",
- "ui.reading.kept": "{n} part(s) kept in English because a section number, date or amount changed in translation."
+ "ui.reading.kept": "{n} part(s) kept in English because a section number, date or amount changed in translation.",
+ "ui.form.aid_note": "This calculator is an aid for the reviewing lawyer, not a release decision. Start with \"Any case\" for most people; use this when someone is in custody and a lawyer will review the dates."
 }

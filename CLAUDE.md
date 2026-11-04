@@ -40,9 +40,10 @@ size of the problem, severity, quality of the solution, proven impact (real use 
 ## What this tool will never do
 - It never predicts the outcome of a case, the chances of bail, flight risk, the risk of
   re-offending, or anyone's guilt or credibility, and it never scores or ranks people.
-- The Section 479 dates are statutory deadlines worked out by plain, tested code from the
-  statute and knowledge/sentence_table.csv. They are not an assessment of whether bail should
-  be granted: the jail superintendent must apply and the court decides.
+- The Section 479 calculator is an aid for the reviewing lawyer, not a release decision. Its
+  dates are worked out by plain, tested code from the statute and knowledge/sentence_table.csv;
+  they are not an assessment of whether bail should be granted: the jail superintendent must
+  apply and the court decides. It is a secondary option; "Any case" is where volunteers start.
 - AI is used only to extract facts stated in case notes. A volunteer checks every fact, and
   the AI is told never to judge bail chances, risk, guilt or credibility.
 - Every draft ends with a note on how it was prepared (AI model used, if any; rule-based

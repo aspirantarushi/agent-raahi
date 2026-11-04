@@ -96,7 +96,7 @@ def test_never_do_section_in_docs(path):
     text = (ROOT / path).read_text(encoding="utf-8")
     assert "## What this tool will never do" in text
     section = text.split("## What this tool will never do")[1].split("\n## ")[0]
-    for words in ["bail", "flight risk", "re-offending", "credibility", "statutory deadlines",
+    for words in ["bail", "flight risk", "re-offending", "credibility", "an aid for the reviewing lawyer, not a release decision",
                   "plain", "not an assessment of whether bail should", "only to extract facts"]:
         assert words in " ".join(section.split()), words
 

@@ -8,12 +8,19 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 import bhashini
+import lang
 import llm
 import multilingual
 import privacy
 from test_intake import NOTES, practice_answer
 
 TAMIL_NOTES = "பயிற்சி வழக்கு. அவரது சகோதரர் 15 மார்ச் 2024 அன்று கைது செய்யப்பட்டார். தொலைபேசி ௯௮௭௬௫௪௩௨௧௦."
+
+
+@pytest.fixture(autouse=True)
+def all_languages(monkeypatch):
+    """These tests cover the other scheduled languages, which the pilot freeze hides."""
+    monkeypatch.setattr(lang, "PILOT_FREEZE", False)
 
 
 @pytest.fixture
@@ -147,3 +154,9 @@ def test_gemini_when_bhashini_not_set_up(voices, monkeypatch):
     monkeypatch.setattr(bhashini, "configured", lambda: False)
     multilingual.speech_to_text(wav_bytes(), "audio/wav", "ta")
     assert voices == [("Gemini", "other")]
+
+
+def test_pilot_freeze_offers_only_english_and_hindi(monkeypatch):
+    monkeypatch.setattr(lang, "PILOT_FREEZE", True)
+    assert multilingual.note_languages() == {"en": "English", "hi": "हिंदी"}
+    assert set(lang._offered()) == {"en", "hi"}

@@ -708,6 +708,7 @@ def checked_by_volunteer() -> bool:
 
 def undertrial_form():
     st.header(t("ui.form.header"))
+    st.info(t("ui.form.aid_note"))
 
     col1, col2 = st.columns([1, 2])
     law = col1.selectbox(t("fact.law"), ["IPC", "BNS"], key="f_law")

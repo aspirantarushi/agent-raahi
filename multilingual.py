@@ -23,6 +23,8 @@ DIRECT = ("en", "hi")  # the AI reads these (and Hinglish) itself
 
 def note_languages() -> Dict[str, str]:
     """English, Hindi, then the other scheduled languages, each in its own script."""
+    if lang.PILOT_FREEZE:
+        return {"en": "English", "hi": lang.NATIVE_NAMES["hi"]}
     return {"en": "English", "hi": lang.NATIVE_NAMES["hi"],
             **{c: native for c, (_, native) in bhashini.LANGUAGES.items() if c != "hi"}}
 
