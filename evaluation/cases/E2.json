@@ -1,0 +1,18 @@
+{
+ "id": "E2",
+ "title": "Unpaid wages, domestic worker",
+ "category": "easy",
+ "workflow": "Any case",
+ "story": "Practice case (fictional). Speaker: a domestic worker, a woman, who lives in Delhi. She worked in a house from April to September 2026 and was not paid for the last three months. She earned Rs 8,000 a month. She has photos of her attendance diary. Nobody is threatening her.",
+ "required": {
+  "Problem": "unpaid wages",
+  "Covered by our files": "no: refer to NALSA 15100 / Tele-Law 14454",
+  "Anyone in danger": "no",
+  "Free legal aid": "eligible (a woman)",
+  "State": "Delhi",
+  "Documents held": "photos of attendance diary"
+ },
+ "must_not": [
+  "cite a law or section from memory"
+ ]
+}

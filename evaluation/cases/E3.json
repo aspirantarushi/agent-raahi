@@ -1,0 +1,19 @@
+{
+ "id": "E3",
+ "title": "UPI fraud yesterday",
+ "category": "easy",
+ "workflow": "Any case",
+ "story": "Practice case (fictional). Speaker: a college student, a man aged 20, who lives in Jaipur, Rajasthan. Yesterday someone posing as a courier sent him a link and Rs 12,000 left his account by UPI. He has not called 1930 and has not told the bank in writing. He has the bank SMS.",
+ "required": {
+  "Urgent action": "Call 1930 now",
+  "Problem": "online fraud",
+  "Money lost": "Rs 12,000, yesterday",
+  "1930 called": "no",
+  "State": "Rajasthan",
+  "Free legal aid": "not decided: income not known",
+  "Documents held": "bank SMS"
+ },
+ "must_not": [
+  "skip the 1930 warning"
+ ]
+}

@@ -18,6 +18,7 @@ import streamlit as st
 import audit
 import consistency
 import drafts
+import evaluation
 import general
 import intake
 import lang
@@ -60,7 +61,7 @@ def show_date(d: date) -> str:
 # Choice buttons (radios) and lists whose wording changes with the language. In Streamlit, a radio's
 # identity includes its label and option wording, so a new language would reset it to its default.
 # When the language is switched, these are saved again first, so the new-language widgets keep them.
-KEEP_ON_LANGUAGE_SWITCH = ("ho-how-", "ho-by-", "case_type", "screen", "f_lawyer", "f_draft_lang", "g_draft_lang", "f_offence_pick",
+KEEP_ON_LANGUAGE_SWITCH = ("ev-method", "evs-accepted", "ho-how-", "ho-by-", "case_type", "screen", "f_lawyer", "f_draft_lang", "g_draft_lang", "f_offence_pick",
                            "ge-", "q-never", "q-other_cases_pending", "q-delay_days_by_accused", "q-lawyer",
                            "tl-action-", "tl-step-", "action-")
 LANGUAGE_LABEL = "Language / \u092d\u093e\u0937\u093e"  # the same in every language, so the switch never resets
@@ -503,6 +504,7 @@ def general_summary(gen):
             st.error(str(err))
             return
         st.session_state["gen_sent"] = case_id
+        finish_agent_session(case_id, draft)
         st.rerun()
     report_problem_box("gen-draft", "Any-case summary", None)
 
@@ -976,6 +978,7 @@ def draft_section(known: dict, result: section479.Result):
             st.error(str(err))
             return
         st.session_state["sent"] = {"sig": signature, "id": case_id}
+        finish_agent_session(case_id, text)
         st.rerun()
 
 
@@ -1266,6 +1269,128 @@ def fix_and_resend(case_id: str):
         st.rerun()
 
 
+# ---------- evaluation (practice only) ----------
+
+def finish_agent_session(case_id: str, draft: str):
+    """If an evaluation session "with the agent" is running, sending to the supervisor stops its clock."""
+    sid = st.session_state.get("eval_session")
+    if not sid:
+        return
+    try:
+        session = evaluation.load(sid)
+        if session["method"] == evaluation.WITH_AGENT and not session["finished"]:
+            evaluation.finish(sid, {"agent_case": case_id, "draft": draft})
+            st.session_state.pop("eval_session", None)
+    except ValueError:
+        st.session_state.pop("eval_session", None)
+
+
+def start_eval():
+    try:
+        session = evaluation.start(st.session_state.get("ev-case"), st.session_state.get("ev-method") or "",
+                                   st.session_state.get("ev-volunteer", ""))
+    except ValueError as err:
+        st.session_state["ev-msg"] = ("error", str(err))
+        return
+    st.session_state["eval_session"] = session["session_id"]
+
+
+def finish_eval():
+    sid = st.session_state.get("eval_session")
+    session = evaluation.load(sid)
+    c = evaluation.case(session["case"])
+    if session["method"] == evaluation.BY_HAND:
+        answers = {name: st.session_state.get(f"ev-field-{i}", "") for i, name in enumerate(c["required"])}
+        answers["notes"] = st.session_state.get("ev-notes", "")
+    else:
+        answers = {"agent_case": "", "draft": "(finished without sending to the supervisor)"}
+    done = evaluation.finish(sid, answers)
+    st.session_state.pop("eval_session", None)
+    st.session_state["ev-msg"] = ("ok", t("eval.finished", minutes=evaluation.minutes(done)))
+
+
+def cancel_eval():
+    st.session_state.pop("eval_session", None)
+
+
+def evaluation_screen():
+    st.title(t("eval.title"))
+    st.caption(t("eval.caption"))
+    msg = st.session_state.pop("ev-msg", None)
+    if msg:
+        (st.success if msg[0] == "ok" else st.error)(msg[1])
+    sid = st.session_state.get("eval_session")
+    if not sid:
+        cases = {c["id"]: f"{c['id']} \u00b7 {c['title']} ({c['category']})" for c in evaluation.cases()}
+        st.selectbox(t("eval.case"), list(cases), format_func=cases.get, key="ev-case")
+        st.radio(t("eval.method"), evaluation.METHODS, index=None, key="ev-method", format_func=option_text("eval.method."))
+        st.text_input(t("eval.volunteer"), max_chars=40, key="ev-volunteer")
+        st.button(t("eval.start"), type="primary", on_click=start_eval)
+        return
+    session = evaluation.load(sid)
+    c = evaluation.case(session["case"])
+    st.info(t("eval.active", sid=sid, case=c["id"], method=t("eval.method." + session["method"]),
+              started=session["started"].replace("T", " ")))
+    st.markdown(f"**{t('eval.story')}**")
+    st.code(c["story"], language=None, wrap_lines=True)
+    if session["method"] == evaluation.BY_HAND:
+        st.caption(t("eval.by_hand_help"))
+        for i, name in enumerate(c["required"]):
+            st.text_input(name, key=f"ev-field-{i}")
+        st.text_area(t("eval.notes"), key="ev-notes", height=150)
+    else:
+        st.info(t("eval.agent_help", workflow=c["workflow"]))
+    col1, col2 = st.columns(2)
+    col1.button(t("eval.finish"), type="primary", on_click=finish_eval)
+    col2.button(t("eval.cancel"), on_click=cancel_eval)
+
+
+def save_eval_score():
+    get = st.session_state.get
+    try:
+        evaluation.score(get("evs-session"), get("evs-reviewer", ""), int(get("evs-correct") or 0),
+                         int(get("evs-errors") or 0), int(get("evs-corrections") or 0), get("evs-accepted") == "Yes")
+    except ValueError as err:
+        st.session_state["evs-msg"] = ("error", str(err))
+        return
+    st.session_state["evs-msg"] = ("ok", t("eval.saved"))
+
+
+def evaluation_scoring_box():
+    """Reviewer scoring form on the Supervisor screen (practice data only) and the raw-count export."""
+    with st.expander(t("eval.score_title")):
+        finished = evaluation.sessions(finished_only=True)
+        if not finished:
+            st.caption(t("eval.no_sessions"))
+            return
+        labels = {s["session_id"]: f"{s['session_id']} \u00b7 {s['case']} \u00b7 {s['method']} \u00b7 {s['volunteer']}"
+                  for s in finished}
+        sid = st.selectbox(t("eval.session"), list(labels), format_func=labels.get, key="evs-session")
+        session = evaluation.load(sid)
+        c = evaluation.case(session["case"])
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown(f"**{t('eval.answer_key')}**")
+            st.markdown("\n".join(f"- {k}: {v}" for k, v in c["required"].items()))
+            st.markdown(f"_{t('eval.must_not')}_ " + "; ".join(c["must_not"]))
+        with col2:
+            st.markdown(f"**{t('eval.submission')}**")
+            st.code("\n".join(f"{k}: {v}" for k, v in session["submission"].items()), language=None, wrap_lines=True)
+        st.text_input(t("eval.reviewer"), max_chars=40, key="evs-reviewer")
+        st.number_input(t("eval.fields_correct", total=len(c["required"])), min_value=0,
+                        max_value=len(c["required"]), step=1, key="evs-correct")
+        st.number_input(t("eval.material_errors"), min_value=0, step=1, key="evs-errors")
+        st.number_input(t("eval.major_corrections"), min_value=0, step=1, key="evs-corrections")
+        st.radio(t("eval.accepted"), ["Yes", "No"], index=None, horizontal=True, key="evs-accepted",
+                 format_func=option_text("opt."))
+        st.button(t("eval.save_score"), on_click=save_eval_score, key="evs-save")
+        msg = st.session_state.pop("evs-msg", None)
+        if msg:
+            (st.success if msg[0] == "ok" else st.error)(msg[1])
+        st.download_button(t("eval.export"), evaluation.export_csv(), file_name="evaluation_raw_counts.csv",
+                           mime="text/csv", key="evs-export")
+
+
 def learn_screen():
     st.title(t("ui.learn.title"))
     st.info(t("ui.learn.soon"))
@@ -1316,6 +1441,7 @@ def supervisor_screen():
             review_one(record)
 
     delete_case_box()
+    evaluation_scoring_box()
 
     st.subheader(t("ui.sup.problems"))
     problems = audit.list_problems()
@@ -1410,6 +1536,7 @@ SCREENS = {
     "New case": new_case_screen,
     "My cases": my_cases_screen,
     "Learn": learn_screen,
+    "Evaluation": evaluation_screen,
     "Supervisor": supervisor_screen,
 }
 

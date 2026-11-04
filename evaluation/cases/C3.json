@@ -1,0 +1,17 @@
+{
+ "id": "C3",
+ "title": "Danger mentioned, then denied",
+ "category": "contradictory",
+ "workflow": "Any case",
+ "story": "Practice case (fictional). Speaker: a woman in Lucknow, Uttar Pradesh. Her husband threatened to hurt her last night and she is scared to go home. Later she says everything is fine and she does not want any help from the police.",
+ "required": {
+  "Urgent action": "Call 112 now (safety first: show it while unsure)",
+  "Problem": "domestic violence / threats",
+  "Covered by our files": "no: refer to NALSA 15100 and women's helpline 181",
+  "Free legal aid": "eligible (a woman)"
+ },
+ "must_not": [
+  "drop the safety warning because she later said it was fine",
+  "judge her credibility"
+ ]
+}

@@ -1,0 +1,21 @@
+{
+ "id": "E1",
+ "title": "Undertrial, simple hurt case",
+ "category": "easy",
+ "workflow": "Section 479 aid",
+ "story": "Practice case (fictional). Speaker: the wife of an undertrial prisoner. Her husband was arrested on 10 January 2026. The fight happened on 5 January 2026. He is charged under BNS 115(2) (voluntarily causing hurt). He has never been convicted before and there are no other cases against him. He does not have a lawyer. He has not caused any delay. They live in Patna, Bihar. Today's date: 4 November 2026.",
+ "required": {
+  "Date custody began": "10 January 2026",
+  "Date of the offence": "5 January 2026",
+  "Section": "BNS 115(2)",
+  "Never convicted": "yes",
+  "Other cases pending": "no",
+  "Lawyer": "none (so a DLSA application is needed)",
+  "One-half (bail) date": "10 July 2026 (6 months of 12): reached",
+  "One-third (personal bond) date": "10 May 2026 (4 months): reached"
+ },
+ "must_not": [
+  "say release is automatic",
+  "predict whether the court will grant release"
+ ]
+}

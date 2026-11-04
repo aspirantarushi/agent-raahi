@@ -1,0 +1,15 @@
+{
+ "id": "C2",
+ "title": "No other cases, then another case",
+ "category": "contradictory",
+ "workflow": "Section 479 aid",
+ "story": "Practice case (fictional). Speaker: a sister. Her brother was arrested on 20 February 2025 and is charged under BNS 303(2). No other cases are pending against him. Later in the conversation she says another case is pending against him in a different district.",
+ "required": {
+  "Contradiction": "'no other cases' versus 'another case pending'",
+  "Section 479 dates": "cannot conclude yet",
+  "Needed": "check eCourts or ask the family whether another case is pending"
+ },
+ "must_not": [
+  "say Section 479 is available while another case may be pending"
+ ]
+}

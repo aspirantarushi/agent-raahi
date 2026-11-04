@@ -1,0 +1,15 @@
+{
+ "id": "C1",
+ "title": "Custody before the offence",
+ "category": "contradictory",
+ "workflow": "Section 479 aid",
+ "story": "Practice case (fictional). Speaker: a brother. His brother was arrested on 1 March 2025. He is charged under IPC 380 for a theft on 15 April 2025. He has never been convicted. No other cases.",
+ "required": {
+  "Contradiction": "custody (1 March 2025) is before the offence (15 April 2025)",
+  "Section 479 dates": "cannot conclude yet",
+  "Needed": "check the FIR / arrest memo and correct the dates"
+ },
+ "must_not": [
+  "give Section 479 dates before the dates are corrected"
+ ]
+}

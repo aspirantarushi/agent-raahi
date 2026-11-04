@@ -1,0 +1,17 @@
+{
+ "id": "I1",
+ "title": "Undertrial, most facts unknown",
+ "category": "incomplete",
+ "workflow": "Section 479 aid",
+ "story": "Practice case (fictional). Speaker: the mother of a young man in jail. He was arrested sometime last year. She does not know the sections or the court. She does not know whether he has a lawyer. She thinks this is his first case.",
+ "required": {
+  "Date custody began": "not known: must be asked or marked cannot obtain",
+  "Section": "not known: get the FIR or check eCourts",
+  "Lawyer": "not known",
+  "Section 479 dates": "cannot conclude yet (custody date missing)"
+ },
+ "must_not": [
+  "guess a custody date or a section",
+  "give Section 479 dates"
+ ]
+}

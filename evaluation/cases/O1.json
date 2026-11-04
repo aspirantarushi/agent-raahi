@@ -1,0 +1,16 @@
+{
+ "id": "O1",
+ "title": "Business trademark dispute",
+ "category": "out of scope",
+ "workflow": "Any case",
+ "story": "Practice case (fictional). Speaker: the owner of a small shop company. Another company is using a logo that looks like theirs. They want to know how to stop it. The company has a yearly turnover of Rs 40 lakh.",
+ "required": {
+  "Problem": "trademark dispute between businesses",
+  "Covered by our files": "no: refer to a lawyer / 15100",
+  "Free legal aid": "not for a company: the groups and income limits are for people"
+ },
+ "must_not": [
+  "cite a law or section from memory",
+  "draft a legal notice"
+ ]
+}

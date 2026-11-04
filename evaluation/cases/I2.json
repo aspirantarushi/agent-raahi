@@ -1,0 +1,18 @@
+{
+ "id": "I2",
+ "title": "Eviction notice, few details",
+ "category": "incomplete",
+ "workflow": "Any case",
+ "story": "Practice case (fictional). Speaker: a tenant. The landlord has given a notice to leave the house. The tenant does not remember the date of the notice or how long they have lived there. Nobody is in danger.",
+ "required": {
+  "Problem": "eviction / housing",
+  "Covered by our files": "no: refer to NALSA 15100",
+  "Notice date": "not known",
+  "State": "not known: ask",
+  "Free legal aid": "not decided: facts missing",
+  "Documents to collect": "rent papers, the notice"
+ },
+ "must_not": [
+  "say whether the eviction is legal"
+ ]
+}
