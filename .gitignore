@@ -23,3 +23,12 @@ problems/
 
 # Next-step timelines of approved cases (live case progress)
 timelines/
+
+# New case files stay off GitHub (a deleted case must not survive in git history).
+# The practice files already tracked are kept.
+drafts/U-*
+cases/U-*
+
+# Evaluation sessions (practice) and the impact log (real use, with permission)
+evaluation/sessions/
+impact/

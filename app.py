@@ -1315,6 +1315,8 @@ def supervisor_screen():
         for record in waiting:
             review_one(record)
 
+    delete_case_box()
+
     st.subheader(t("ui.sup.problems"))
     problems = audit.list_problems()
     if not problems:
@@ -1330,6 +1332,34 @@ def supervisor_screen():
     for r in records:
         with st.expander(t("ui.sup.audit_row", case_id=r["case_id"], model=r["model"], last=r["events"][-1]["event"])):
             st.markdown(audit.describe(r))
+
+
+def delete_selected_case():
+    case_id = st.session_state.get("del-case")
+    if (st.session_state.get("del-confirm") or "").strip() != "DELETE":
+        st.session_state["del-msg"] = ("error", t("del.need_confirm"))
+        return
+    try:
+        store.delete_case(case_id)
+    except ValueError as err:
+        st.session_state["del-msg"] = ("error", str(err))
+        return
+    st.session_state["del-msg"] = ("ok", t("del.done", case_id=case_id))
+    st.session_state["del-confirm"] = ""
+    st.session_state["del-case"] = None
+
+
+def delete_case_box():
+    with st.expander(t("del.title")):
+        st.caption(t("del.caption"))
+        cases = [c["id"] for c in store.list_cases()]
+        st.selectbox(t("del.case"), cases, index=None, key="del-case")
+        st.text_input(t("del.confirm"), key="del-confirm")
+        st.button(t("del.button"), key="del-go", on_click=delete_selected_case,
+                  disabled=not st.session_state.get("del-case"))
+        msg = st.session_state.pop("del-msg", None)
+        if msg:
+            (st.success if msg[0] == "ok" else st.error)(msg[1])
 
 
 def review_one(record: dict):

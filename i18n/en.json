@@ -526,5 +526,12 @@
  "ui.status.submitted": "📤 Submitted by an authorised worker",
  "ui.status.acknowledged": "📬 Acknowledged",
  "step.handoff-submitted": "Submitted by an authorised worker",
- "step.handoff-acknowledged": "Acknowledged by the DLSA, clinic or court"
+ "step.handoff-acknowledged": "Acknowledged by the DLSA, clinic or court",
+ "del.title": "Delete a case",
+ "del.caption": "Removes the case, its draft, case file, timeline and problem reports from this computer. The audit record keeps only \"case deleted\" and the date. This can't be undone.",
+ "del.case": "Case to delete",
+ "del.confirm": "Type DELETE to confirm",
+ "del.button": "Delete this case",
+ "del.done": "Case {case_id} deleted.",
+ "del.need_confirm": "Type DELETE (in capitals) to confirm."
 }

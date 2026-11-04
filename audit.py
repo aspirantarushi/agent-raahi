@@ -185,3 +185,11 @@ def list_problems(base: Path = HERE) -> List[dict]:
         return []
     entries = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
     return list(reversed(entries))  # newest first
+
+
+def replace_with_deletion(case_id: str, base: Path = HERE) -> None:
+    """After a case is deleted, its audit record keeps only "case deleted" and the date."""
+    record = {"case_id": case_id, "created": now(), "model": "deleted", "ai_extracted": {},
+              "ai_answers_not_accepted": [], "volunteer_changed": [], "entered_by_volunteer": [],
+              "events": [{"time": now(), "event": "case deleted", "by": SUPERVISOR}]}
+    _write(_path(case_id, base), json.dumps(record, indent=2, ensure_ascii=False))

@@ -211,3 +211,26 @@ def list_cases(base: Path = HERE) -> List[dict]:
             cases_list.append({"id": p.stem, "case_type": case_type, "status": APPROVED,
                                "reason": "", "date": "", "file": p})
     return sorted(cases_list, key=lambda c: c["id"], reverse=True)
+
+
+def delete_case(case_id: str, base: Path = HERE) -> List[str]:
+    """Remove a case completely: waiting or sent-back record, approved draft, case file, timeline and its
+    problem reports. The audit record keeps only "case deleted" with the date. Returns what was removed."""
+    _check_id(case_id)
+    removed = []
+    for folder, ext in (("pending", ".json"), ("drafts", ".md"), ("cases", ".md"), ("timelines", ".json")):
+        path = base / folder / f"{case_id}{ext}"
+        if path.exists():
+            path.unlink()
+            removed.append(folder)
+    if not removed and audit.read_record(case_id, base=base) is None:
+        raise ValueError("No such case.")
+    problems = base / "problems" / "problems.jsonl"
+    if problems.exists():
+        lines = problems.read_text(encoding="utf-8").splitlines()
+        kept = [l for l in lines if l.strip() and json.loads(l).get("case_id") != case_id]
+        if len(kept) != len([l for l in lines if l.strip()]):
+            _write(problems, "\n".join(kept) + ("\n" if kept else ""))
+            removed.append("problems")
+    audit.replace_with_deletion(case_id, base=base)
+    return removed
