@@ -15,6 +15,14 @@ def ok(at):
     assert not at.exception, at.exception[0].stack_trace
 
 
+def open_app(case_type="Undertrial"):
+    """Open New case and choose the case type (the screen starts on "Any case")."""
+    at = AppTest.from_file(APP, default_timeout=20).run()
+    ok(at)
+    at.radio(key="case_type").set_value(case_type).run()
+    return at
+
+
 def button(at, label):
     return next(b for b in at.button if b.label == label)
 
@@ -33,7 +41,7 @@ def pretend_ai(monkeypatch):
 
 
 def test_notes_fill_the_practice_case(pretend_ai):
-    at = AppTest.from_file(APP, default_timeout=20).run()
+    at = open_app()
     ok(at)
     at.text_area(key="f_notes").set_value(NOTES)
     button(at, "Read notes").click().run()
@@ -65,7 +73,7 @@ def test_notes_fill_the_practice_case(pretend_ai):
 
 
 def test_dont_know_skips_a_question(pretend_ai):
-    at = AppTest.from_file(APP, default_timeout=20).run()
+    at = open_app()
     at.text_area(key="f_notes").set_value(NOTES)
     button(at, "Read notes").click().run()
     button(at, "Don't know").click().run()
@@ -76,7 +84,7 @@ def test_dont_know_skips_a_question(pretend_ai):
 
 def test_no_key_the_form_still_works(monkeypatch):
     monkeypatch.setattr(llm, "available", lambda: False)
-    at = AppTest.from_file(APP, default_timeout=20).run()
+    at = open_app()
     ok(at)
     assert any("not set up" in i.value for i in at.info)
     at.text_input(key="f_section").set_value("380")
@@ -93,7 +101,7 @@ def test_ai_failure_shows_message_and_form_works(monkeypatch):
 
     monkeypatch.setattr(llm, "available", lambda: True)
     monkeypatch.setattr(llm, "read_undertrial_notes", fail)
-    at = AppTest.from_file(APP, default_timeout=20).run()
+    at = open_app()
     at.text_area(key="f_notes").set_value(NOTES)
     button(at, "Read notes").click().run()
     ok(at)
@@ -109,7 +117,7 @@ def test_ai_failure_shows_message_and_form_works(monkeypatch):
 def test_empty_reading_asks_every_fact_in_intake_order(monkeypatch):
     monkeypatch.setattr(llm, "available", lambda: True)
     monkeypatch.setattr(llm, "read_undertrial_notes", lambda notes: llm.NotesReading({}, notes, {}, "pretend-model"))
-    at = AppTest.from_file(APP, default_timeout=20).run()
+    at = open_app()
     at.text_area(key="f_notes").set_value("Nothing useful here.")
     button(at, "Read notes").click().run()
 
@@ -152,7 +160,7 @@ def test_empty_reading_asks_every_fact_in_intake_order(monkeypatch):
 def test_next_without_an_answer_stays_on_the_question(monkeypatch):
     monkeypatch.setattr(llm, "available", lambda: True)
     monkeypatch.setattr(llm, "read_undertrial_notes", lambda notes: llm.NotesReading({}, notes, {}, "pretend-model"))
-    at = AppTest.from_file(APP, default_timeout=20).run()
+    at = open_app()
     at.text_area(key="f_notes").set_value("Nothing useful here.")
     button(at, "Read notes").click().run()
     button(at, "Next").click().run()

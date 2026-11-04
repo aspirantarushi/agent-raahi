@@ -17,6 +17,7 @@ from typing import List, Optional
 
 import audit
 import drafts
+import general
 from drafts import UndertrialFacts
 
 HERE = Path(__file__).resolve().parent
@@ -70,7 +71,7 @@ def submit(draft_text: str, facts: UndertrialFacts, base: Path = HERE, ai: Optio
     case_id = new_case_id(base)
     record = {
         "id": case_id,
-        "case_type": "Undertrial",
+        "case_type": getattr(facts, "CASE_TYPE", "Undertrial"),
         "status": WAITING,
         "submitted": datetime.now().isoformat(timespec="minutes"),
         "facts": facts.to_dict(),
@@ -108,7 +109,9 @@ def approve(case_id: str, edited_text: Optional[str] = None, base: Path = HERE,
     text = text.replace("\r\n", "\n")
     edited = text.strip() != record["draft"].strip()
     approved_on = approved_on or date.today()
-    text = drafts.fill_approval_date(text, approved_on, record.get("ai_model"))
+    is_general = record.get("case_type") == general.CASE_TYPE
+    text = drafts.fill_approval_date(text, approved_on, record.get("ai_model"),
+                                     general.RULES_USED if is_general else drafts.RULES_DATES)
     if not text.startswith(drafts.DRAFT_HEADER):
         text = drafts.DRAFT_HEADER + "\n\n" + text.lstrip()
     found = drafts.personal_details_found(text)
@@ -116,9 +119,12 @@ def approve(case_id: str, edited_text: Optional[str] = None, base: Path = HERE,
         raise ValueError("The draft seems to contain " + " and ".join(found)
                          + ". Remove it before approving: personal details are never stored.")
 
-    facts = UndertrialFacts.from_dict(record["facts"])
-    result = drafts.recalculate(facts)
-    case_text = drafts.make_case_file(case_id, facts, result, approved_on)
+    if is_general:
+        case_text = general.make_case_file(case_id, record["facts"], approved_on)
+    else:
+        facts = UndertrialFacts.from_dict(record["facts"])
+        result = drafts.recalculate(facts)
+        case_text = drafts.make_case_file(case_id, facts, result, approved_on)
 
     pending, drafts_dir, cases = _dirs(base)
     _write(drafts_dir / f"{case_id}.md", text if text.endswith("\n") else text + "\n")
@@ -179,6 +185,11 @@ def list_cases(base: Path = HERE) -> List[dict]:
         for p in sorted(cases.glob("U-*.md")):
             if not ID_PATTERN.match(p.stem):
                 continue
-            cases_list.append({"id": p.stem, "case_type": "Undertrial", "status": APPROVED,
+            case_type = "Undertrial"
+            for line in p.read_text(encoding="utf-8").splitlines()[:8]:
+                if line.startswith("- Case type: "):
+                    case_type = (general.CASE_TYPE if line.endswith(general.CASE_TYPE_LABEL)
+                                 else line[len("- Case type: "):].split(" (")[0])
+            cases_list.append({"id": p.stem, "case_type": case_type, "status": APPROVED,
                                "reason": "", "date": "", "file": p})
     return sorted(cases_list, key=lambda c: c["id"], reverse=True)

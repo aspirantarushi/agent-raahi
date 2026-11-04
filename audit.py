@@ -27,6 +27,11 @@ AI_FACT_TO_CASE_FIELD = {
     "law": "law_typed", "section": "section_typed", "never_convicted": "never_convicted",
     "other_cases_pending": "other_cases_pending", "more_than_one_section": "more_than_one_section",
     "delay_days_by_accused": "delay_days_by_accused", "lawyer": "lawyer", "answer": "answer",
+    # general intake
+    "danger_now": "danger_now", "money_lost_online": "money_lost_online",
+    "money_lost_in_last_few_days": "money_lost_in_last_few_days", "called_1930": "called_1930",
+    "woman": "woman", "under_18": "under_18", "sc_st": "sc_st", "disability": "disability",
+    "state": "state", "annual_income": "annual_income", "in_custody": "in_custody",
 }
 
 

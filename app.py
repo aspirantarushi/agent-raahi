@@ -6,12 +6,14 @@ Run with:  streamlit run app.py
 import hmac
 import json
 import os
+import re
 from datetime import date
 
 import streamlit as st
 
 import audit
 import drafts
+import general
 import intake
 import llm
 import section479
@@ -105,17 +107,226 @@ def new_case_screen():
     st.caption("Use only case numbers (CNR, FIR). Do not type names, phone numbers, "
                "Aadhaar numbers, addresses or prisoner IDs.")
 
-    case_type = st.radio("What kind of case is it?", ["Undertrial"], horizontal=True)
-    if case_type == "Undertrial":
+    case_type = st.radio("What kind of case is it?", CASE_TYPES, horizontal=True, key="case_type")
+    if case_type == ANY_CASE:
+        general_screen()
+    else:
         init_form()
         notes_box()
         if not ask_missing_facts():  # while missing facts are asked one at a time, the form waits
             undertrial_form()
-        sent = st.session_state.get("sent")
-        report_problem_box("new-case", "New case", sent["id"] if sent else None)
+    sent = st.session_state.get("sent") if case_type != ANY_CASE else None
+    case_id = sent["id"] if sent else st.session_state.get("gen_sent")
+    report_problem_box("new-case", "New case", case_id)
 
 
 # ----- reading pasted case notes with the AI -----
+
+# ----- any case: general intake -----
+
+ANY_CASE = "Any case (start here)"
+CASE_TYPES = [ANY_CASE, "Undertrial"]
+NAMES_WARNING = ("**Do not type names**, phone numbers, Aadhaar numbers, addresses or prisoner IDs. "
+                 "Describe people by their role (\"the employer\", \"the husband\"). Phone numbers, Aadhaar "
+                 "numbers and email addresses are removed before the story is sent to the AI (Google Gemini), "
+                 "but names cannot be removed automatically. The story itself is never saved.")
+
+
+def case_type_label(case_type: str) -> str:
+    return general.CASE_TYPE_LABEL if case_type == general.CASE_TYPE else case_type
+
+
+def _start_general(reading, model, removed):
+    st.session_state["gen"] = {"reading": reading, "model": model, "read_at": audit.now(), "removed": removed,
+                               "facts": dict(reading.facts), "answers": [], "q_index": 0,
+                               "unanswered": [], "skipped": set(), "done": False}
+    for key in ("g_checked", "gen_sent"):
+        st.session_state.pop(key, None)
+
+
+def read_general():
+    """Runs when "Read the story" is clicked."""
+    st.session_state.pop("gen_error", None)
+    try:
+        notes_reading = llm.read_general_notes(st.session_state.get("g_notes", ""))
+    except llm.AIUnavailable as err:
+        st.session_state["gen_error"] = str(err)
+        return
+    reading = general.check_general_answer(notes_reading.answer, notes_reading.notes_sent)
+    _start_general(reading, notes_reading.model, notes_reading.removed)
+
+
+def start_general_without_ai():
+    text = st.session_state.get("g_manual", "")
+    reading = general.GeneralReading(
+        what_happened=[general.clean(t) for t in re.split(r"(?<=[.!?])\s+", text) if t.strip()][:6],
+        issues=[("other", "the problem described")])
+    st.session_state.pop("gen_error", None)
+    _start_general(reading, None, {})
+
+
+def clear_general():
+    for key in ["gen", "gen_error", "g_notes", "g_manual", "g_checked", "gen_sent"]:
+        st.session_state.pop(key, None)
+
+
+def open_section479():
+    """Hand the same story to the undertrial reader, so the Section 479 form is filled in."""
+    st.session_state["case_type"] = "Undertrial"
+    st.session_state["f_notes"] = st.session_state.get("g_notes", "")
+    read_notes()
+
+
+def general_question(gen):
+    """The next question to ask: the AI's questions first (most important first), then only
+    the facts the free legal aid check still needs."""
+    if gen["done"]:
+        return None
+    questions = gen["reading"].questions
+    if gen["q_index"] < len(questions):
+        return ("ai", gen["q_index"], questions[gen["q_index"]])
+    missing = [m for m in general.check_eligibility(gen["facts"]).missing if m not in gen["skipped"]]
+    if missing:
+        return ("eligibility", missing[0], general.ELIGIBILITY_QUESTIONS[missing[0]])
+    return None
+
+
+def answer_general(kind: str, ref, skip: bool = False):
+    gen = st.session_state["gen"]
+    get = st.session_state.get
+    if kind == "ai":
+        question = gen["reading"].questions[ref]
+        text = (get(f"gq-{ref}") or "").strip()
+        if skip:
+            gen["unanswered"].append(question)
+        elif text:
+            gen["answers"].append((question, text))
+        else:
+            return  # nothing typed yet: stay on this question
+        gen["q_index"] += 1
+        return
+    fact = ref
+    if fact == "state":
+        value = get("ge-state")
+    elif fact == "annual_income":
+        amount, per = get("ge-income"), get("ge-income-per")
+        value = int(amount) * (12 if per == "per month" else 1) if amount is not None and per else None
+    else:
+        choice = get(f"ge-{fact}")
+        value = {"Yes": True, "No": False}.get(choice)
+        if choice == "Not sure":
+            skip = True
+    if skip:
+        gen["skipped"].add(fact)
+    elif value is not None:
+        gen["facts"][fact] = value
+
+
+def skip_general_questions():
+    gen = st.session_state["gen"]
+    gen["unanswered"] += gen["reading"].questions[gen["q_index"]:]
+    gen["q_index"] = len(gen["reading"].questions)
+    gen["done"] = True
+
+
+def general_screen():
+    st.header("Any case: summary and next steps")
+    gen = st.session_state.get("gen")
+    if gen:  # urgent actions always at the top
+        for action in general.urgent_actions(gen["facts"]):
+            st.error(f"## \U0001F6A8 {action}")
+
+    with st.expander("Paste or type the story", expanded=gen is None):
+        st.warning(NAMES_WARNING)
+        if llm.available():
+            st.text_area("The story, in the volunteer's words", key="g_notes", height=220,
+                         placeholder="For example: The employer has not paid the worker for three months ...")
+            col1, col2 = st.columns(2)
+            col1.button("Read the story", type="primary", on_click=read_general)
+            if gen:
+                col2.button("Clear and start again", on_click=clear_general)
+        else:
+            st.info("AI reading is not set up on this computer. You can type a short summary yourself below.")
+        if not llm.available() or st.session_state.get("gen_error"):
+            st.text_area("What happened, in your own words (no names)", key="g_manual", height=120)
+            st.button("Start without AI", on_click=start_general_without_ai)
+    if st.session_state.get("gen_error"):
+        st.error(st.session_state["gen_error"] + " You can type a short summary yourself instead.")
+    if not gen:
+        return
+
+    if gen["removed"]:
+        st.caption("Removed before sending: " + ", ".join(f"{n} \u00d7 {k}" for k, n in gen["removed"].items()))
+
+    question = general_question(gen)
+    if question:
+        kind, ref, text = question
+        st.subheader("A few questions, one at a time")
+        with st.container(border=True):
+            st.markdown(f"**{text}**")
+            if kind == "ai":
+                st.text_input("Answer (no names or phone numbers)", key=f"gq-{ref}", max_chars=300)
+            elif ref == "state":
+                st.selectbox("State or union territory", general.state_names(), index=None, key="ge-state")
+            elif ref == "annual_income":
+                col1, col2 = st.columns(2)
+                col1.number_input("Amount in \u20b9", min_value=0, step=500, value=None, key="ge-income")
+                col2.radio("Per", ["per month", "per year"], index=None, key="ge-income-per", horizontal=True)
+            else:
+                st.radio("Answer", ["Yes", "No", "Not sure"], index=None, key=f"ge-{ref}", horizontal=True)
+            col1, col2, col3 = st.columns([1, 1, 2])
+            col1.button("Next", type="primary", key=f"gnext-{kind}-{ref}", on_click=answer_general, args=(kind, ref))
+            col2.button("Don't know", key=f"gskip-{kind}-{ref}", on_click=answer_general, args=(kind, ref, True))
+            col3.button("Skip the rest and see the summary", key="gskip-all", on_click=skip_general_questions)
+        return
+
+    general_summary(gen)
+
+
+def general_summary(gen):
+    reading = gen["reading"]
+    eligibility = general.check_eligibility(gen["facts"])
+    still_to_ask = gen["unanswered"] + [general.ELIGIBILITY_QUESTIONS[m] for m in eligibility.missing]
+    facts = general.build_facts(reading, gen["answers"], still_to_ask, gen["facts"], date.today())
+    draft = general.make_summary_draft(facts, gen["model"])
+
+    categories = [c for c, _ in reading.issues]
+    if "arrest_or_custody" in categories:
+        st.info("Someone is in custody. You can work out the Section 479 dates with the facts already filled in.")
+        st.button("Open Section 479 check", on_click=open_section479, disabled=not llm.available())
+    if "online_or_financial_fraud" in categories:
+        st.info("Money was lost online. The cyber fraud module (complaint and bank letter) is coming next. "
+                "Until then: call 1930 or report on cybercrime.gov.in, and tell the bank in writing.")
+
+    st.subheader("Case summary (draft)")
+    st.code(draft, language=None, wrap_lines=True)
+    names = general.possible_names(draft, st.session_state.get("g_notes", ""))
+    if names:
+        st.warning("These words from the notes appear in the summary and might be names: " + ", ".join(names)
+                   + ". If any is a person's name, start again and describe them by role.")
+
+    sent = st.session_state.get("gen_sent")
+    if sent:
+        st.success(f"Sent to the supervisor as case {sent}. See its status on \"My cases\".")
+        report_problem_box("gen-draft", "Any-case summary", sent)
+        return
+    checked = st.checkbox("I have checked this summary against the notes, and it contains no names of people",
+                          key="g_checked")
+    if st.button("Send to supervisor", disabled=not checked):
+        ai = None
+        if gen["model"]:
+            extracted = dict(reading.facts)
+            ai = {"model": gen["model"], "read_at": gen["read_at"], "extracted": extracted,
+                  "not_accepted": sorted(set(reading.dropped))}
+        try:
+            case_id = store.submit(draft, facts, ai=ai)
+        except ValueError as err:
+            st.error(str(err))
+            return
+        st.session_state["gen_sent"] = case_id
+        st.rerun()
+    report_problem_box("gen-draft", "Any-case summary", None)
+
 
 def show_value(value) -> str:
     if isinstance(value, bool):
@@ -525,7 +736,7 @@ def my_cases_screen():
         return
     for c in cases:
         with st.container(border=True):
-            st.markdown(f"**Case {c['id']}** · {c['case_type']}  \n{STATUS_LABELS[c['status']]}")
+            st.markdown(f"**Case {c['id']}** · {case_type_label(c['case_type'])}  \n{STATUS_LABELS[c['status']]}")
             if c["status"] == store.SENT_BACK:
                 st.warning(f"Supervisor's reason: {c['reason']}")
                 fix_and_resend(c["id"])
@@ -633,7 +844,8 @@ def supervisor_screen():
 
 def review_one(record: dict):
     case_id = record["id"]
-    with st.expander(f"Case {case_id} · {record['case_type']} · sent {record['submitted'].replace('T', ' ')}",
+    with st.expander(f"Case {case_id} · {case_type_label(record['case_type'])} · "
+                     f"sent {record['submitted'].replace('T', ' ')}",
                      expanded=True):
         for h in record.get("history", []):
             st.caption(f"Sent back earlier, then fixed and resent ({h['resent'].replace('T', ' ')}). "

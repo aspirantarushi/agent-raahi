@@ -215,34 +215,37 @@ def dlsa_replacements(facts: UndertrialFacts, result: Result) -> List[Tuple[str,
 # ---------- AI disclosure (draft SC "Regulations for Use of AI in Courts, 2026", Reg. 43(3), 43(6)) ----------
 
 DISCLOSURE_START = "How this draft was prepared:"
+RULES_DATES = "dates were calculated by rule-based code from the statute"
 APPROVAL_BLANK = "approved by the supervisor on [date]."
 
 
-def disclosure_block(ai_model: Optional[str], approved_on: Optional[date] = None) -> str:
+def disclosure_block(ai_model: Optional[str], approved_on: Optional[date] = None,
+                     rules: str = RULES_DATES) -> str:
     """The block added at the end of every draft. Names the AI model only if AI was used."""
     if ai_model:
         how = f"facts were read from case notes with AI assistance ({ai_model}) and checked by a volunteer"
     else:
         how = "facts were entered by a volunteer"
     approved = show_date(approved_on) if approved_on else "[date]"
-    block = (f"{DISCLOSURE_START} {how}; dates were calculated by rule-based code from the statute; "
+    block = (f"{DISCLOSURE_START} {how}; {rules}; "
              f"the draft was reviewed and approved by the supervisor on {approved}.")
     if ai_model:
         block += " If this is filed in any court, AI assistance must be declared as the court requires."
     return block
 
 
-def add_disclosure(text: str, ai_model: Optional[str], approved_on: Optional[date] = None) -> str:
-    return text.rstrip("\n") + "\n\n---\n\n" + disclosure_block(ai_model, approved_on) + "\n"
+def add_disclosure(text: str, ai_model: Optional[str], approved_on: Optional[date] = None,
+                   rules: str = RULES_DATES) -> str:
+    return text.rstrip("\n") + "\n\n---\n\n" + disclosure_block(ai_model, approved_on, rules) + "\n"
 
 
-def fill_approval_date(text: str, approved_on: date, ai_model: Optional[str]) -> str:
+def fill_approval_date(text: str, approved_on: date, ai_model: Optional[str], rules: str = RULES_DATES) -> str:
     """At approval: fill the date in the disclosure block, or add the block if it was removed."""
     if APPROVAL_BLANK in text:
         i = text.rindex(APPROVAL_BLANK)
         return text[:i] + f"approved by the supervisor on {show_date(approved_on)}." + text[i + len(APPROVAL_BLANK):]
     if DISCLOSURE_START not in text:
-        return add_disclosure(text, ai_model, approved_on)
+        return add_disclosure(text, ai_model, approved_on, rules)
     return text
 
 

@@ -257,3 +257,123 @@ def read_undertrial_notes(notes: str) -> NotesReading:
     if not isinstance(answer, dict):
         raise AIUnavailable("AI reading failed: the answer could not be read.")
     return NotesReading(answer=answer, notes_sent=clean, removed=removed, model=model)
+
+
+# ---------- reading any case (general intake) ----------
+
+_YES_NO = {
+    "type": "OBJECT",
+    "properties": {
+        "value": {"type": "STRING", "enum": ["yes", "no", "unknown"]},
+        "quote": {"type": "STRING", "nullable": True},
+    },
+    "required": ["value", "quote"],
+}
+
+GENERAL_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "person_needing_help": {"type": "STRING"},  # a role, e.g. "the brother, who is in jail"
+        "what_happened": {"type": "ARRAY", "items": {"type": "STRING"}},
+        "timeline": {
+            "type": "ARRAY",
+            "items": {"type": "OBJECT",
+                      "properties": {"when": {"type": "STRING"}, "what": {"type": "STRING"}},
+                      "required": ["when", "what"]},
+        },
+        "danger_now": _YES_NO,
+        "in_custody": _YES_NO,
+        "money_lost_online": _YES_NO,
+        "money_lost_in_last_few_days": _YES_NO,
+        "called_1930": _YES_NO,
+        "coming_dates": {
+            "type": "ARRAY",
+            "items": {"type": "OBJECT",
+                      "properties": {"when": {"type": "STRING"}, "what": {"type": "STRING"},
+                                     "quote": {"type": "STRING"}},
+                      "required": ["when", "what", "quote"]},
+        },
+        "sections_charged": {
+            "type": "ARRAY",
+            "items": {"type": "OBJECT",
+                      "properties": {"law": {"type": "STRING", "enum": ["IPC", "BNS"]},
+                                     "section": {"type": "STRING"}, "quote": {"type": "STRING"}},
+                      "required": ["law", "section", "quote"]},
+        },
+        "issues": {
+            "type": "ARRAY",
+            "items": {"type": "OBJECT",
+                      "properties": {
+                          "category": {"type": "STRING",
+                                       "enum": ["arrest_or_custody", "online_or_financial_fraud", "other"]},
+                          "name": {"type": "STRING"}},
+                      "required": ["category", "name"]},
+        },
+        "documents_held": {"type": "ARRAY", "items": {"type": "STRING"}},
+        "questions_to_ask": {"type": "ARRAY", "items": {"type": "STRING"}},
+        "woman": _YES_NO,
+        "under_18": _YES_NO,
+        "sc_st": _YES_NO,
+        "disability": _YES_NO,
+        "state": {"type": "OBJECT",
+                  "properties": {"value": {"type": "STRING", "nullable": True},
+                                 "quote": {"type": "STRING", "nullable": True}},
+                  "required": ["value", "quote"]},
+        "income": {"type": "OBJECT",
+                   "properties": {"amount": {"type": "NUMBER", "nullable": True},
+                                  "per": {"type": "STRING", "enum": ["month", "year", "unknown"]},
+                                  "quote": {"type": "STRING", "nullable": True}},
+                   "required": ["amount", "per", "quote"]},
+    },
+    "required": ["person_needing_help", "what_happened", "timeline", "danger_now", "in_custody",
+                 "money_lost_online", "money_lost_in_last_few_days", "called_1930", "coming_dates",
+                 "sections_charged", "issues", "documents_held", "questions_to_ask", "woman", "under_18",
+                 "sc_st", "disability", "state", "income"],
+}
+
+GENERAL_PROMPT = """You help legal aid volunteers in India write a short, factual summary of a person's
+problem from the volunteer's notes. Read the notes and fill in the form.
+
+Rules:
+- Only extract facts stated in the notes. Never judge or predict bail chances, flight risk, the risk
+  of re-offending, guilt, innocence or anyone's credibility, never predict the outcome of a case, and
+  never give an opinion or a score.
+- Describe people only by their role ("the employer", "the husband", "the sister", "the person
+  seeking help"). Never write anyone's name, phone number, address or ID number.
+- Never cite any law, Act, section, article, rule or court case. Name problems only in plain words,
+  for example "unpaid wages", "domestic violence", "land dispute", "online fraud", "arrest and bail".
+  The only exception is "sections_charged": copy any IPC or BNS section written in the notes, with the
+  exact words.
+- Never guess. If something is not clearly stated, use "unknown" (or null, or an empty list).
+- For every yes/no answer and for state and income, "quote" must be the exact words copied from the
+  notes that show it (null if unknown).
+- what_happened: 2 to 6 short plain sentences. timeline: dates or times exactly as written in the notes.
+- in_custody: "yes" only if the notes say someone is in jail or police custody now.
+- money_lost_in_last_few_days: "yes" only if the notes say the money was lost within about the last
+  7 days ("today", "yesterday", "two days ago"...).
+- coming_dates: hearings, deadlines or other dates still to come, as written.
+- issues: one entry per problem. category "arrest_or_custody" for arrest, jail or bail; category
+  "online_or_financial_fraud" for money taken by online or payment fraud; otherwise "other".
+- documents_held: papers or evidence the notes say the person already has.
+- questions_to_ask: up to 5 short questions the volunteer should still ask, most important first.
+  Never ask for names, phone numbers, Aadhaar numbers, addresses or ID numbers.
+- woman, under_18, sc_st, disability, state, income: about the person needing legal help (not the
+  person telling the story). income: the amount and whether it is per month or per year, as written;
+  do not convert it.
+
+Volunteer's notes:
+<<<
+{notes}
+>>>"""
+
+
+def read_general_notes(notes: str) -> NotesReading:
+    """Send a story to the AI for a structured summary. Phone numbers, Aadhaar numbers and email
+    addresses are removed before sending. Check the answer with general.check_general_answer."""
+    clean, removed = privacy.redact(notes)
+    if not clean.strip():
+        raise AIUnavailable("There are no case notes to read.")
+    answer, model = _generate_json(GENERAL_PROMPT.format(notes=clean), GENERAL_SCHEMA)
+    if not isinstance(answer, dict):
+        raise AIUnavailable("AI reading failed: the answer could not be read.")
+    return NotesReading(answer=answer, notes_sent=clean, removed=removed, model=model)
