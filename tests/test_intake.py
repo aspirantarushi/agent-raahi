@@ -366,3 +366,30 @@ def test_prompt_sent_to_the_ai_includes_the_rule(monkeypatch):
     monkeypatch.setattr(llm, "_generate_json", fake_generate)
     llm.read_undertrial_notes(NOTES)
     assert llm.NO_JUDGEMENT_RULE in " ".join(sent["prompt"].split())
+
+
+# ---------- privacy in Hindi: Devanagari digits and spaced-out numbers ----------
+
+@pytest.mark.parametrize("text, kind", [
+    ("फ़ोन ९८७६५४३२१०", "a phone number"),
+    ("phone 98 76 54 32 10", "a phone number"),
+    ("9 8 7 6 5 4 3 2 1 0", "a phone number"),
+    ("98765-432-10", "a phone number"),
+    ("+९१ ९८७६५ ४३२१०", "a phone number"),
+    ("आधार १२३४ ५६७८ ९०१२", "an Aadhaar number"),
+    ("aadhaar 2 3 4 5 6 7 8 9 0 1 2 3", "an Aadhaar number"),
+    ("ईमेल didi@example.com", "an email address"),
+])
+def test_redact_catches_hindi_and_spaced_numbers(text, kind):
+    clean, removed = privacy.redact(text)
+    assert removed == {kind: 1}
+    assert not privacy.personal_details_found(clean)
+    assert privacy.personal_details_found(text) == [kind]
+
+
+@pytest.mark.parametrize("text", ["2024 2025 2026", "15 03 2024", "१५ मार्च २०२४", "₹४०,०००", "84 months",
+                                  "IPC ३८०", "FIR 123/2024", "CNR DLCT010012342024"])
+def test_redact_keeps_dates_amounts_and_case_numbers(text):
+    clean, removed = privacy.redact(text)
+    assert removed == {}
+    assert clean == privacy.normalise_digits(text)  # Devanagari digits are kept as 0-9
