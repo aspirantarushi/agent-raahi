@@ -575,5 +575,18 @@
  "imp.save": "Add to the impact log",
  "imp.saved": "Added to the impact log.",
  "imp.export": "Download the impact log (CSV)",
- "imp.count": "{n} real case(s) logged."
+ "imp.count": "{n} real case(s) logged.",
+ "app.name": "Legal aid agent",
+ "app.tagline": "Legal aid casework assistant for clinics and NGOs",
+ "safety.bar112": "In danger? Call 112",
+ "safety.bar15100": "Free legal aid: 15100",
+ "flow.g.1": "Tell the story",
+ "flow.g.2": "Questions",
+ "flow.g.3": "Summary and checklist",
+ "flow.g.4": "Send for review",
+ "flow.step": "Step {n} of {total}: {name}",
+ "ui.general.story_done": "Step 1: the story (show or edit)",
+ "ui.back_story": "← Back to the story",
+ "ui.back_questions": "← Back to the questions",
+ "ui.details": "Show details"
 }

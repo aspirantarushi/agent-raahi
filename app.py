@@ -31,18 +31,12 @@ import readiness
 import section479
 import store
 import timeline
+import ui
 
 st.set_page_config(page_title="Legal aid agent", page_icon="⚖️", layout="centered")
 
-# Large, readable text on phones and laptops.
-st.markdown(
-    """
-    <style>
-    html, body, [class*="css"], .stMarkdown p, .stMarkdown li, label { font-size: 1.15rem !important; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+# Look and feel: .streamlit/config.toml (colours, fonts) plus a small stylesheet (assets/app.css).
+st.markdown(ui.style(), unsafe_allow_html=True)
 
 
 # ---------- language ----------
@@ -323,6 +317,8 @@ def answer_general(kind: str, ref, skip: bool = False):
     if kind == "ai":
         question = gen["reading"].questions[ref]
         text = (get(f"gq-{ref}") or "").strip()
+        gen["answers"] = [(q, a) for q, a in gen["answers"] if q != question]
+        gen["unanswered"] = [q for q in gen["unanswered"] if q != question]
         if skip:
             gen["unanswered"].append(question)
         elif text:
@@ -358,14 +354,55 @@ def skip_general_questions():
 URGENT_KEYS = {general.CALL_112: "safety.call112", general.CALL_1930: "safety.call1930"}
 
 
+GENERAL_FLOW = ["flow.g.1", "flow.g.2", "flow.g.3", "flow.g.4"]
+
+
+def general_step(gen) -> int:
+    """1 Tell the story -> 2 Questions -> 3 Summary and checklist -> 4 Send for review."""
+    if not gen:
+        return 1
+    if st.session_state.get("g_story_open"):
+        return 1
+    if general_question(gen):
+        return 2
+    return 4 if st.session_state.get("g_checked") else 3
+
+
+def flow_title(n: int):
+    st.markdown(f'<div class="step-title">{n} \u00b7 {t(GENERAL_FLOW[n - 1])}</div>', unsafe_allow_html=True)
+
+
+def back_to_story():
+    st.session_state["g_story_open"] = True
+
+
+def close_story():
+    st.session_state["g_story_open"] = False
+
+
+def back_to_questions():
+    """Reopen the questions with the answers already given filled in (nothing is lost)."""
+    gen = st.session_state["gen"]
+    answers = dict(gen["answers"])
+    for i, question in enumerate(gen["reading"].questions):
+        if question in answers:
+            st.session_state[f"gq-{i}"] = answers[question]
+    gen["unanswered"] = []
+    gen["q_index"], gen["done"] = 0, False
+
+
 def general_screen():
-    st.header(t("ui.general.header"))
     gen = st.session_state.get("gen")
+    step = general_step(gen)
+    st.markdown(ui.stepper([t(k) for k in GENERAL_FLOW], step), unsafe_allow_html=True)
     if gen:  # urgent actions always at the top
         for action in general.urgent_actions(gen["facts"], gen["reading"].unconfirmed_yes):
             st.error(f"## \U0001F6A8 {t(URGENT_KEYS[action])}")
 
-    with st.expander(t("ui.general.story_box"), expanded=gen is None):
+    if gen is None or st.session_state.get("g_story_open"):
+        flow_title(1)
+    story_label = t("ui.general.story_box") if gen is None else t("ui.general.story_done")
+    with st.expander(story_label, expanded=gen is None or bool(st.session_state.get("g_story_open"))):
         st.warning(t("ui.general.names_warning"))
         if llm.available():
             notes_language_choice("g_notes_lang")
@@ -376,6 +413,8 @@ def general_screen():
             col1.button(t("ui.general.read"), type="primary", on_click=read_general)
             if gen:
                 col2.button(t("ui.general.clear"), on_click=clear_general)
+                if st.session_state.get("g_story_open"):
+                    st.button(t("ui.next") + " \u2192", key="g-story-continue", on_click=close_story)
         else:
             st.info(t("ui.general.no_ai"))
         if not llm.available() or st.session_state.get("gen_error"):
@@ -393,7 +432,8 @@ def general_screen():
     question = general_question(gen)
     if question:
         kind, ref, text = question
-        st.subheader(t("ui.general.questions"))
+        flow_title(2)
+        st.button(t("ui.back_story"), key="g-back-story", on_click=back_to_story)
         with st.container(border=True):
             st.markdown(f"**{text}**")
             if kind == "ai":
@@ -469,7 +509,9 @@ def general_summary(gen):
     if "online_or_financial_fraud" in categories:
         st.info(t("ui.general.cyber_info"))
 
-    st.subheader(t("ui.general.summary"))
+    flow_title(3)
+    if gen["reading"].questions or gen["answers"]:
+        st.button(t("ui.back_questions"), key="g-back-questions", on_click=back_to_questions)
     draft_lang = draft_language_choice("g_draft_lang")
     items = readiness.general_items(facts, eligibility, cannot_marks("g"))
     draft = readiness.add_gaps_to_draft(general.make_summary_draft(facts, gen["model"], draft_lang), items, draft_lang)
@@ -487,6 +529,7 @@ def general_summary(gen):
     if names:
         st.warning(t("ui.general.possible_names", names=", ".join(names)))
 
+    flow_title(4)
     sent = st.session_state.get("gen_sent")
     if sent:
         st.success(t("ui.sent", case_id=sent))
@@ -894,7 +937,7 @@ def ledger_box(entries, expanded=False):
     open_points = ledger.unresolved([e if isinstance(e, ledger.Entry) else ledger.Entry(**e) for e in entries])
     if open_points:
         st.warning(t("ledger.unresolved_warning", n=len(open_points)))
-    with st.expander(t("ledger.title"), expanded=expanded):
+    with st.expander(f"{t('ui.details')}: {t('ledger.title')}", expanded=expanded):
         for e in entries:
             e = e if isinstance(e, ledger.Entry) else ledger.Entry(**e)
             st.markdown(f"{LEDGER_ICONS[e.source]} **{t(e.fact)}:** {e.value} \u2014 _{t('ledger.source.' + e.source)}_")
@@ -1576,5 +1619,10 @@ st.sidebar.title(t("ui.app_title"))
 choice = st.sidebar.radio(t("ui.go_to"), list(SCREENS), format_func=option_text("screen."), key="screen")
 st.sidebar.markdown("---")
 st.sidebar.markdown(f"**{t('ui.sidebar.danger')}**  \n{t('ui.sidebar.helpline')}")
-language_switch()
+head_left, head_right = st.columns([3, 2])
+with head_left:
+    st.markdown(ui.header(t("app.name"), t("app.tagline")), unsafe_allow_html=True)
+with head_right:
+    language_switch()
+st.markdown(ui.safety_bar(t("safety.bar112"), t("safety.bar15100")), unsafe_allow_html=True)
 SCREENS[choice]()

@@ -1,0 +1,51 @@
+/* Small stylesheet on top of .streamlit/config.toml. No web fonts, no images, no animations. */
+:root { --ink: #14213D; --teal: #0F766E; --paper: #FAF8F4; --line: #D9D3C7; --amber-bg: #FEF3C7;
+        --amber-ink: #78350F; --red: #B91C1C; --muted: #4B5563; }
+html, body, [class*="css"], .stMarkdown p, .stMarkdown li, label, input, textarea { font-size: 1.0625rem; line-height: 1.55; }
+.block-container { padding-top: 3.75rem; max-width: 52rem; }  /* room for Streamlit's top bar */
+
+/* Header and safety bar */
+.app-header { display: flex; align-items: baseline; gap: .75rem; flex-wrap: wrap; margin: 0 0 .25rem 0; }
+.app-name { font-weight: 800; font-size: 1.5rem; color: var(--ink); letter-spacing: -.01em; }
+.app-name span { color: var(--teal); }
+.app-tagline { color: var(--muted); font-size: .95rem; }
+.safety-bar { position: sticky; top: 3.5rem; z-index: 999; display: flex; flex-wrap: wrap; gap: .5rem 1.25rem;
+  background: var(--ink); color: #fff; padding: .55rem .9rem; border-radius: .6rem; margin: .25rem 0 1rem 0;
+  font-size: 1rem; }
+.safety-bar a { color: #fff; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.safety-bar a.danger { color: #FECACA; }
+
+/* Step progress */
+.stepper { display: flex; gap: .35rem; margin: .5rem 0 1.25rem 0; list-style: none; padding: 0; }
+.stepper li { flex: 1; font-size: .9rem; color: var(--muted); padding-top: .45rem; border-top: 5px solid var(--line); }
+.stepper li.done { color: var(--ink); border-top-color: var(--teal); }
+.stepper li.now { color: var(--ink); font-weight: 700; border-top-color: var(--teal); }
+.stepper li b { display: block; font-size: .8rem; }
+.step-title { font-weight: 700; font-size: 1.3rem; margin: .75rem 0 .25rem 0; color: var(--ink); }
+
+/* Status chips */
+.chip { display: inline-block; padding: .1rem .6rem; border-radius: 999px; font-size: .85rem; font-weight: 600;
+        border: 1px solid transparent; }
+.chip.waiting { background: #E0F2FE; color: #0C4A6E; } .chip.sent-back { background: var(--amber-bg); color: var(--amber-ink); }
+.chip.approved { background: #DCFCE7; color: #14532D; } .chip.submitted { background: #E0E7FF; color: #312E81; }
+.chip.acknowledged { background: #CCFBF1; color: #134E4A; }
+
+/* Buttons: at least 44px tall; visible focus for keyboard users */
+.stButton > button, .stDownloadButton > button, [data-testid="stBaseButton-primary"],
+[data-testid="stBaseButton-secondary"] { min-height: 44px; font-weight: 600; }
+:focus-visible { outline: 3px solid var(--teal) !important; outline-offset: 2px !important; }
+
+/* Phones: one column, full-width buttons, no sideways scrolling */
+@media (max-width: 640px) {
+  .block-container { padding-left: .9rem; padding-right: .9rem; padding-top: 4.75rem !important; }
+  [data-testid="stHorizontalBlock"] { flex-direction: column !important; gap: .5rem !important; }
+  [data-testid="stHorizontalBlock"] > div { width: 100% !important; flex: 1 1 100% !important; min-width: 0 !important; }
+  .stButton, .stDownloadButton, [data-testid="stButton"], [data-testid="stDownloadButton"],
+  [data-testid="stElementContainer"]:has([data-testid="stButton"]) { width: 100% !important; }
+  .stButton > button, .stDownloadButton > button, [data-testid="stBaseButton-primary"],
+  [data-testid="stBaseButton-secondary"] { width: 100% !important; }
+  .stepper li span { display: none; }  /* numbers only on narrow screens */
+  h1 { font-size: 1.75rem !important; }
+}
+html, body { overflow-x: hidden; }
+[data-testid="stHeader"] { background: var(--paper); }  /* the top bar never covers the app name */
