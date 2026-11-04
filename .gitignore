@@ -20,3 +20,6 @@ pending/
 # Audit records and the problems log (stay on this computer / server)
 audit/
 problems/
+
+# Next-step timelines of approved cases (live case progress)
+timelines/

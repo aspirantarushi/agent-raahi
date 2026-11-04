@@ -18,6 +18,7 @@ import intake
 import llm
 import section479
 import store
+import timeline
 
 st.set_page_config(page_title="Legal aid agent", page_icon="⚖️", layout="centered")
 
@@ -728,8 +729,110 @@ STATUS_LABELS = {
 }
 
 
+STEP_ICONS = {timeline.TO_DO: "\u2b1c", timeline.DONE: "\u2705", timeline.NOT_NEEDED: "\u2796"}
+
+
+def step_due_text(s: timeline.Step) -> str:
+    return f" \u2014 due {show_date(s.due_date())} ({s.label()})" if s.due else ""
+
+
+def due_this_week_box():
+    st.subheader("Due this week")
+    items = timeline.due_this_week(date.today())
+    if not items:
+        st.caption("Nothing overdue or due in the next 7 days.")
+    for case_id, s, overdue in items:
+        line = f"**{show_date(s.due_date())}** \u00b7 case {case_id} \u00b7 {s.title} ({s.label()})"
+        if overdue:
+            st.error("\u26a0\ufe0f OVERDUE \u00b7 " + line)
+        else:
+            st.info(line)
+
+
+def save_step(case_id: str):
+    get = st.session_state.get
+    step_id, action = get(f"tl-step-{case_id}"), get(f"tl-action-{case_id}")
+    when, by = get(f"tl-date-{case_id}") or date.today(), get(f"tl-by-{case_id}", "")
+    try:
+        if action == "Mark done":
+            details = {}
+            if step_id == "dlsa-lawyer":
+                meeting = get(f"tl-meeting-{case_id}")
+                details = {"first meeting": meeting.isoformat() if meeting else "not yet",
+                           "documents handed over": "yes" if get(f"tl-docs-{case_id}") else "no"}
+            timeline.mark_done(case_id, step_id, when, by, details)
+        elif action == "Not needed":
+            timeline.mark_not_needed(case_id, step_id, by)
+        elif action == "Set date":
+            timeline.set_due(case_id, step_id, when, by)
+        elif action == "Undo (back to to do)":
+            timeline.reopen(case_id, step_id, by)
+        else:
+            raise ValueError("Choose what happened.")
+    except ValueError as err:
+        st.session_state[f"tl-msg-{case_id}"] = ("error", str(err))
+        return
+    st.session_state[f"tl-msg-{case_id}"] = ("ok", "Saved, and added to the case's audit record.")
+    st.session_state[f"tl-step-{case_id}"] = None
+
+
+def timeline_box(case_id: str):
+    record = timeline.load(case_id)
+    if not record:
+        st.caption("No next-step timeline (this case was approved before timelines were added).")
+        return
+    steps = timeline.steps_of(record)
+    today = date.today()
+    with st.expander("Next steps", expanded=True):
+        nxt = timeline.next_due(steps)
+        if nxt:
+            text = f"**Next:** {nxt.title}{step_due_text(nxt)}"
+            (st.error if timeline.is_overdue(nxt, today) else st.success)(text)
+        for s in timeline.ordered(steps):
+            line = f"{STEP_ICONS[s.status]} **{s.title}**{step_due_text(s)}"
+            if s.status == timeline.DONE:
+                line += f" \u2014 done{' on ' + show_date(date.fromisoformat(s.done_on)) if s.done_on else ''}"
+                line += f" by {s.done_by}" if s.done_by else ""
+                if s.details:
+                    line += " (" + "; ".join(f"{k}: {v}" for k, v in s.details.items()) + ")"
+            elif s.status == timeline.NOT_NEEDED:
+                line += " \u2014 not needed"
+            if timeline.is_overdue(s, today):
+                st.error("\u26a0\ufe0f OVERDUE \u00b7 " + line)
+            else:
+                st.markdown(line)
+            notes = [n for n in (s.note, s.source_line) if n]
+            if notes:
+                st.caption("  \n".join(notes))
+
+        st.markdown("**Update a step**")
+        by_id = {s.id: s for s in steps}
+        step_id = st.selectbox("Step", list(by_id), index=None, key=f"tl-step-{case_id}",
+                               format_func=lambda i: f"{by_id[i].title} ({by_id[i].status})")
+        if step_id:
+            step = by_id[step_id]
+            if step.status == timeline.TO_DO:
+                actions = ["Mark done", "Not needed"] + (["Set date"] if step.due_editable else [])
+            else:
+                actions = ["Undo (back to to do)"]
+            action = st.radio("What happened?", actions, index=None, horizontal=True, key=f"tl-action-{case_id}")
+            if action in ("Mark done", "Set date"):
+                st.date_input("Date done" if action == "Mark done" else "Date to follow up", value=date.today(),
+                              format="DD/MM/YYYY", key=f"tl-date-{case_id}")
+            if action == "Mark done" and step_id == "dlsa-lawyer":
+                st.date_input("First meeting with the lawyer", value=None, format="DD/MM/YYYY",
+                              key=f"tl-meeting-{case_id}")
+                st.checkbox("Documents handed over to the lawyer", key=f"tl-docs-{case_id}")
+            st.text_input("Done by (your name or initials)", max_chars=60, key=f"tl-by-{case_id}")
+            st.button("Save", key=f"tl-save-{case_id}", on_click=save_step, args=(case_id,))
+        msg = st.session_state.pop(f"tl-msg-{case_id}", None)
+        if msg:
+            (st.success if msg[0] == "ok" else st.error)(msg[1])
+
+
 def my_cases_screen():
     st.title("My cases")
+    due_this_week_box()
     cases = store.list_cases()
     if not cases:
         st.info("No cases yet. Make a draft on \"New case\" and send it to the supervisor.")
@@ -741,6 +844,7 @@ def my_cases_screen():
                 st.warning(f"Supervisor's reason: {c['reason']}")
                 fix_and_resend(c["id"])
             if c["status"] == store.APPROVED:
+                timeline_box(c["id"])
                 with st.expander("Case file"):
                     st.markdown(c["file"].read_text(encoding="utf-8"))
                 draft_file = c["file"].parent.parent / "drafts" / c["file"].name

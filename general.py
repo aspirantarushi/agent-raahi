@@ -456,6 +456,16 @@ def _yes_no(v) -> str:
     return "yes" if v is True else "no" if v is False else "not known"
 
 
+def case_next_steps(g: "GeneralFacts") -> List[str]:
+    """The summary's own next steps (used for the case's timeline after approval)."""
+    categories = [c for c, _ in g.issues]
+    eligibility = check_eligibility(g.facts)
+    story = g.what_happened + [n for _, n in g.issues] + g.documents_held
+    docs = [i for _, items, _ in document_lists(categories or ["other"], g.documents_held, story) for i in items]
+    steps, _ = next_steps(g.facts, categories, eligibility, docs)
+    return steps
+
+
 def summary_body(g: GeneralFacts) -> str:
     """The summary text (without the DRAFT header and the AI disclosure)."""
     facts = g.facts

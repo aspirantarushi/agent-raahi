@@ -296,7 +296,7 @@ def test_general_case_flow_through_the_supervisor(tmp_path):
 
     record = audit.read_record(case_id, base=tmp_path)
     assert record["model"] == MODEL and record["ai_extracted"]["money_lost_online"] is True
-    assert [e["event"] for e in record["events"]] == ["sent to supervisor", "approved"]
+    assert [e["event"] for e in record["events"]] == ["sent to supervisor", "approved", "timeline created"]
 
     saved = "".join(p.read_text(encoding="utf-8") for p in tmp_path.rglob("*") if p.is_file())
     assert "Speaker: the son of the person who lost the money." not in saved  # the notes are never saved

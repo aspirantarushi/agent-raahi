@@ -142,6 +142,7 @@ def test_audit_records_each_decision(tmp_path):
         ("sent back", audit.SUPERVISOR),
         ("fixed and resent", "volunteer"),
         ("approved", audit.SUPERVISOR),
+        ("timeline created", "app"),
     ]
     assert events[1]["details"] == "reason: Add the court."
     assert events[3]["details"] == "edited by the supervisor before approval"

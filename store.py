@@ -18,6 +18,7 @@ from typing import List, Optional
 import audit
 import drafts
 import general
+import timeline
 from drafts import UndertrialFacts
 
 HERE = Path(__file__).resolve().parent
@@ -132,6 +133,13 @@ def approve(case_id: str, edited_text: Optional[str] = None, base: Path = HERE,
     (pending / f"{case_id}.json").unlink()
     audit.add_event(case_id, "approved", audit.SUPERVISOR,
                     "edited by the supervisor before approval" if edited else "approved as sent", base=base)
+    # Next-step timeline for the approved case
+    if is_general:
+        g = general.GeneralFacts.from_dict(record["facts"])
+        timeline.create(case_id, general.CASE_TYPE, timeline.general_steps(general.case_next_steps(g)),
+                        approved_on, base=base)
+    else:
+        timeline.create_for_undertrial(case_id, facts, result, approved_on, base=base)
 
 
 def reject(case_id: str, reason: str, base: Path = HERE) -> None:
