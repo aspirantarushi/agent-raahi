@@ -1,6 +1,7 @@
 """Every AI call in the app lives in this file, so the model can be swapped.
 
-Provider: Google Gemini API (free tier), model gemini-3.8-flash.
+Provider: Google Gemini API (free tier). Model gemini-3.8-flash; if Google says it is
+busy or it is too slow, the same request goes once to gemini-3.5-flash-lite.
 The key is read from the environment variable GEMINI_API_KEY, or from a .env file
 in the project folder (kept out of git). It is never written in the code.
 
@@ -15,6 +16,7 @@ not to type names.
 
 import json
 import os
+import socket
 import ssl
 import urllib.error
 import urllib.request
@@ -25,8 +27,10 @@ import privacy
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_MODEL = "gemini-3.8-flash"
+FALLBACK_MODEL = "gemini-3.5-flash-lite"  # used when the main model is busy or too slow
 API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-TIMEOUT_SECONDS = 60
+TIMEOUT_SECONDS = 25
+BUSY_CODES = {429, 500, 503, 504}  # worth trying the other model
 
 
 class AIUnavailable(Exception):
@@ -60,6 +64,15 @@ def model_name() -> str:
     return os.environ.get("GEMINI_MODEL", DEFAULT_MODEL)
 
 
+def models_to_try() -> list:
+    """The main model, then the fallback (unless GEMINI_FALLBACK_MODEL is set to empty)."""
+    fallback = os.environ.get("GEMINI_FALLBACK_MODEL", FALLBACK_MODEL).strip()
+    models = [model_name()]
+    if fallback and fallback not in models:
+        models.append(fallback)
+    return models
+
+
 def available() -> bool:
     return api_key() is not None
 
@@ -74,6 +87,53 @@ def _ssl_context() -> ssl.SSLContext:
 
 # ---------- the one place that talks to the AI ----------
 
+class _Busy(Exception):
+    """The model was busy or too slow: try the next one."""
+
+    def __init__(self, message: str):
+        super().__init__(message)
+        self.message = message
+
+
+def _call_model(model: str, key: str, body: dict) -> dict:
+    request = urllib.request.Request(
+        API_URL.format(model=model),
+        data=json.dumps(body).encode("utf-8"),
+        headers={"Content-Type": "application/json", "x-goog-api-key": key},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS, context=_ssl_context()) as response:
+            return json.load(response)
+    except urllib.error.HTTPError as err:
+        message = ""
+        try:
+            message = json.load(err).get("error", {}).get("message", "")
+        except Exception:
+            pass
+        if err.code in BUSY_CODES:
+            hint = ("the free-tier limit was reached; try again later" if err.code == 429
+                    else "the AI service is busy; try again in a few minutes")
+            raise _Busy(f"AI reading failed: {hint} (error {err.code}).") from None
+        hint = {
+            400: "the request was not accepted",
+            401: "the API key was not accepted",
+            403: "the API key was not accepted",
+            404: f"the model '{model}' was not found",
+        }.get(err.code, "the AI service had a problem")
+        raise AIUnavailable(f"AI reading failed: {hint} (error {err.code}). {message}".strip()) from None
+    except (TimeoutError, socket.timeout):
+        raise _Busy("AI reading failed: the AI service took too long to answer; try again in a few minutes.") \
+            from None
+    except urllib.error.URLError as err:
+        if isinstance(err.reason, (TimeoutError, socket.timeout)):
+            raise _Busy("AI reading failed: the AI service took too long to answer; try again in a few minutes.") \
+                from None
+        raise AIUnavailable("AI reading failed: could not reach the AI service (check the internet).") from None
+    except OSError:
+        raise AIUnavailable("AI reading failed: could not reach the AI service (check the internet).") from None
+
+
 def _generate_json(prompt: str, schema: dict) -> dict:
     key = api_key()
     if not key:
@@ -86,31 +146,15 @@ def _generate_json(prompt: str, schema: dict) -> dict:
             "responseSchema": schema,
         },
     }
-    request = urllib.request.Request(
-        API_URL.format(model=model_name()),
-        data=json.dumps(body).encode("utf-8"),
-        headers={"Content-Type": "application/json", "x-goog-api-key": key},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS, context=_ssl_context()) as response:
-            data = json.load(response)
-    except urllib.error.HTTPError as err:
-        message = ""
+    last_busy = None
+    for model in models_to_try():
         try:
-            message = json.load(err).get("error", {}).get("message", "")
-        except Exception:
-            pass
-        hint = {
-            400: "the request was not accepted",
-            401: "the API key was not accepted",
-            403: "the API key was not accepted",
-            404: f"the model '{model_name()}' was not found",
-            429: "the free-tier limit was reached; try again later",
-        }.get(err.code, "the AI service had a problem")
-        raise AIUnavailable(f"AI reading failed: {hint} (error {err.code}). {message}".strip()) from None
-    except (urllib.error.URLError, TimeoutError, OSError):
-        raise AIUnavailable("AI reading failed: could not reach the AI service (check the internet).") from None
+            data = _call_model(model, key, body)
+            break
+        except _Busy as busy:
+            last_busy = busy
+    else:
+        raise AIUnavailable(last_busy.message)
 
     try:
         parts = data["candidates"][0]["content"]["parts"]

@@ -213,13 +213,75 @@ def test_no_key_means_not_available(no_key):
         llm.read_undertrial_notes(NOTES)
 
 
-@pytest.mark.parametrize("code, words", [(429, "limit"), (403, "key was not accepted"), (404, "not found")])
+@pytest.mark.parametrize("code, words", [(429, "limit"), (503, "busy"), (403, "key was not accepted"),
+                                         (404, "not found")])
 def test_http_errors_become_friendly_messages(fake_key, monkeypatch, code, words):
     def fail(*a, **k):
         raise urllib.error.HTTPError("url", code, "error", {}, None)
     monkeypatch.setattr(llm.urllib.request, "urlopen", fail)
     with pytest.raises(llm.AIUnavailable, match=words):
         llm.read_undertrial_notes(NOTES)
+
+
+def gemini_reply(answer: dict):
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self, *a):
+            return json.dumps({"candidates": [{"content": {"parts": [{"text": json.dumps(answer)}]}}]}).encode()
+
+    return Response()
+
+
+def test_busy_main_model_falls_back_to_flash_lite(fake_key, monkeypatch):
+    tried = []
+
+    def urlopen(request, **k):
+        tried.append(request.full_url.split("/models/")[1].split(":")[0])
+        if "gemini-3.8-flash" in request.full_url:
+            raise urllib.error.HTTPError("url", 503, "busy", {}, None)
+        return gemini_reply(practice_answer())
+
+    monkeypatch.setattr(llm.urllib.request, "urlopen", urlopen)
+    answer, clean, removed = llm.read_undertrial_notes(NOTES)
+    assert tried == ["gemini-3.8-flash", "gemini-3.5-flash-lite"]
+    assert answer["lawyer"]["value"] == "Legal aid lawyer"
+
+
+def test_slow_main_model_falls_back(fake_key, monkeypatch):
+    def urlopen(request, **k):
+        if "gemini-3.8-flash" in request.full_url:
+            raise urllib.error.URLError(llm.socket.timeout("timed out"))
+        return gemini_reply(practice_answer())
+
+    monkeypatch.setattr(llm.urllib.request, "urlopen", urlopen)
+    assert llm.read_undertrial_notes(NOTES)[0]["sections"][0]["section"] == "380"
+
+
+def test_both_models_busy_gives_friendly_message(fake_key, monkeypatch):
+    def urlopen(request, **k):
+        raise TimeoutError()
+
+    monkeypatch.setattr(llm.urllib.request, "urlopen", urlopen)
+    with pytest.raises(llm.AIUnavailable, match="took too long"):
+        llm.read_undertrial_notes(NOTES)
+
+
+def test_bad_key_does_not_try_the_fallback(fake_key, monkeypatch):
+    tried = []
+
+    def urlopen(request, **k):
+        tried.append(request.full_url)
+        raise urllib.error.HTTPError("url", 403, "forbidden", {}, None)
+
+    monkeypatch.setattr(llm.urllib.request, "urlopen", urlopen)
+    with pytest.raises(llm.AIUnavailable, match="key was not accepted"):
+        llm.read_undertrial_notes(NOTES)
+    assert len(tried) == 1
 
 
 def test_no_internet_is_handled(fake_key, monkeypatch):
