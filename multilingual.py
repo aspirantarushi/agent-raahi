@@ -73,3 +73,50 @@ def speech_to_text(audio: bytes, mime_type: str, language: str) -> SpokenText:
     script = language if language in DIRECT else "other"  # other languages: "write it in its own script"
     result = llm.transcribe(audio, mime_type, script=script)
     return SpokenText(result.text, result.removed, result.model)
+
+
+# ---------- legal text: a reading copy only ----------
+
+import re as _re
+from typing import List as _List
+
+READING_COPY_LABEL = "Machine translated, not checked. Rely on the English or Hindi version."
+KEEP_IN_ENGLISH = _re.compile(r"^\s*(?:Source|Link|Also|Checked):|^DRAFT — to be checked by a lawyer$|https?://")
+
+
+def numbers_in(text: str) -> _List[str]:
+    """Section numbers, dates and amounts as they appear: '479(2)', '2024', '40,000' (any script's digits)."""
+    return sorted(_re.findall(r"\d+(?:\(\w+\))*(?:,\d+)*", privacy.normalise_digits(text)))
+
+
+@dataclass
+class ReadingCopy:
+    text: str
+    kept_in_english: int  # paragraphs kept in English because a number, date or amount changed
+
+
+def reading_copy(text: str, language: str, translate=None) -> ReadingCopy:
+    """A machine-translated reading copy of legal text (a draft, a summary or a knowledge entry).
+
+    Translated a paragraph at a time; lines with Source / Link / web addresses and the DRAFT line stay
+    in English; any paragraph whose section numbers, dates or amounts change is kept in English.
+    Never saved, never sent to the DLSA or a court."""
+    translate = translate or bhashini.translate
+    out, kept = [READING_COPY_LABEL], 0
+    for paragraph in _re.split(r"\n\s*\n", text.strip()):
+        lines = paragraph.split("\n")
+        if all(KEEP_IN_ENGLISH.search(l) or not _re.search(r"[A-Za-z]", l) for l in lines):
+            out.append(paragraph)
+            continue
+        translatable = [l for l in lines if not KEEP_IN_ENGLISH.search(l)]
+        result = translate("\n".join(translatable), "en", language).text
+        if numbers_in(result) != numbers_in("\n".join(translatable)):
+            kept += 1
+            out.append("[kept in English: a number, date or amount changed in translation]\n" + paragraph)
+            continue
+        translated = iter(result.split("\n")) if result.count("\n") == len(translatable) - 1 else None
+        if translated is None:
+            out.append(result + "\n" + "\n".join(l for l in lines if KEEP_IN_ENGLISH.search(l)))
+        else:
+            out.append("\n".join(l if KEEP_IN_ENGLISH.search(l) else next(translated) for l in lines))
+    return ReadingCopy("\n\n".join(out), kept)

@@ -404,5 +404,9 @@
  "ui.lang.notes_language": "Language of the notes",
  "ui.lang.bhashini_down": "Bhashini is not available, so notes in {language} can't be translated. Please write the notes in English or Hindi.",
  "ui.lang.translated_note": "These notes were translated from {language} to English by Bhashini (machine translation, not checked) before the AI read them. Check every fact against the original notes.",
- "ui.lang.show_translation": "Bhashini's English translation"
+ "ui.lang.show_translation": "Bhashini's English translation",
+ "ui.reading.title": "Reading copy in {language} (machine translated, not checked)",
+ "ui.reading.make": "Make a reading copy",
+ "ui.reading.down": "Bhashini is not available, so a reading copy can't be made. Use the English or Hindi version.",
+ "ui.reading.kept": "{n} part(s) kept in English because a section number, date or amount changed in translation."
 }

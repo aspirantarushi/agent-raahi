@@ -422,6 +422,31 @@ def draft_language_choice(key: str) -> str:
                     horizontal=True, key=key)
 
 
+def make_reading_copy(key: str, text: str):
+    try:
+        copy = multilingual.reading_copy(text, code())
+    except bhashini.BhashiniUnavailable as err:
+        st.session_state[f"rc-{key}"] = ("error", t("ui.reading.down") + f" ({err})")
+        return
+    st.session_state[f"rc-{key}"] = ("ok", copy.text, copy.kept_in_english)
+
+
+def reading_copy_box(key: str, text: str):
+    """In a machine-translated language: a reading copy of legal text, never saved or sent."""
+    if not lang.is_machine_translated(code()):
+        return
+    with st.expander(t("ui.reading.title", language=lang.LANGUAGES.get(code(), code()))):
+        st.caption(multilingual.READING_COPY_LABEL)
+        st.button(t("ui.reading.make"), key=f"rc-go-{key}", on_click=make_reading_copy, args=(key, text))
+        result = st.session_state.get(f"rc-{key}")
+        if result and result[0] == "error":
+            st.error(result[1])
+        elif result:
+            if result[2]:
+                st.warning(t("ui.reading.kept", n=result[2]))
+            st.code(result[1], language=None, wrap_lines=True)
+
+
 def general_summary(gen):
     reading = gen["reading"]
     eligibility = general.check_eligibility(gen["facts"])
@@ -441,6 +466,7 @@ def general_summary(gen):
     if draft_lang == "hi":
         st.caption(t("ui.hindi_label_note"))
     st.code(draft, language=None, wrap_lines=True)
+    reading_copy_box("summary", draft)
     names = general.possible_names(draft, st.session_state.get("g_notes", ""))
     if names:
         st.warning(t("ui.general.possible_names", names=", ".join(names)))
@@ -809,6 +835,7 @@ def draft_section(known: dict, result: section479.Result):
     if draft_lang == "hi":
         st.caption(t("ui.hindi_label_note"))
     st.code(draft["text"], language=None, wrap_lines=True)
+    reading_copy_box("draft", draft["text"])
     st.caption(t("ui.draft.blanks"))
 
     sent = st.session_state.get("sent")
