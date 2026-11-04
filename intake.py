@@ -13,6 +13,7 @@ from datetime import date
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import privacy
 import section479
 
 HERE = Path(__file__).resolve().parent
@@ -32,6 +33,16 @@ FACT_QUESTIONS = [
     ("lawyer", 12),
 ]
 
+# Month names in English, Hindi (both common spellings) and Hinglish, by month number.
+HINDI_MONTH_NAMES = [
+    ["जनवरी"], ["फ़रवरी", "फरवरी"], ["मार्च"], ["अप्रैल", "अप्रेल"], ["मई"], ["जून"], ["जुलाई"], ["अगस्त"],
+    ["सितंबर", "सितम्बर"], ["अक्टूबर", "अक्तूबर"], ["नवंबर", "नवम्बर"], ["दिसंबर", "दिसम्बर"]]
+HINGLISH_MONTH_NAMES = [
+    ["janvari", "janwari"], ["farvari", "farwari", "pharvari"], ["march", "maarch"], ["aprail", "april"],
+    ["mai", "may"], ["jun", "joon"], ["julai", "july"], ["agast", "agust"], ["sitambar", "sitamber"],
+    ["aktubar", "aktoobar"], ["navambar", "navamber"], ["disambar", "disamber"]]
+LAW_WORDS = {"IPC": ["ipc", "आईपीसी", "आई.पी.सी", "भारतीय दंड संहिता", "dand sanhita"],
+             "BNS": ["bns", "बीएनएस", "बी.एन.एस", "भारतीय न्याय संहिता", "nyay sanhita", "nyaya sanhita"]}
 MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august",
           "september", "october", "november", "december"]
 
@@ -72,7 +83,7 @@ def question_order(path: Path = INTAKE_FILE) -> List[str]:
 # ---------- checking the AI's answer ----------
 
 def _norm(text: str) -> str:
-    return re.sub(r"\s+", " ", text or "").strip().casefold()
+    return privacy.comparable(text)
 
 
 def _in_notes(quote: Optional[str], notes: str) -> bool:
@@ -87,7 +98,8 @@ def _date_supported(value: date, quote: str) -> bool:
     month_name = MONTHS[value.month - 1]
     has_month = value.month in numbers or any(
         t == month_name or (len(t) >= 3 and month_name.startswith(t)) for t in tokens if t.isalpha()
-    )
+    ) or any(privacy.comparable(name) in q for name in HINDI_MONTH_NAMES[value.month - 1]) \
+        or any(name in tokens for name in HINGLISH_MONTH_NAMES[value.month - 1])
     return value.year in numbers and value.day in numbers and has_month
 
 
@@ -137,10 +149,10 @@ def check_ai_answer(raw: dict, notes: str) -> Reading:
         law = str(item.get("law", "")).strip().upper()
         section = str(item.get("section", "")).strip()
         quote = str(item.get("quote", "")).strip()
-        cleaned = re.sub(r"\s+", "", section).casefold()
+        cleaned = re.sub(r"\s+", "", privacy.normalise_digits(section)).casefold()
         if (law in ("IPC", "BNS") and section and _in_notes(quote, notes)
-                and cleaned in re.sub(r"\s+", "", quote).casefold()
-                and law.casefold() in quote.casefold()):
+                and cleaned in re.sub(r"\s+", "", _norm(quote))
+                and any(w in _norm(quote) for w in LAW_WORDS[law])):
             if (law, section) not in [(s[0], s[1]) for s in sections]:
                 sections.append((law, section, quote))
         else:

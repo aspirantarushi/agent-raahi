@@ -36,6 +36,18 @@ def normalise_digits(text: str) -> str:
     return text.translate(DEVANAGARI_DIGITS)
 
 
+# Hindi letters with a dot below (ज़, फ़, ड़ ...) can be typed two ways; for comparing words, drop the dot.
+_NUKTA = str.maketrans({"\u093c": None, "\u0958": "\u0915", "\u0959": "\u0916", "\u095a": "\u0917",
+                        "\u095b": "\u091c", "\u095c": "\u0921", "\u095d": "\u0922", "\u095e": "\u092b",
+                        "\u095f": "\u092f"})
+
+
+def comparable(text: str) -> str:
+    """Text for comparing words: 0-9 digits, no Hindi dot-below, lower case, single spaces."""
+    import re as _re
+    return _re.sub(r"\s+", " ", normalise_digits(text or "").translate(_NUKTA)).strip().casefold()
+
+
 def personal_details_found(text: str) -> List[str]:
     """Labels of the kinds of personal numbers found, for example ['a phone number']."""
     return list(redact(text)[1])  # the same steps as redact, so the two always agree

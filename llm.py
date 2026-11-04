@@ -14,6 +14,7 @@ Personal numbers are removed before sending (privacy.redact), and volunteers are
 not to type names.
 """
 
+import base64
 import json
 import os
 import socket
@@ -135,13 +136,13 @@ def _call_model(model: str, key: str, body: dict) -> dict:
         raise AIUnavailable("AI reading failed: could not reach the AI service (check the internet).") from None
 
 
-def _generate_json(prompt: str, schema: dict) -> Tuple[dict, str]:
-    """Returns (the JSON answer, the model that gave it)."""
+def _generate_json(prompt: str, schema: dict, extra_parts: Optional[list] = None) -> Tuple[dict, str]:
+    """Returns (the JSON answer, the model that gave it). extra_parts: e.g. an audio recording."""
     key = api_key()
     if not key:
         raise AIUnavailable("AI reading is not set up yet (no GEMINI_API_KEY).")
     body = {
-        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "contents": [{"role": "user", "parts": (extra_parts or []) + [{"text": prompt}]}],
         "generationConfig": {
             "temperature": 0,
             "responseMimeType": "application/json",
@@ -211,6 +212,9 @@ undertrial prisoner. Read the notes and return only facts the notes state clearl
 Rules:
 - Only extract facts stated in the notes. Never judge or predict bail chances, flight risk, the risk
   of re-offending, guilt, innocence or anyone's credibility, and never give an opinion or a score.
+- The notes may be in English, Hindi (Devanagari script), Hinglish (Hindi written in Roman letters)
+  or a mix. Read them all the same way. Copy every "quote" exactly as written, in the same script and
+  spelling. "आईपीसी" or "IPC" means law "IPC"; "बीएनएस" or "BNS" means law "BNS".
 - Never guess or work anything out. If a fact is not clearly stated, return null for both value and quote.
 - For every value, "quote" must be the exact words copied from the notes that state it.
 - Dates: return YYYY-MM-DD only when the notes give the day, month and year. If only a month or a
@@ -344,6 +348,11 @@ Rules:
   for example "unpaid wages", "domestic violence", "land dispute", "online fraud", "arrest and bail".
   The only exception is "sections_charged": copy any IPC or BNS section written in the notes, with the
   exact words.
+- The notes may be in English, Hindi (Devanagari script), Hinglish (Hindi written in Roman letters)
+  or a mix. Read them all the same way. Copy every "quote" exactly as written, in the same script and
+  spelling. "आईपीसी" or "IPC" means law "IPC"; "बीएनएस" or "BNS" means law "BNS".
+- Write person_needing_help, what_happened, timeline, issue names, documents_held and questions_to_ask
+  in {output_language}.
 - Never guess. If something is not clearly stated, use "unknown" (or null, or an empty list).
 - For every yes/no answer and for state and income, "quote" must be the exact words copied from the
   notes that show it (null if unknown).
@@ -367,13 +376,52 @@ Volunteer's notes:
 >>>"""
 
 
-def read_general_notes(notes: str) -> NotesReading:
+OUTPUT_LANGUAGES = {"en": "English", "hi": "simple everyday Hindi (Devanagari script)"}
+
+
+def read_general_notes(notes: str, output_lang: str = "en") -> NotesReading:
     """Send a story to the AI for a structured summary. Phone numbers, Aadhaar numbers and email
     addresses are removed before sending. Check the answer with general.check_general_answer."""
     clean, removed = privacy.redact(notes)
     if not clean.strip():
         raise AIUnavailable("There are no case notes to read.")
-    answer, model = _generate_json(GENERAL_PROMPT.format(notes=clean), GENERAL_SCHEMA)
+    answer, model = _generate_json(GENERAL_PROMPT.format(notes=clean, output_language=OUTPUT_LANGUAGES.get(
+        output_lang, "English")), GENERAL_SCHEMA)
     if not isinstance(answer, dict):
         raise AIUnavailable("AI reading failed: the answer could not be read.")
     return NotesReading(answer=answer, notes_sent=clean, removed=removed, model=model)
+
+
+# ---------- voice: turning a recording into text ----------
+
+MAX_AUDIO_BYTES = 15 * 1024 * 1024
+TRANSCRIBE_SCHEMA = {"type": "OBJECT", "properties": {"text": {"type": "STRING"}}, "required": ["text"]}
+TRANSCRIBE_PROMPT = """Write down what is said in this recording, word for word, in the language it is
+spoken: Hindi in Devanagari script, Hinglish in Roman letters, English in English. Do not translate,
+summarise, explain or add anything. Never write a phone number, Aadhaar number or email address:
+write [number removed] instead. Replace any person's name with [name]. If nothing can be heard,
+return an empty text."""
+
+
+@dataclass
+class Transcript:
+    text: str                 # already through the privacy filter
+    removed: Dict[str, int]
+    model: str
+
+
+def transcribe(audio: bytes, mime_type: str = "audio/wav") -> Transcript:
+    """Send a recording to Gemini only to turn it into text. The recording is not saved anywhere;
+    the text goes through the same privacy filter as typed notes."""
+    if not audio:
+        raise AIUnavailable("The recording is empty.")
+    if len(audio) > MAX_AUDIO_BYTES:
+        raise AIUnavailable("The recording is too long. Please record a shorter part of the story.")
+    part = {"inline_data": {"mime_type": mime_type or "audio/wav",
+                            "data": base64.b64encode(audio).decode("ascii")}}
+    answer, model = _generate_json(TRANSCRIBE_PROMPT, TRANSCRIBE_SCHEMA, extra_parts=[part])
+    text = answer.get("text", "") if isinstance(answer, dict) else ""
+    if not isinstance(text, str):
+        raise AIUnavailable("AI reading failed: the answer could not be read.")
+    clean, removed = privacy.redact(text.strip())
+    return Transcript(text=clean, removed=removed, model=model)

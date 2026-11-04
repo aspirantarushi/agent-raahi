@@ -21,6 +21,7 @@ from typing import Dict, List, Optional, Tuple
 import drafts
 import intake
 import knowledge
+import lang
 import privacy
 import section479
 
@@ -86,6 +87,9 @@ LEGAL_REF = re.compile(
     r"|\b(?:[A-Z][\w'’-]*\s+){1,7}Act\b(?:,?\s*\d{4})?"
     r"|\b(?:Act|Code|Sanhita)\s*,?\s*(?:of\s+)?\d{4}\b"
     r"|\b(?:the\s+)?Code\s+(?:on|of)\s+(?:[A-Z][\w'’-]*\s*)+(?:,?\s*\d{4})?"
+    # Hindi and Hinglish: "धारा 498A", "अनुच्छेद 21", "dhara 420", "... अधिनियम, 1936", "... संहिता"
+    r"|(?:धारा|धाराओं|अनुच्छेद|नियम|विनियम|dhara|dafa|दफ़ा|दफा)\s*\d+[A-Za-z]?(?:\s*\(\s*\w+\s*\))*"
+    r"|(?:[\u0900-\u097F]+\s+){0,6}(?:अधिनियम|संहिता|क़ानून\s+\d{4})(?:,?\s*\d{4})?"
     r"|\b(?:[A-Z][\w'’-]*\s+){1,6}(?:Code|Sanhita)\b,?\s*\d{4}"
 )
 REMOVED = "[law reference removed: ask a lawyer]"
@@ -135,8 +139,38 @@ def _quoted(item, notes: str) -> Tuple[Optional[str], Optional[str]]:
     return value, None
 
 
+_MULTIPLIERS = {"हज़ार": 1000, "हजार": 1000, "hazar": 1000, "hazaar": 1000, "hajar": 1000, "thousand": 1000,
+                "k": 1000, "लाख": 100000, "lakh": 100000, "lac": 100000, "lakhs": 100000}
+
+
 def _digits_in(quote: str) -> List[int]:
-    return [int(n.replace(",", "")) for n in re.findall(r"\d[\d,]*", quote)]
+    """Amounts written in the quote: "10,000", "१०,०००", "10 हज़ार", "1.5 lakh" (each also as the bare number)."""
+    quote = privacy.comparable(quote)
+    words = "|".join(sorted({privacy.comparable(w) for w in _MULTIPLIERS}, key=len, reverse=True))
+    amounts = []
+    for number, word in re.findall(rf"(\d[\d,]*(?:\.\d+)?)\s*({words})?(?![a-z])", quote):
+        value = float(number.replace(",", ""))
+        amounts.append(int(value))
+        if word:
+            amounts.append(int(round(value * {privacy.comparable(k): v for k, v in _MULTIPLIERS.items()}[word])))
+    return amounts
+
+
+HINDI_STATE_NAMES = {
+    "Andhra Pradesh": ["आंध्र प्रदेश"], "Assam": ["असम"], "Bihar": ["बिहार"], "Chhattisgarh": ["छत्तीसगढ़"],
+    "Goa": ["गोवा"], "Gujarat": ["गुजरात"], "Haryana": ["हरियाणा"], "Himachal Pradesh": ["हिमाचल प्रदेश", "हिमाचल"],
+    "Jammu and Kashmir": ["जम्मू और कश्मीर", "जम्मू-कश्मीर"], "Jharkhand": ["झारखंड", "झारखण्ड"],
+    "Karnataka": ["कर्नाटक"], "Kerala": ["केरल"], "Madhya Pradesh": ["मध्य प्रदेश"], "Maharashtra": ["महाराष्ट्र"],
+    "Odisha": ["ओडिशा", "उड़ीसा"], "Punjab": ["पंजाब"], "Rajasthan": ["राजस्थान"], "Tamil Nadu": ["तमिलनाडु"],
+    "Telangana": ["तेलंगाना"], "Tripura": ["त्रिपुरा"], "Uttar Pradesh": ["उत्तर प्रदेश", "यूपी"],
+    "Uttarakhand": ["उत्तराखंड", "उत्तराखण्ड"], "West Bengal": ["पश्चिम बंगाल", "बंगाल"], "Delhi": ["दिल्ली"],
+    "Chandigarh": ["चंडीगढ़"], "Ladakh": ["लद्दाख"], "Puducherry": ["पुडुचेरी"],
+}
+
+
+def _state_in(state: str, quote: str) -> bool:
+    q = privacy.comparable(quote)
+    return state.casefold() in q or any(privacy.comparable(n) in q for n in HINDI_STATE_NAMES.get(state, []))
 
 
 def state_names() -> List[str]:
@@ -167,8 +201,10 @@ def check_general_answer(raw: dict, notes: str) -> GeneralReading:
 
     value, quote = _quoted(raw.get("state"), notes)
     if value and quote:
-        match = [s for s in state_names() if s.casefold() == str(value).strip().casefold()
-                 and s.casefold() in quote.casefold()]
+        value_text = str(value).strip()
+        match = [s for s in state_names()
+                 if (s.casefold() == value_text.casefold() or value_text in HINDI_STATE_NAMES.get(s, []))
+                 and _state_in(s, quote)]
         if match:
             r.facts["state"] = match[0]
             r.evidence["state"] = quote
@@ -304,6 +340,8 @@ class Eligibility:
     missing: List[str]
     notes: List[str]
     sources: List[str]
+    reason_key: str = ""
+    params: Dict[str, object] = field(default_factory=dict)
 
 
 def income_limit(state: str) -> Tuple[Optional[int], str, str]:
@@ -332,8 +370,9 @@ def check_eligibility(facts: Dict[str, object]) -> Eligibility:
 
     groups = [label for key, label in GROUPS if facts.get(key) is True]
     if groups:
+        group_key = next(key for key, _ in GROUPS if facts.get(key) is True)
         return Eligibility("eligible", f"Qualifies for free legal aid whatever the income, as {groups[0]}.",
-                           [], notes, sources)
+                           [], notes, sources, "elig.group", {"group": group_key})
 
     unknown_groups = [key for key, _ in GROUPS if facts.get(key) is None]
     if state:
@@ -342,15 +381,18 @@ def check_eligibility(facts: Dict[str, object]) -> Eligibility:
         if limit is not None and income is not None:
             if int(income) < limit:
                 return Eligibility("eligible", f"Qualifies on income: about ₹{int(income):,} a year is below "
-                                   f"{state}'s limit of ₹{limit:,}.", [], notes, sources)
+                                   f"{state}'s limit of ₹{limit:,}.", [], notes, sources, "elig.income_below",
+                                   {"income": int(income), "limit": limit, "state": state})
             if not unknown_groups:
                 return Eligibility("not eligible on income alone",
                                    f"About ₹{int(income):,} a year is not below {state}'s limit of "
                                    f"₹{limit:,}, and none of the groups above applies. Some states add "
                                    "more groups: ask the DLSA or NALSA's free helpline 15100.",
-                                   [], notes, sources)
+                                   [], notes, sources, "elig.income_above",
+                                   {"income": int(income), "limit": limit, "state": state})
     missing = unknown_groups + [k for k in ("state", "annual_income") if facts.get(k) is None]
-    return Eligibility("not decided yet", "Not decided yet: a few facts are still needed.", missing, notes, sources)
+    return Eligibility("not decided yet", "Not decided yet: a few facts are still needed.", missing, notes, sources,
+                       "elig.undecided")
 
 
 # ---------- next steps ----------
@@ -550,7 +592,142 @@ def summary_body(g: GeneralFacts) -> str:
     return "\n".join(out)
 
 
-def make_summary_draft(g: GeneralFacts, ai_model: Optional[str]) -> str:
+# ---------- the summary in Hindi ----------
+
+def _hi(key: str, **params) -> str:
+    return lang.t(key, "hi", **params)
+
+
+def _hi_known(prefix: str, english: str) -> str:
+    """A fixed English phrase (next step, document) in Hindi, if hi.json has it; else the English."""
+    return lang.strings("hi").get(prefix + english, english)
+
+
+def _money(n: int) -> str:
+    return f"\u20b9{n:,}"
+
+
+def eligibility_text(e: Eligibility, code: str) -> str:
+    if code == "en" or not e.reason_key:
+        return e.reason
+    p = dict(e.params)
+    if "group" in p:
+        p["group"] = lang.t(f"group.{p['group']}", code)
+    for k in ("income", "limit"):
+        if k in p:
+            p[k] = _money(int(p[k]))
+    return lang.t(e.reason_key, code, **p)
+
+
+def _yes_no_hi(v) -> str:
+    return _hi("yes") if v is True else _hi("no") if v is False else _hi("sum.not_known")
+
+
+def summary_body_hi(g: "GeneralFacts") -> str:
+    """The summary in everyday Hindi. Legal text comes from knowledge_hi/ (English if missing), each
+    with its "translation checked" label; Source lines stay in English."""
+    facts = g.facts
+    categories = [c for c, _ in g.issues]
+    eligibility = check_eligibility(facts)
+    story = g.what_happened + [f"{w} {what}" for w, what in g.timeline] \
+        + [f"{w} {what}" for w, what in g.coming_dates] + [n for _, n in g.issues] + g.documents_held \
+        + [f"{q} {a}" for q, a in g.answers] + (["jail"] if facts.get("in_custody") else [])
+    doc_lists = document_lists(categories or ["other"], g.documents_held, story)
+    docs_missing = [i for _, items, _ in doc_lists for i in items]
+    steps, steps_entry = next_steps(facts, categories, eligibility, docs_missing)
+    out = [_hi("sum.title"), _hi("sum.date", date=lang.show_date(date.fromisoformat(g.today), "hi")),
+           _hi("sum.prepared"), _hi("sum.person", person=g.person), ""]
+
+    urgent = [_hi("safety.call112") if a == CALL_112 else _hi("safety.call1930") for a in urgent_actions(facts)]
+    flags = [_hi("sum.in_custody")] if facts.get("in_custody") is True else []
+    flags += [_hi("sum.coming_up", when=w, what=what) for w, what in g.coming_dates]
+    out.append(_hi("sum.urgent"))
+    out += [f"- {a}" for a in urgent + flags] or [f"- {_hi('sum.nothing_urgent')}"]
+    out.append("")
+
+    out.append(_hi("sum.what_happened"))
+    out += [f"- {x}" for x in g.what_happened] or [f"- {_hi('sum.not_clear')}"]
+    if g.timeline:
+        out += ["", _hi("sum.timeline")] + [f"- {w}: {what}" for w, what in g.timeline]
+    if g.sections:
+        out += ["", _hi("sum.sections")] + [f"- {x}" for x in g.sections]
+    out.append("")
+
+    out.append(_hi("sum.issues"))
+    for n, (category, name) in enumerate(g.issues or [("other", _hi("sum.problem_described"))], 1):
+        out.append(f"{n}. {name} \u2014 {_hi('sum.to_discuss')}.")
+        entries = [knowledge.get(f, h, "hi") for f, h in ISSUE_KNOWLEDGE.get(category, [])]
+        if not entries:
+            out.append(f"   {_hi('sum.not_covered')}")
+        for e in entries:
+            out.append("   " + _hi("sum.from_files", heading=e.heading))
+            out += [f"   {line}" for line in e.excerpt(4).splitlines()]
+            if e.lang == "hi" and not e.translation_checked:
+                out.append("   " + _hi("sum.translation_not_checked"))
+            out.append(f"   {e.source_line}")
+    out.append("")
+
+    out.append(_hi("sum.documents"))
+    out.append(_hi("sum.has") + ("; ".join(g.documents_held) if g.documents_held else _hi("sum.none_mentioned")))
+    for label, items, source_line in doc_lists:
+        hindi_items = []
+        for item in items:
+            hindi_items.append(_hindi_document(item, categories))
+        label_hi = _hi("sum.often_help") if label == OFTEN_HELP else _hi("sum.still_to_collect")
+        out.append(f"- {label_hi}: " + ("; ".join(hindi_items) if hindi_items else _hi("sum.nothing_more")))
+        if source_line:
+            out.append(f"  ({source_line})")
+    out.append("")
+
+    out.append(_hi("sum.legal_aid"))
+    out.append(f"- {eligibility_text(eligibility, 'hi')}")
+    if eligibility.missing:
+        out.append(_hi("sum.still_needed") + "; ".join(_hi(f"elig.q.{m}") for m in eligibility.missing))
+    worth = knowledge.get(*WORTH_PURSUING_ENTRY)
+    out.append(f"- {_hi('elig.dlsa_decides')} {worth.source_line}")
+    out += [f"- {n}" for n in eligibility.notes[1:]]  # state notes from income_limits.csv (in English)
+    out += [f"  {x}" for x in eligibility.sources]
+    income = facts.get("annual_income")
+    out.append(_hi("sum.facts_used", custody=_yes_no_hi(facts.get("in_custody")), woman=_yes_no_hi(facts.get("woman")),
+                   under18=_yes_no_hi(facts.get("under_18")), scst=_yes_no_hi(facts.get("sc_st")),
+                   disability=_yes_no_hi(facts.get("disability")), state=facts.get("state") or _hi("sum.not_known"),
+                   income=_hi("sum.about", amount=_money(int(income))) if income is not None else _hi("sum.not_known")))
+    out.append("")
+
+    if g.answers:
+        out.append(_hi("sum.answers"))
+        out += [f"- {q} \u2014 {a}" for q, a in g.answers]
+        out.append("")
+    if g.still_to_ask:
+        out.append(_hi("sum.still_to_ask"))
+        out += [f"- {_hi_known('elig.q_en:', q)}" for q in g.still_to_ask]
+        out.append("")
+
+    out.append(_hi("sum.next_steps"))
+    out += [f"{i}. {_hi_known('next:', x)}" for i, x in enumerate(steps, 1)]
+    out.append(f"   ({steps_entry.source_line})")
+    out.append("")
+    out.append(_hi("sum.no_prediction"))
+    return "\n".join(out)
+
+
+def _hindi_document(item: str, categories: List[str]) -> str:
+    """A document name in Hindi: from the Hindi knowledge entry (same order as the English list), or hi.json."""
+    for cat in categories:
+        if cat in ISSUE_DOCUMENTS:
+            en_entry = knowledge.get(*ISSUE_DOCUMENTS[cat])
+            hi_entry = knowledge.get(*ISSUE_DOCUMENTS[cat], "hi")
+            en_items = [l.lstrip("- ").strip() for l in en_entry.body.splitlines() if l.strip().startswith("- ")]
+            hi_items = [l.lstrip("- ").strip() for l in hi_entry.body.splitlines() if l.strip().startswith("- ")]
+            if item in en_items and len(hi_items) == len(en_items):
+                return hi_items[en_items.index(item)]
+    return _hi_known("doc:", item)
+
+
+def make_summary_draft(g: GeneralFacts, ai_model: Optional[str], code: str = "en") -> str:
+    if code == "hi":
+        text = drafts.DRAFT_HEADER + "\n" + _hi("draft.header") + "\n\n" + summary_body_hi(g)
+        return drafts.add_disclosure(text, ai_model, rules=RULES_USED, code="hi")
     text = drafts.DRAFT_HEADER + "\n\n" + summary_body(g)
     return drafts.add_disclosure(text, ai_model, rules=RULES_USED)
 
