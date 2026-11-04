@@ -34,6 +34,30 @@ Version 1 content for the legal aid agent (Code for a Billion, Timely Justice tr
   Supreme Court's draft "Regulations for Use of AI in Courts, 2026" (Regulations 16, 20(d),
   20(f) and 43), because drafts may later be filed in court.
 
+## Language support
+- **English and Hindi** are the checked languages. Their screen text is in `i18n/en.json` and
+  `i18n/hi.json` (everyday Hindi). Hindi legal text is in `knowledge_hi/` and `templates_hi/`, marked
+  "Hindi translation checked: no" until a Hindi speaker who knows the law has checked it.
+- **The other 21 scheduled languages** use Bhashini (MeitY). `scripts/translate_ui.py` translates
+  the screen text once into `i18n/<code>.json`, marked "machine translated by Bhashini, not checked".
+  {placeholders}, numbers, 112, 1930, 15100 and web addresses are never sent for translation, so they
+  stay exact (a test checks every file). The language switch lists each language in its own script.
+- **Notes** in Hindi, Hinglish or English are read by the AI directly. Notes in another scheduled
+  language are translated to English by Bhashini first; the volunteer checks every fact against the
+  original. **Voice**: Bhashini speech-to-text where it supports the language, otherwise Gemini.
+- **Privacy first**: phone, Aadhaar and email numbers are removed BEFORE any text reaches Bhashini or
+  Gemini, in every script (Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada,
+  Malayalam, Ol Chiki, Meetei Mayek, Arabic-Indic and others). Recordings are never saved.
+- **Legal text** in languages other than English and Hindi is only a *reading copy*, labelled
+  "Machine translated, not checked. Rely on the English or Hindi version." Section numbers, dates
+  and amounts must come back exactly as in English, or that part stays in English. **Drafts for the
+  DLSA or a court are made only in English or Hindi.**
+- **If Bhashini is not set up or not reachable**, the app works in English and Hindi and says so.
+- Bhashini access: register at https://dashboard.bhashini.co.in/user/register; after approval, the
+  user ID and API key are under "My Profile". Put them in `.env` as `BHASHINI_USER_ID` and
+  `BHASHINI_API_KEY` (never in git). Bhashini's docs say the free APIs are for proof-of-concept use;
+  production use needs their paid plan.
+
 ## Before launch: checks for the reviewing lawyer
 1. sentence_table.csv: every maximum term, especially rows with an "ask_to_decide" question, and the status of BNS 106(2).
 2. undertrial_bail.md: the Section 479 rules and the worked example, and especially how Section 479(2) ("more than one offence") should be applied when one case charges several sections.
