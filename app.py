@@ -23,6 +23,7 @@ import lang
 import bhashini
 import llm
 import multilingual
+import ledger
 import readiness
 import section479
 import store
@@ -472,6 +473,8 @@ def general_summary(gen):
         st.code(draft, language=None, wrap_lines=True)
     with col_check:
         checklist_box(items, "g")
+    entries = ledger.general(facts, reading.facts, eligibility, ai_checked=bool(gen["model"]))
+    ledger_box(entries)
     reading_copy_box("summary", draft)
     names = general.possible_names(draft, st.session_state.get("g_notes", ""))
     if names:
@@ -489,7 +492,8 @@ def general_summary(gen):
             ai = {"model": gen["model"], "read_at": gen["read_at"], "extracted": dict(reading.facts),
                   "not_accepted": sorted(set(reading.dropped))}
         try:
-            case_id = store.submit(draft, facts, ai=ai, draft_lang=draft_lang, readiness=readiness_rows(items))
+            case_id = store.submit(draft, facts, ai=ai, draft_lang=draft_lang, readiness=readiness_rows(items),
+                                   ledger=[e.as_dict() for e in entries])
         except ValueError as err:
             st.error(str(err))
             return
@@ -849,6 +853,23 @@ def checklist_box(items, prefix: str):
                 st.text_input(t("ready.reason"), max_chars=120, key=f"cantr-{prefix}-{item.key}")
 
 
+LEDGER_ICONS = {ledger.TOLD: "\U0001F5E3\ufe0f", ledger.AI_CHECKED: "\U0001F916\u2705", ledger.CALCULATED: "\U0001F9EE",
+                ledger.VERIFIED: "\U0001F4D7", ledger.UNRESOLVED: "\u2753", ledger.PRECAUTION: "\u26a0\ufe0f"}
+
+
+def ledger_box(entries, expanded=False):
+    """Where each fact comes from, for the volunteer and the supervisor."""
+    open_points = ledger.unresolved([e if isinstance(e, ledger.Entry) else ledger.Entry(**e) for e in entries])
+    if open_points:
+        st.warning(t("ledger.unresolved_warning", n=len(open_points)))
+    with st.expander(t("ledger.title"), expanded=expanded):
+        for e in entries:
+            e = e if isinstance(e, ledger.Entry) else ledger.Entry(**e)
+            st.markdown(f"{LEDGER_ICONS[e.source]} **{t(e.fact)}:** {e.value} \u2014 _{t('ledger.source.' + e.source)}_")
+            if e.source_line:
+                st.caption(e.source_line)
+
+
 def readiness_rows(items) -> list:
     return [{"key": i.key, "status": i.status, "note": i.note} for i in items]
 
@@ -900,6 +921,16 @@ def draft_section(known: dict, result: section479.Result):
         st.code(text, language=None, wrap_lines=True)
     with col_check:
         checklist_box(items, "f")
+    ai_state = st.session_state.get("ai")
+    entries = ledger.undertrial(facts, result, dict(ai_state["values"]) if ai_state else {},
+                                ai_checked=bool(ai_state) and bool(st.session_state.get("f_checked")))
+    if ai_state:  # only what the AI itself read counts as "read from notes by AI"
+        read = ai_state["reading"].values
+        for e in entries:
+            fact = e.fact.split(".", 1)[1]
+            if e.source == ledger.AI_CHECKED and fact not in read:
+                e.source = ledger.TOLD
+    ledger_box(entries)
     reading_copy_box("draft", text)
     st.caption(t("ui.draft.blanks"))
 
@@ -910,7 +941,8 @@ def draft_section(known: dict, result: section479.Result):
         st.success(t("ui.sent", case_id=sent["id"]))
     elif st.button(send_label(items), key="send-f"):
         try:
-            case_id = store.submit(text, facts, ai=ai_info, draft_lang=draft_lang, readiness=readiness_rows(items))
+            case_id = store.submit(text, facts, ai=ai_info, draft_lang=draft_lang, readiness=readiness_rows(items),
+                                   ledger=[e.as_dict() for e in entries])
         except ValueError as err:
             st.error(str(err))
             return
@@ -1220,6 +1252,8 @@ def review_one(record: dict):
                 for r in record["readiness"]:
                     st.markdown(f"- {t('ready.' + r['key'])}: {t('ready.status.' + r['status'])}"
                                 + (f" \u2014 {r['note']}" if r.get("note") else ""))
+        if record.get("ledger"):
+            ledger_box(record["ledger"])
         audit_record = audit.read_record(case_id)
         with st.expander(t("ui.sup.audit_one")):
             st.markdown(audit.describe(audit_record) if audit_record else t("ui.sup.no_audit_one"))

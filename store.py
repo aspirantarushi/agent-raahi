@@ -59,7 +59,7 @@ def new_case_id(base: Path = HERE, today: Optional[date] = None) -> str:
 
 
 def submit(draft_text: str, facts: UndertrialFacts, base: Path = HERE, ai: Optional[dict] = None,
-           draft_lang: str = "en", readiness: Optional[list] = None) -> str:
+           draft_lang: str = "en", readiness: Optional[list] = None, ledger: Optional[list] = None) -> str:
     """Send a draft to the supervisor. Saved in pending/ only, plus its audit record.
 
     ai: what the AI did for this case ({"model", "read_at", "extracted", "not_accepted"}),
@@ -82,6 +82,7 @@ def submit(draft_text: str, facts: UndertrialFacts, base: Path = HERE, ai: Optio
         "ai_model": (ai or {}).get("model"),
         "draft_lang": draft_lang,
         "readiness": readiness or [],  # [{"key", "status", "note"}] when sent
+        "ledger": ledger or [],        # [{"fact", "value", "source", "source_line"}]: where each fact came from
     }
     pending, _, _ = _dirs(base)
     _write(pending / f"{case_id}.json", json.dumps(record, indent=2, ensure_ascii=False))
