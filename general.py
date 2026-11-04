@@ -34,7 +34,24 @@ TO_DISCUSS = "to discuss with a lawyer"
 CALL_112 = "Call 112 now."
 CALL_1930 = "Call 1930 now."
 RULES_USED = "free legal aid eligibility was checked by rule-based code from our verified files"
-GENERAL_DOCUMENTS = ["FIR copy", "Court orders", "Notices", "Receipts", "Identity proof", "Income proof"]
+OFTEN_HELP = "Documents that often help (a lawyer will confirm)"
+# For problems our files don't cover: a plain list by type of problem, no law named.
+PROBLEM_DOCUMENTS = [
+    ("money or wages", ["wage", "salary", "salaries", "pay", "paid", "employer", "contractor", "job", "worker",
+                        "work", "loan", "money", "dues", "pension"],
+     ["Appointment letter or ID card", "Pay slips", "Bank statements", "Attendance records",
+      "Messages with the employer"]),
+    ("family or home", ["husband", "wife", "marriage", "married", "divorce", "maintenance", "dowry", "domestic",
+                        "in-laws", "children", "child", "family"],
+     ["Marriage proof", "Children's birth certificates", "Any medical records", "Messages",
+      "Notices received"]),
+    ("land or house", ["land", "house", "property", "plot", "rent", "tenant", "landlord", "evict", "eviction",
+                       "neighbour", "boundary"],
+     ["Ownership or rent papers", "Tax receipts", "Notices received"]),
+]
+POLICE_OR_COURT_WORDS = ["police", "fir", "arrest", "arrested", "court", "hearing", "chargesheet", "jail", "summons"]
+POLICE_OR_COURT_DOCUMENTS = ["FIR copy", "Court orders", "Notices received"]
+ALWAYS_DOCUMENTS = ["ID proof", "Income proof (for free legal aid)"]
 YES_NO_FACTS = ["danger_now", "in_custody", "money_lost_online", "money_lost_in_last_few_days", "called_1930",
                 "woman", "under_18", "sc_st", "disability"]
 
@@ -214,23 +231,48 @@ def issue_guidance(category: str) -> List[knowledge.Entry]:
     return [knowledge.get(f, h) for f, h in ISSUE_KNOWLEDGE.get(category, [])]
 
 
-def documents_to_collect(categories: List[str], held: List[str]) -> Tuple[List[str], Optional[knowledge.Entry]]:
-    """Documents still to collect, from the knowledge file for the issue, else a general list."""
-    for cat in categories:
-        if cat in ISSUE_DOCUMENTS:
-            entry = knowledge.get(*ISSUE_DOCUMENTS[cat])
-            items = [l.lstrip("- ").strip() for l in entry.body.splitlines() if l.strip().startswith("- ")]
-            break
-    else:
-        entry, items = None, list(GENERAL_DOCUMENTS)
+def _words(texts: List[str]) -> List[str]:
+    return re.findall(r"[a-z][a-z-]+", " ".join(texts).casefold())
+
+
+def _not_held(items: List[str], held: List[str]) -> List[str]:
     held_words = " ".join(held).casefold()
 
     def has(item: str) -> bool:
         keys = [w for w in re.findall(r"[A-Za-z]{3,}", item.casefold())
-                if w not in ("copy", "copies", "any", "the", "and", "all", "has", "proof", "number", "numbers")]
+                if w not in ("copy", "copies", "any", "the", "and", "all", "has", "proof", "number", "numbers",
+                             "for", "free", "legal", "aid", "received", "with")]
         return bool(keys) and all(k in held_words for k in keys[:2])
 
-    return [i for i in items if not has(i)], entry
+    return [i for i in items if not has(i)]
+
+
+def document_lists(categories: List[str], held: List[str], story: List[str]) -> List[Tuple[str, List[str], str]]:
+    """Documents still to collect, as (label, items, source line or "").
+
+    Issues covered by our files: the list from that knowledge entry, with its Source line.
+    Other issues: a plain list by type of problem (no law named), FIR and court papers only if the
+    story mentions police, an arrest or a court case, and always ID proof and income proof.
+    'story' is the saved summary text (the pasted notes are never kept)."""
+    lists = []
+    for cat in dict.fromkeys(categories):
+        if cat in ISSUE_DOCUMENTS:
+            entry = knowledge.get(*ISSUE_DOCUMENTS[cat])
+            items = [l.lstrip("- ").strip() for l in entry.body.splitlines() if l.strip().startswith("- ")]
+            lists.append(("Still to collect", _not_held(items, held), entry.source_line))
+    if "other" in categories or not lists:
+        words = set(_words(story))
+        items: List[str] = []
+        for _, keys, docs in PROBLEM_DOCUMENTS:  # "wage" also matches "wages", "work" matches "worked"
+            if any(w.startswith(k) for w in words for k in keys):
+                items += docs
+        if words & set(POLICE_OR_COURT_WORDS):
+            items += POLICE_OR_COURT_DOCUMENTS
+        if not items:
+            items = ["Any papers, receipts or messages about the problem", "Notices received"]
+        items += ALWAYS_DOCUMENTS
+        lists.append((OFTEN_HELP, _not_held(list(dict.fromkeys(items)), held), ""))
+    return lists
 
 
 # ---------- free legal aid eligibility (plain code) ----------
@@ -315,6 +357,7 @@ def check_eligibility(facts: Dict[str, object]) -> Eligibility:
 
 def next_steps(facts: Dict[str, object], categories: List[str], eligibility: Eligibility,
                docs_missing: List[str]) -> Tuple[List[str], knowledge.Entry]:
+    """docs_missing: every document still to collect, from document_lists."""
     when = knowledge.get("helplines.md", "When to use which")
     steps = []
     if facts.get("danger_now") is True:
@@ -418,7 +461,11 @@ def summary_body(g: GeneralFacts) -> str:
     facts = g.facts
     categories = [c for c, _ in g.issues]
     eligibility = check_eligibility(facts)
-    docs_missing, docs_entry = documents_to_collect(categories, g.documents_held)
+    story = g.what_happened + [f"{w} {what}" for w, what in g.timeline] \
+        + [f"{w} {what}" for w, what in g.coming_dates] + [n for _, n in g.issues] + g.documents_held \
+        + [f"{q} {a}" for q, a in g.answers] + (["jail"] if facts.get("in_custody") else [])
+    doc_lists = document_lists(categories or ["other"], g.documents_held, story)
+    docs_missing = [i for _, items, _ in doc_lists for i in items]
     steps, steps_entry = next_steps(facts, categories, eligibility, docs_missing)
     out = ["CASE SUMMARY — any case (general intake)",
            f"Date: {drafts.show_date(date.fromisoformat(g.today))}",
@@ -457,8 +504,10 @@ def summary_body(g: GeneralFacts) -> str:
 
     out.append("Documents")
     out.append("- The person has: " + ("; ".join(g.documents_held) if g.documents_held else "none mentioned"))
-    out.append("- Still to collect: " + ("; ".join(docs_missing) if docs_missing else "nothing more listed"))
-    out.append(f"  ({docs_entry.source_line})" if docs_entry else "  (general list)")
+    for label, items, source_line in doc_lists:
+        out.append(f"- {label}: " + ("; ".join(items) if items else "nothing more listed"))
+        if source_line:
+            out.append(f"  ({source_line})")
     out.append("")
 
     out.append("Free legal aid")

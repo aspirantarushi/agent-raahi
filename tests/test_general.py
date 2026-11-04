@@ -141,7 +141,9 @@ def test_unpaid_wages_story():
     assert reading.facts["annual_income"] == 120000
     assert ("Qualifies on income: about ₹120,000 a year is below Maharashtra's limit of ₹300,000."
             in text)
-    assert "- Still to collect: FIR copy; Court orders; Notices; Receipts; Identity proof; Income proof" in text
+    assert ("- Documents that often help (a lawyer will confirm): Appointment letter or ID card; Pay slips; "
+            "Bank statements; Attendance records; Messages with the employer; ID proof; "
+            "Income proof (for free legal aid)") in text
     assert refs_not_from_knowledge(text, reading) == []
 
 
@@ -424,3 +426,68 @@ def test_live_ai_three_stories(notes, urgent, words):
     assert words in text
     assert refs_not_from_knowledge(text, reading) == []
     assert general.possible_names(text, notes) == []
+
+
+# ---------- documents for problems our files don't cover ----------
+
+def documents_line(text):
+    return next(l for l in text.splitlines() if l.startswith("- Documents that often help"))
+
+
+def test_unpaid_wages_gets_no_fir_or_court_papers():
+    _, _, text = summarise(WAGES_ANSWER, WAGES)
+    line = documents_line(text)
+    for word in ["FIR", "Court", "court"]:
+        assert word not in line
+    assert "FIR" not in text.split("Documents")[1].split("Free legal aid")[0]
+    assert legal_refs_free(line)
+
+
+def legal_refs_free(line):
+    return general.legal_refs(line) == []
+
+
+@pytest.mark.parametrize("issue, story, expected, not_expected", [
+    ("domestic violence", "The husband beats the wife at home.",
+     ["Marriage proof", "Children's birth certificates", "Any medical records", "Messages", "Notices received"],
+     ["FIR copy", "Pay slips"]),
+    ("land dispute", "The neighbour took part of the family's land.",
+     ["Ownership or rent papers", "Tax receipts", "Notices received"], ["FIR copy"]),
+    ("land dispute", "The neighbour took the land. The police refused to file an FIR.",
+     ["Ownership or rent papers", "FIR copy", "Court orders"], []),
+    ("unpaid wages", "There is a court hearing next month about the wages.",
+     ["Pay slips", "FIR copy", "Court orders"], []),
+    ("noise from a factory", "The factory runs machines all night.",
+     ["Any papers, receipts or messages about the problem"], ["FIR copy"]),
+])
+def test_documents_by_type_of_problem(issue, story, expected, not_expected):
+    raw = answer(what_happened=[story], issues=[{"category": "other", "name": issue}])
+    _, _, text = summarise(raw, story)
+    line = documents_line(text)
+    for d in expected + ["ID proof", "Income proof (for free legal aid)"]:
+        assert d in line, d
+    for d in not_expected:
+        assert d not in line, d
+    assert general.legal_refs(line) == []
+
+
+def test_first_does_not_mean_fir():
+    raw = answer(what_happened=["The first payment was missed by the employer."],
+                 issues=[{"category": "other", "name": "unpaid wages"}])
+    _, _, text = summarise(raw, "The first payment was missed by the employer.")
+    assert "FIR copy" not in documents_line(text)
+
+
+def test_covered_issue_keeps_its_knowledge_list_and_source():
+    _, _, text = summarise(UPI_ANSWER, UPI)
+    assert "- Still to collect:" in text
+    assert knowledge.get("cyber_fraud.md", "Evidence to keep").source_line in text
+    assert "Documents that often help" not in text
+
+
+def test_documents_held_are_not_listed_again():
+    raw = dict(WAGES_ANSWER)
+    raw["documents_held"] = ["pay slips for June", "bank statements"]
+    _, _, text = summarise(raw, WAGES)
+    line = documents_line(text)
+    assert "Pay slips" not in line and "Bank statements" not in line and "Attendance records" in line
