@@ -106,7 +106,7 @@ def test_screen_by_hand(eval_folder):
     at.selectbox(key="ev-case").set_value("E2")
     at.radio(key="ev-method").set_value("by hand")
     at.text_input(key="ev-volunteer").set_value("Volunteer 1").run()
-    next(b for b in at.button if b.label.startswith("Start")).click().run()
+    next(b for b in at.button if b.label.startswith("Start (records")).click().run()
     assert not at.exception, at.exception[0].stack_trace
     assert "domestic worker" in at.code[0].value
     at.text_input(key="ev-field-0").set_value("unpaid wages").run()
@@ -125,7 +125,7 @@ def test_screen_with_agent_stops_when_sent(eval_folder, monkeypatch, tmp_path):
     at.selectbox(key="ev-case").set_value("O2")
     at.radio(key="ev-method").set_value("with the agent")
     at.text_input(key="ev-volunteer").set_value("Volunteer 2").run()
-    next(b for b in at.button if b.label.startswith("Start")).click().run()
+    next(b for b in at.button if b.label.startswith("Start (records")).click().run()
     at.sidebar.radio[0].set_value("New case").run()
     at.radio(key="case_type").set_value("Undertrial").run()
     at.text_input(key="f_section").set_value("305")

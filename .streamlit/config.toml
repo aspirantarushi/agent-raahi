@@ -1,18 +1,18 @@
 # Look and feel. Colours meet WCAG AA contrast (checked in tests/test_design.py).
 [theme]
 base = "light"
-primaryColor = "#0F766E"            # calm teal: main buttons, selected choices
-backgroundColor = "#FAF8F4"         # warm off-white
-secondaryBackgroundColor = "#F1EDE4"
-textColor = "#14213D"               # deep ink navy
-linkColor = "#0F766E"
+primaryColor = "#0E7A6B"            # calm teal: main buttons, selected choices
+backgroundColor = "#FBFAF7"         # warm off-white
+secondaryBackgroundColor = "#F3F0E8"
+textColor = "#13213B"               # deep ink navy
+linkColor = "#0E7A6B"
 redColor = "#B91C1C"                # emergencies only (Call 112 / Call 1930)
 orangeColor = "#B45309"             # needs attention (amber)
 yellowColor = "#B45309"
-greenColor = "#0F766E"
-borderColor = "#D9D3C7"
+greenColor = "#0E7A6B"
+borderColor = "#ECE7DC"
 showWidgetBorder = true
-baseRadius = "0.6rem"
+baseRadius = "1rem"
 baseFontSize = 17
 # Fonts already on phones and laptops (no download): Noto Sans covers Indian scripts on Android.
 font = "Noto Sans, Noto Sans Devanagari, system-ui, -apple-system, Segoe UI, Roboto, Nirmala UI, sans-serif"

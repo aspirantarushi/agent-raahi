@@ -21,6 +21,7 @@ import drafts
 import evaluation
 import impact
 import general
+import home
 import intake
 import lang
 import bhashini
@@ -34,7 +35,9 @@ import timeline
 import ui
 
 st.set_page_config(page_title=lang.t("app.name", st.session_state.get("ui_lang", lang.DEFAULT)),
-                   page_icon="\U0001FA94", layout="centered")  # 🪔 lamp
+                   page_icon="\U0001FA94", layout="wide", initial_sidebar_state="collapsed")  # 🪔 lamp
+# The first screen: Home for everyone. The tests start on "New case" (set in tests/conftest.py).
+START_SCREEN = os.environ.get("RAAHI_START_SCREEN", "Home")
 
 # Look and feel: .streamlit/config.toml (colours, fonts) plus a small stylesheet (assets/app.css).
 st.markdown(ui.style(), unsafe_allow_html=True)
@@ -75,7 +78,7 @@ def keep_choices():
 def language_switch():
     """English / हिंदी at the top of every screen, remembered for the session."""
     st.radio(LANGUAGE_LABEL, list(lang.LANGUAGES), format_func=lang.LANGUAGES.get, horizontal=True,
-             key="ui_lang", on_change=keep_choices)
+             key="ui_lang", on_change=keep_choices, label_visibility="collapsed")
     if lang.is_machine_translated(code()):
         st.caption("\u2139\ufe0f " + t("ui.machine_note"))
 
@@ -196,7 +199,7 @@ def transcribe_recording(audio_key: str, target_key: str):
 
 
 def voice_box(audio_key: str, target_key: str):
-    with st.expander(t("ui.voice.title")):
+    with st.expander(t("ui.voice.title"), expanded=bool(st.session_state.pop(f"{audio_key}-open", False))):
         st.warning(t("ui.voice.warning"))
         if not llm.available():
             st.info(t("ui.voice.no_ai"))
@@ -1273,8 +1276,12 @@ def my_cases_screen():
                 stage = timeline.stage(timeline.load(c["id"]))
                 status_key = {timeline.SUBMITTED_STAGE: "ui.status.submitted",
                               timeline.ACKNOWLEDGED_STAGE: "ui.status.acknowledged"}.get(stage, status_key)
-            st.markdown(f"**{t('ui.case_title', case_id=c['id'])}** · {case_type_label(c['case_type'])}  \n"
-                        f"{t(status_key)}")
+            chip_kind = {"ui.status.waiting": "waiting", "ui.status.sent_back": "sent-back",
+                         "ui.status.approved": "approved", "ui.status.submitted": "submitted",
+                         "ui.status.acknowledged": "acknowledged"}[status_key]
+            label = t(status_key).split(" ", 1)[-1]  # the words, without the old emoji
+            st.markdown(f"**{t('ui.case_title', case_id=c['id'])}** · {case_type_label(c['case_type'])} "
+                        f"&nbsp; {ui.chip(chip_kind, label)}", unsafe_allow_html=True)
             if c["status"] == store.SENT_BACK:
                 st.warning(t("ui.cases.reason", reason=c["reason"]))
                 fix_and_resend(c["id"])
@@ -1606,9 +1613,91 @@ def review_one(record: dict):
             st.error(str(err))
 
 
+# ---------- Home ----------
+
+def go(screen: str):
+    st.session_state["screen"] = screen
+
+
+def start_case():
+    go("New case")
+    st.session_state["case_type"] = ANY_CASE
+
+
+def home_to_case(speak: bool):
+    """Home's story box opens step 1 of New case, with the story carried over (and the mic open)."""
+    story = (st.session_state.get("home_story") or "").strip()
+    start_case()
+    if story:
+        for key in ("gen", "gen_error", "g_checked", "gen_sent"):
+            st.session_state.pop(key, None)
+        st.session_state["g_notes"] = story
+    if speak:
+        st.session_state["g_audio-open"] = True
+
+
+def set_language(code_: str):
+    st.session_state["ui_lang"] = code_
+    keep_choices()
+
+
+def home_screen():
+    st.markdown(ui.hero(t("home.kicker"), t("home.lead"), t("app.description") + ". " + t("home.sub")),
+                unsafe_allow_html=True)
+    _, middle, _ = st.columns([1, 5, 1])
+    with middle:
+        st.text_area(t("home.story_label"), key="home_story", height=110, placeholder=t("home.story_placeholder"))
+        b1, b2 = st.columns(2)
+        b1.button(t("home.mic"), key="home-mic", on_click=home_to_case, args=(True,), use_container_width=True)
+        b2.button(t("home.go"), key="home-go", type="primary", on_click=home_to_case, args=(False,),
+                  use_container_width=True)
+        chips = st.columns(len(lang.LANGUAGES))
+        for col, (code_, name) in zip(chips, lang.LANGUAGES.items()):
+            col.button(name, key=f"home-lang-{code_}", on_click=set_language, args=(code_,),
+                       type="primary" if code() == code_ else "secondary", use_container_width=True)
+        st.markdown(ui.helpline(t("home.helpline_danger"), t("home.helpline_aid")), unsafe_allow_html=True)
+
+    st.markdown(ui.section("how-it-works", t("home.how_title"), t("home.how_sub"))
+                + ui.cards([(t(f"home.how{i}_t"), t(f"home.how{i}_p")) for i in range(1, 5)], "four", numbered=True)
+                + ui.section("what-changes", t("home.compare_title"))
+                + ui.compare(t("home.today_t"), [t(f"home.today_{i}") for i in range(1, 5)],
+                             t("home.raahi_t"), [t(f"home.raahi_{i}") for i in range(1, 5)])
+                + ui.section("safety", t("home.safe_title"))
+                + ui.cards([(t(f"home.safe{i}_t"), t(f"home.safe{i}_p")) for i in range(1, 7)], "three")
+                + ui.facts_band(t("home.facts_title"), home.facts(code()))
+                + ui.section("learn-basics", t("home.learn_title"))
+                + ui.cards([(t(f"home.learn{i}"), "") for i in range(1, 4)], "three"),
+                unsafe_allow_html=True)
+    st.button(t("home.learn_go"), key="home-learn", on_click=go, args=("Learn",))
+
+
+def top_bar(current: str):
+    """Logo, section links (Home) or Home / Learn, the language pill, "Start a case" and a menu."""
+    c1, c2, c3, c4 = st.columns([1.9, 2.2, 2.6, 3.3], vertical_alignment="center")
+    c1.markdown(ui.brand(t("app.name")), unsafe_allow_html=True)
+    with c2:
+        if current == "Home":
+            st.markdown(ui.topnav([("how-it-works", t("nav.how")), ("safety", t("nav.safety")),
+                                   ("learn-basics", t("nav.learn"))]), unsafe_allow_html=True)
+        else:
+            n1, n2 = st.columns(2)
+            n1.button(t("nav.home"), type="tertiary", key="nav-home", on_click=go, args=("Home",))
+            n2.button(t("nav.learn"), type="tertiary", key="nav-learn", on_click=go, args=("Learn",))
+    with c3:
+        language_switch()
+    with c4:
+        s1, s2 = st.columns([1, 1.1], gap="small")
+        s1.button(t("nav.start"), type="primary", key="nav-start", on_click=start_case, use_container_width=True)
+        # A drop-down that closes as soon as a screen is chosen (a pop-up menu stayed open over the page).
+        st.session_state["menu_screen"] = current
+        s2.selectbox(t("nav.menu"), list(SCREENS), key="menu_screen", label_visibility="collapsed",
+                     format_func=option_text("screen."), on_change=lambda: go(st.session_state["menu_screen"]))
+
+
 # ---------- navigation ----------
 
 SCREENS = {
+    "Home": home_screen,
     "New case": new_case_screen,
     "My cases": my_cases_screen,
     "Learn": learn_screen,
@@ -1616,14 +1705,14 @@ SCREENS = {
     "Supervisor": supervisor_screen,
 }
 
-st.sidebar.title(t("ui.app_title"))
+st.session_state.setdefault("screen", START_SCREEN)
+st.sidebar.title(t("app.name"))
 choice = st.sidebar.radio(t("ui.go_to"), list(SCREENS), format_func=option_text("screen."), key="screen")
 st.sidebar.markdown("---")
 st.sidebar.markdown(f"**{t('ui.sidebar.danger')}**  \n{t('ui.sidebar.helpline')}")
-head_left, head_right = st.columns([3, 2])
-with head_left:
-    st.markdown(ui.header(t("app.name"), t("app.tagline"), t("app.description")), unsafe_allow_html=True)
-with head_right:
-    language_switch()
-st.markdown(ui.safety_bar(t("safety.bar112"), t("safety.bar15100")), unsafe_allow_html=True)
+top_bar(choice)
+if choice != "Home":  # Home shows the helplines under its story box
+    st.markdown(ui.safety_bar(t("safety.bar112"), t("safety.bar15100")), unsafe_allow_html=True)
 SCREENS[choice]()
+st.markdown(ui.footer(t("app.name"), f"{t('app.tagline')}. {t('app.description')}.", t("home.footer")),
+            unsafe_allow_html=True)

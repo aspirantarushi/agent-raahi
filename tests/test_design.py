@@ -33,6 +33,9 @@ def test_text_and_buttons_meet_wcag_aa():
     assert contrast(c["textColor"], c["secondaryBackgroundColor"]) >= 4.5  # text in boxes
     assert contrast("#FFFFFF", c["primaryColor"]) >= 4.5                    # white text on main buttons
     assert contrast("#FFFFFF", c["redColor"]) >= 4.5                        # emergency banners
+    assert contrast("#FFFFFF", "#13213B") >= 4.5                            # navy main buttons
+    assert contrast("#4A5468", c["backgroundColor"]) >= 4.5                 # muted text
+    assert contrast("#C7D2E5", "#13213B") >= 4.5                            # sources on the navy facts band
     assert contrast("#78350F", "#FEF3C7") >= 4.5                            # amber "needs attention" chip
     assert contrast("#FFFFFF", "#14213D") >= 4.5 and contrast("#FECACA", "#14213D") >= 4.5  # safety bar
 
