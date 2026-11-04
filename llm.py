@@ -352,7 +352,8 @@ Rules:
   or a mix. Read them all the same way. Copy every "quote" exactly as written, in the same script and
   spelling. "आईपीसी" or "IPC" means law "IPC"; "बीएनएस" or "BNS" means law "BNS".
 - Write person_needing_help, what_happened, timeline, issue names, documents_held and questions_to_ask
-  in {output_language}.
+  in {output_language}. Every "quote" must still be copied word for word from the notes, in the notes'
+  own script and spelling: never translate or transliterate a quote.
 - Never guess. If something is not clearly stated, use "unknown" (or null, or an empty list).
 - For every yes/no answer and for state and income, "quote" must be the exact words copied from the
   notes that show it (null if unknown).

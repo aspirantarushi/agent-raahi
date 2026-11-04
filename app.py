@@ -315,7 +315,7 @@ def general_screen():
     st.header(t("ui.general.header"))
     gen = st.session_state.get("gen")
     if gen:  # urgent actions always at the top
-        for action in general.urgent_actions(gen["facts"]):
+        for action in general.urgent_actions(gen["facts"], gen["reading"].unconfirmed_yes):
             st.error(f"## \U0001F6A8 {t(URGENT_KEYS[action])}")
 
     with st.expander(t("ui.general.story_box"), expanded=gen is None):

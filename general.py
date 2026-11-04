@@ -128,6 +128,7 @@ class GeneralReading:
     documents_held: List[str] = field(default_factory=list)
     questions: List[str] = field(default_factory=list)
     dropped: List[str] = field(default_factory=list)
+    unconfirmed_yes: List[str] = field(default_factory=list)  # "yes" answers whose words weren't found
 
 
 def _quoted(item, notes: str) -> Tuple[Optional[str], Optional[str]]:
@@ -198,6 +199,8 @@ def check_general_answer(raw: dict, notes: str) -> GeneralReading:
             r.evidence[key] = quote
         elif value in ("yes", "no"):
             r.dropped.append(key)
+            if value == "yes":
+                r.unconfirmed_yes.append(key)
 
     value, quote = _quoted(raw.get("state"), notes)
     if value and quote:
@@ -249,9 +252,19 @@ def check_general_answer(raw: dict, notes: str) -> GeneralReading:
 
 # ---------- urgency (rules in CLAUDE.md) ----------
 
-def urgent_actions(facts: Dict[str, object]) -> List[str]:
+PRECAUTION_FACTS = ("danger_now", "money_lost_online", "money_lost_in_last_few_days")
+
+
+def urgent_actions(facts: Dict[str, object], unconfirmed_yes=()) -> List[str]:
     """'Call 112 now.' if anyone is in danger. 'Call 1930 now.' if money was lost online in the last
-    few days (or when is not known) and 1930 has not been called."""
+    few days (or when is not known) and 1930 has not been called.
+
+    Safety first: a "yes" from the AI whose words couldn't be found in the notes (unconfirmed_yes)
+    still counts here, as a precaution. A false alarm is better than a missed one."""
+    facts = dict(facts)
+    for key in unconfirmed_yes:
+        if key in PRECAUTION_FACTS and key not in facts:
+            facts[key] = True
     actions = []
     if facts.get("danger_now") is True:
         actions.append(CALL_112)
@@ -404,7 +417,7 @@ def next_steps(facts: Dict[str, object], categories: List[str], eligibility: Eli
     steps = []
     if facts.get("danger_now") is True:
         steps.append("Someone is in danger: call 112 now.")
-    if CALL_1930 in urgent_actions(facts):
+    if CALL_1930 in urgent_actions(facts, facts.get("_precautions", ())):
         steps.append("Money was lost online: call 1930 now, or report on cybercrime.gov.in.")
     if "arrest_or_custody" in categories:
         steps.append("Someone is in custody: open the Section 479 check, and contact the jail legal aid "
@@ -469,6 +482,7 @@ class GeneralFacts:
     still_to_ask: List[str]
     facts: Dict[str, object]                  # yes/no facts, state, annual_income
     today: str
+    precautions: List[str] = field(default_factory=list)  # unconfirmed "yes" answers used only for safety
 
     def to_dict(self) -> dict:
         d = {k: v for k, v in self.__dict__.items()}
@@ -479,7 +493,7 @@ class GeneralFacts:
     def from_dict(cls, d: dict) -> "GeneralFacts":
         keys = ["person", "what_happened", "timeline", "coming_dates", "issues", "sections", "documents_held",
                 "answers", "still_to_ask", "facts", "today"]
-        return cls(**{k: d[k] for k in keys})
+        return cls(**{k: d[k] for k in keys}, precautions=d.get("precautions", []))
 
 
 def build_facts(reading: GeneralReading, answers: List[Tuple[str, str]], still_to_ask: List[str],
@@ -491,6 +505,7 @@ def build_facts(reading: GeneralReading, answers: List[Tuple[str, str]], still_t
         documents_held=reading.documents_held,
         answers=[(clean(q, 200), clean(a, 300)) for q, a in answers],
         still_to_ask=still_to_ask, facts=dict(facts), today=today.isoformat(),
+        precautions=[k for k in reading.unconfirmed_yes if k in PRECAUTION_FACTS],
     )
 
 
@@ -504,7 +519,7 @@ def case_next_steps(g: "GeneralFacts") -> List[str]:
     eligibility = check_eligibility(g.facts)
     story = g.what_happened + [n for _, n in g.issues] + g.documents_held
     docs = [i for _, items, _ in document_lists(categories or ["other"], g.documents_held, story) for i in items]
-    steps, _ = next_steps(g.facts, categories, eligibility, docs)
+    steps, _ = next_steps({**g.facts, "_precautions": g.precautions}, categories, eligibility, docs)
     return steps
 
 
@@ -518,13 +533,13 @@ def summary_body(g: GeneralFacts) -> str:
         + [f"{q} {a}" for q, a in g.answers] + (["jail"] if facts.get("in_custody") else [])
     doc_lists = document_lists(categories or ["other"], g.documents_held, story)
     docs_missing = [i for _, items, _ in doc_lists for i in items]
-    steps, steps_entry = next_steps(facts, categories, eligibility, docs_missing)
+    steps, steps_entry = next_steps({**facts, "_precautions": g.precautions}, categories, eligibility, docs_missing)
     out = ["CASE SUMMARY — any case (general intake)",
            f"Date: {drafts.show_date(date.fromisoformat(g.today))}",
            "Prepared from the volunteer's notes. People are described by their role only.",
            f"Person needing help: {g.person}", ""]
 
-    urgent = urgent_actions(facts)
+    urgent = urgent_actions(facts, g.precautions)
     flags = []
     if facts.get("in_custody") is True:
         flags.append("Someone is in custody now.")
@@ -634,11 +649,12 @@ def summary_body_hi(g: "GeneralFacts") -> str:
         + [f"{q} {a}" for q, a in g.answers] + (["jail"] if facts.get("in_custody") else [])
     doc_lists = document_lists(categories or ["other"], g.documents_held, story)
     docs_missing = [i for _, items, _ in doc_lists for i in items]
-    steps, steps_entry = next_steps(facts, categories, eligibility, docs_missing)
+    steps, steps_entry = next_steps({**facts, "_precautions": g.precautions}, categories, eligibility, docs_missing)
     out = [_hi("sum.title"), _hi("sum.date", date=lang.show_date(date.fromisoformat(g.today), "hi")),
            _hi("sum.prepared"), _hi("sum.person", person=g.person), ""]
 
-    urgent = [_hi("safety.call112") if a == CALL_112 else _hi("safety.call1930") for a in urgent_actions(facts)]
+    urgent = [_hi("safety.call112") if a == CALL_112 else _hi("safety.call1930")
+              for a in urgent_actions(facts, g.precautions)]
     flags = [_hi("sum.in_custody")] if facts.get("in_custody") is True else []
     flags += [_hi("sum.coming_up", when=w, what=what) for w, what in g.coming_dates]
     out.append(_hi("sum.urgent"))

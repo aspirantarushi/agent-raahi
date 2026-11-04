@@ -491,3 +491,37 @@ def test_documents_held_are_not_listed_again():
     _, _, text = summarise(raw, WAGES)
     line = documents_line(text)
     assert "Pay slips" not in line and "Bank statements" not in line and "Attendance records" in line
+
+
+# ---------- safety first: an unconfirmed "yes" still shows the warning ----------
+
+def test_unconfirmed_money_loss_still_shows_call_1930():
+    raw = dict(UPI_ANSWER)
+    raw["money_lost_online"] = yn("yes", "उनके खाते से 40,000 रुपये निकल गए")  # words not in the notes
+    reading = general.check_general_answer(raw, UPI)
+    assert "money_lost_online" not in reading.facts  # not accepted as a fact
+    assert general.urgent_actions(reading.facts) == []
+    assert general.urgent_actions(reading.facts, reading.unconfirmed_yes) == [general.CALL_1930]
+    _, facts, text = summarise(raw, UPI)
+    assert "URGENT\n- Call 1930 now." in text  # also in the summary
+
+
+def test_unconfirmed_danger_still_shows_call_112():
+    raw = dict(UPI_ANSWER)
+    raw["danger_now"] = yn("yes", "someone is threatening her")
+    reading = general.check_general_answer(raw, UPI)
+    assert general.urgent_actions(reading.facts, reading.unconfirmed_yes)[0] == general.CALL_112
+
+
+def test_unconfirmed_no_does_not_hide_a_warning():
+    raw = dict(UPI_ANSWER)
+    raw["called_1930"] = yn("yes", "she already called 1930")  # not in the notes: can't stop the warning
+    reading = general.check_general_answer(raw, UPI)
+    assert general.CALL_1930 in general.urgent_actions(reading.facts, reading.unconfirmed_yes)
+
+
+def test_unconfirmed_money_loss_adds_the_1930_next_step():
+    raw = dict(UPI_ANSWER)
+    raw["money_lost_online"] = yn("yes", "words that are not in the notes")
+    _, facts, text = summarise(raw, UPI)
+    assert "Money was lost online: call 1930 now" in text.split("Next steps")[1]
