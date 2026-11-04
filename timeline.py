@@ -24,6 +24,10 @@ LEGAL, SUGGESTED, ENTERED = "legal", "suggested", "entered"
 SUGGESTED_LABEL = "suggested follow-up, not a legal deadline"
 ENTERED_LABEL = "date entered by the volunteer"
 SUGGESTED_DAYS = 7
+# Section 479 one-third and one-half dates: the person becomes eligible on them. They are not
+# deadlines, so they are never "overdue"; the "ask whether the superintendent has applied" step is.
+ELIGIBILITY_STEP_IDS = {"s479-third", "s479-half"}
+ELIGIBILITY_LABEL = "eligibility date, not a deadline"
 
 DECISION_ENTRY = ("legal_aid_eligibility.md", "How long a decision takes")
 REFUSED_ENTRY = ("legal_aid_eligibility.md", "If the application is refused")
@@ -48,9 +52,15 @@ class Step:
     def due_date(self) -> Optional[date]:
         return date.fromisoformat(self.due) if self.due else None
 
+    @property
+    def eligibility_date(self) -> bool:
+        return self.id in ELIGIBILITY_STEP_IDS
+
     def label(self) -> str:
         if not self.due:
             return ""
+        if self.eligibility_date:
+            return ELIGIBILITY_LABEL
         if self.kind == LEGAL:
             return "legal date"
         return ENTERED_LABEL if self.kind == ENTERED else SUGGESTED_LABEL
@@ -240,7 +250,15 @@ def set_due(case_id: str, step_id: str, due: date, by: str, base: Path = HERE) -
 # ---------- what needs attention ----------
 
 def is_overdue(step: Step, today: date) -> bool:
-    return step.status == TO_DO and step.due_date() is not None and step.due_date() < today
+    """A to-do step past its date. Eligibility dates are never overdue (see is_reached)."""
+    return (step.status == TO_DO and not step.eligibility_date
+            and step.due_date() is not None and step.due_date() < today)
+
+
+def is_reached(step: Step, today: date) -> bool:
+    """An eligibility date (Section 479 one-third or one-half) that has come."""
+    return step.status == TO_DO and step.eligibility_date and step.due_date() is not None \
+        and step.due_date() <= today
 
 
 def ordered(steps: List[Step]) -> List[Step]:
@@ -252,13 +270,21 @@ def ordered(steps: List[Step]) -> List[Step]:
     return sorted(steps, key=key)
 
 
-def next_due(steps: List[Step]) -> Optional[Step]:
-    dated = [s for s in steps if s.status == TO_DO and s.due]
+def next_due(steps: List[Step], today: Optional[date] = None) -> Optional[Step]:
+    """The earliest to-do step with a date, leaving out eligibility dates already reached
+    (they are information, not a task: the "ask" step is the task)."""
+    today = today or date.today()
+    dated = [s for s in steps if s.status == TO_DO and s.due and not is_reached(s, today)]
     return min(dated, key=lambda s: s.due) if dated else None
 
 
-def due_this_week(today: date, base: Path = HERE) -> List[Tuple[str, Step, bool]]:
-    """(case number, step, overdue?) for to-do steps overdue or due in the next 7 days, earliest first."""
+OVERDUE, DUE, ELIGIBILITY = "overdue", "due", "eligibility"
+
+
+def due_this_week(today: date, base: Path = HERE) -> List[Tuple[str, Step, str]]:
+    """(case number, step, state) for to-do steps that are overdue or due in the next 7 days, earliest
+    first. state: "overdue" (red), "due", or "eligibility" (an eligibility date falling this week).
+    Eligibility dates already passed are left out: the "ask" step carries the follow-up."""
     folder = base / "timelines"
     found = []
     if folder.exists():
@@ -266,6 +292,11 @@ def due_this_week(today: date, base: Path = HERE) -> List[Tuple[str, Step, bool]
             record = json.loads(path.read_text(encoding="utf-8"))
             for s in steps_of(record):
                 d = s.due_date()
-                if s.status == TO_DO and d is not None and d <= today + timedelta(days=6):
-                    found.append((record["case_id"], s, d < today))
+                if s.status != TO_DO or d is None or d > today + timedelta(days=6):
+                    continue
+                if s.eligibility_date:
+                    if d >= today:
+                        found.append((record["case_id"], s, ELIGIBILITY))
+                else:
+                    found.append((record["case_id"], s, OVERDUE if d < today else DUE))
     return sorted(found, key=lambda x: x[1].due)

@@ -49,7 +49,8 @@ def test_practice_undertrial_timeline(tmp_path):
     assert (s["s479-note"].due, s["s479-note"].label()) == ("2026-11-10", timeline.SUGGESTED_LABEL)
 
     third, half = s["s479-third"], s["s479-half"]
-    assert (third.due, third.kind, third.label()) == ("2026-07-15", timeline.LEGAL, "legal date")
+    assert (third.due, third.kind, third.label()) == ("2026-07-15", timeline.LEGAL,
+                                                      "eligibility date, not a deadline")
     assert (half.due, half.kind) == ("2027-09-15", timeline.LEGAL)
     assert third.source_line == half.source_line == source(timeline.S479_ENTRY)
 
@@ -61,10 +62,10 @@ def test_practice_undertrial_timeline(tmp_path):
     court = s["s479-court"]
     assert court.title == "Next court date" and court.due is None and court.kind == timeline.ENTERED
 
-    # Overdue and next due
-    assert timeline.is_overdue(third, TODAY) and not timeline.is_overdue(half, TODAY)
-    assert timeline.next_due(list(s.values())).id == "s479-third"
-    assert timeline.ordered(list(s.values()))[0].id == "s479-third"
+    # The one-third date has passed: reached, never "overdue" (it is not a deadline)
+    assert timeline.is_reached(third, TODAY) and not timeline.is_overdue(third, TODAY)
+    assert not timeline.is_reached(half, TODAY) and not timeline.is_overdue(half, TODAY)
+    assert timeline.next_due(list(s.values()), TODAY).id == "s479-note"  # a task, not the reached date
 
     # The volunteer enters the next court date
     timeline.set_due(case_id, "s479-court", date(2026, 12, 2), "VA", base=tmp_path)
@@ -179,11 +180,10 @@ def test_every_change_goes_into_the_audit_record(tmp_path):
 def test_due_this_week(tmp_path):
     case_id = approve_undertrial(tmp_path)
     items = timeline.due_this_week(TODAY, base=tmp_path)
-    assert [(c, s.id, overdue) for c, s, overdue in items] == [
-        (case_id, "s479-third", True),   # 15 July 2026: overdue
-        (case_id, "s479-note", False),   # 10 November 2026
-        (case_id, "s479-ask", False),    # 10 November 2026
-    ]
+    assert [(c, s.id, state) for c, s, state in items] == [
+        (case_id, "s479-note", "due"),   # 10 November 2026
+        (case_id, "s479-ask", "due"),    # 10 November 2026
+    ]  # the one-third date (15 July 2026) has passed: it is not a task, so it is not listed
     assert all(s.id != "s479-half" for _, s, _ in items)  # 2027 is not this week
 
 
@@ -215,8 +215,11 @@ def test_my_cases_shows_due_this_week_and_overdue_steps(my_cases):
     at = open_my_cases()
     assert at.subheader[0].value == "Due this week"
     errors = [e.value for e in at.error]
-    assert any(e.startswith("⚠️ OVERDUE") and "One-third (personal bond) date" in e for e in errors)
-    assert any(e.startswith("**Next:** One-third (personal bond) date") for e in errors)  # next due, on top
+    warnings = [w.value for w in at.warning]
+    assert not any("One-third" in e for e in errors)  # an eligibility date is never red
+    assert any(w.startswith("Reached on 15 July 2026: check whether an application has been made")
+               and "One-third (personal bond) date" in w for w in warnings)
+    assert any(s.value.startswith("**Next:** Note given to the DLSA") for s in at.success)
     captions = " ".join(c.value for c in at.caption)
     assert source(timeline.S479_ENTRY) in captions
 
@@ -232,3 +235,39 @@ def test_my_cases_update_a_step(my_cases):
     assert any("Saved" in s.value for s in at.success)
     note = steps(case_id, my_cases)["s479-note"]
     assert note.status == timeline.DONE and note.done_by == "Volunteer A"
+
+
+# ---------- eligibility dates are not deadlines; the "ask" step is ----------
+
+def test_ask_step_turns_red_when_past_its_date(tmp_path):
+    case_id = approve_undertrial(tmp_path)
+    s = steps(case_id, tmp_path)
+    later = date(2026, 11, 11)  # the day after the ask step's suggested date
+    assert timeline.is_overdue(s["s479-ask"], later)
+    assert not timeline.is_overdue(s["s479-third"], later)
+    items = {(step.id, state) for _, step, state in timeline.due_this_week(later, base=tmp_path)}
+    assert ("s479-ask", "overdue") in items
+    assert not any(i == "s479-third" for i, _ in items)
+
+
+def test_eligibility_date_this_week_is_listed_in_amber(tmp_path):
+    case_id = approve_undertrial(tmp_path, custody_began=date(2024, 7, 2), offence_date=date(2024, 7, 1))
+    third = steps(case_id, tmp_path)["s479-third"]
+    assert third.due == "2026-11-02"
+    items = timeline.due_this_week(date(2026, 10, 30), base=tmp_path)
+    assert ("s479-third", "eligibility") in {(s.id, state) for _, s, state in items}
+
+
+def test_reached_eligibility_date_marked_done_is_no_longer_highlighted(tmp_path):
+    case_id = approve_undertrial(tmp_path)
+    timeline.mark_done(case_id, "s479-third", TODAY, "VA", base=tmp_path)
+    third = steps(case_id, tmp_path)["s479-third"]
+    assert not timeline.is_reached(third, TODAY) and not timeline.is_overdue(third, TODAY)
+
+
+def test_appeal_date_stays_a_suggestion(tmp_path):
+    case_id = approve_undertrial(tmp_path, lawyer="None")
+    timeline.mark_done(case_id, "dlsa-submitted", date(2026, 11, 5), "VA", base=tmp_path)
+    timeline.mark_done(case_id, "dlsa-refused", date(2026, 11, 12), "VA", base=tmp_path)
+    appeal = steps(case_id, tmp_path)["dlsa-appeal"]
+    assert appeal.label() == timeline.SUGGESTED_LABEL and appeal.due_editable

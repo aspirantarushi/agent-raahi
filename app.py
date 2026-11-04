@@ -741,10 +741,12 @@ def due_this_week_box():
     items = timeline.due_this_week(date.today())
     if not items:
         st.caption("Nothing overdue or due in the next 7 days.")
-    for case_id, s, overdue in items:
+    for case_id, s, state in items:
         line = f"**{show_date(s.due_date())}** \u00b7 case {case_id} \u00b7 {s.title} ({s.label()})"
-        if overdue:
+        if state == timeline.OVERDUE:
             st.error("\u26a0\ufe0f OVERDUE \u00b7 " + line)
+        elif state == timeline.ELIGIBILITY:
+            st.warning(line)
         else:
             st.info(line)
 
@@ -784,7 +786,7 @@ def timeline_box(case_id: str):
     steps = timeline.steps_of(record)
     today = date.today()
     with st.expander("Next steps", expanded=True):
-        nxt = timeline.next_due(steps)
+        nxt = timeline.next_due(steps, today)
         if nxt:
             text = f"**Next:** {nxt.title}{step_due_text(nxt)}"
             (st.error if timeline.is_overdue(nxt, today) else st.success)(text)
@@ -799,6 +801,9 @@ def timeline_box(case_id: str):
                 line += " \u2014 not needed"
             if timeline.is_overdue(s, today):
                 st.error("\u26a0\ufe0f OVERDUE \u00b7 " + line)
+            elif timeline.is_reached(s, today):
+                st.warning(f"Reached on {show_date(s.due_date())}: check whether an application has been made"
+                           f" \u00b7 {line}")
             else:
                 st.markdown(line)
             notes = [n for n in (s.note, s.source_line) if n]
