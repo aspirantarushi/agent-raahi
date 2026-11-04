@@ -416,6 +416,8 @@ SCRIPT_HINTS = {
           "keep English words in English, and write numbers and dates in digits.",
     "en": "Write Hindi or Hinglish speech in Roman letters as it is spoken, English in English, and numbers "
           "and dates in digits.",
+    "other": "Write each language in its own usual script (for example Tamil in Tamil script, Bengali in "
+             "Bengali script), English in English, and numbers and dates in digits.",
 }
 
 
@@ -428,7 +430,7 @@ def transcribe(audio: bytes, mime_type: str = "audio/wav", script: str = "en") -
         raise AIUnavailable("The recording is too long. Please record a shorter part of the story.")
     part = {"inline_data": {"mime_type": mime_type or "audio/wav",
                             "data": base64.b64encode(audio).decode("ascii")}}
-    prompt = TRANSCRIBE_PROMPT + "\n" + SCRIPT_HINTS.get(script, SCRIPT_HINTS["en"])
+    prompt = TRANSCRIBE_PROMPT + "\n" + SCRIPT_HINTS.get(script, SCRIPT_HINTS["other"])
     answer, model = _generate_json(prompt, TRANSCRIBE_SCHEMA, extra_parts=[part])
     text = answer.get("text", "") if isinstance(answer, dict) else ""
     if not isinstance(text, str):

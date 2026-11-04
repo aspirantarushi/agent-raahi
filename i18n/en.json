@@ -400,5 +400,9 @@
  "intake.q.9": "Are any other cases pending against them?",
  "intake.q.11": "Has the case been delayed because of the accused (for example, their own adjournment requests)?",
  "intake.q.12": "Does the person have a lawyer?",
- "ui.machine_note": "Screen text in this language is machine translated by Bhashini and has not been checked. Legal text and drafts stay in English or Hindi."
+ "ui.machine_note": "Screen text in this language is machine translated by Bhashini and has not been checked. Legal text and drafts stay in English or Hindi.",
+ "ui.lang.notes_language": "Language of the notes",
+ "ui.lang.bhashini_down": "Bhashini is not available, so notes in {language} can't be translated. Please write the notes in English or Hindi.",
+ "ui.lang.translated_note": "These notes were translated from {language} to English by Bhashini (machine translation, not checked) before the AI read them. Check every fact against the original notes.",
+ "ui.lang.show_translation": "Bhashini's English translation"
 }

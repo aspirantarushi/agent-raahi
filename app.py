@@ -20,7 +20,9 @@ import drafts
 import general
 import intake
 import lang
+import bhashini
 import llm
+import multilingual
 import section479
 import store
 import timeline
@@ -176,9 +178,10 @@ def transcribe_recording(audio_key: str, target_key: str):
         st.session_state[f"{audio_key}-msg"] = ("error", t("ui.voice.nothing"))
         return
     try:
-        transcript = llm.transcribe(recording.getvalue(), getattr(recording, "type", None) or "audio/wav",
-                                    script=code())
-    except llm.AIUnavailable as err:
+        language = st.session_state.get(NOTES_LANGUAGE_KEYS.get(target_key, ""), code())
+        transcript = multilingual.speech_to_text(recording.getvalue(),
+                                                 getattr(recording, "type", None) or "audio/wav", language)
+    except (llm.AIUnavailable, bhashini.BhashiniUnavailable) as err:
         st.session_state[f"{audio_key}-msg"] = ("error", f"{err} {t('ui.voice.type_instead')}")
         return
     if not transcript.text:
@@ -225,16 +228,53 @@ def _start_general(reading, model, removed):
         st.session_state.pop(key, None)
 
 
+NOTES_LANGUAGE_KEYS = {"g_notes": "g_notes_lang", "f_notes": "f_notes_lang"}
+
+
+def notes_language_choice(key: str):
+    options = multilingual.note_languages()
+    st.session_state.setdefault(key, code() if code() in options else "en")
+    st.selectbox(t("ui.lang.notes_language"), list(options), format_func=options.get, key=key)
+
+
+def language_name(language: str) -> str:
+    return multilingual.note_languages().get(language, language)
+
+
+def prepare_notes(text_key: str, error_key: str):
+    """Filter, and translate to English with Bhashini if needed. None (with an error shown) if it can't."""
+    language = st.session_state.get(NOTES_LANGUAGE_KEYS[text_key], "en")
+    try:
+        return multilingual.prepare(st.session_state.get(text_key, ""), language)
+    except bhashini.BhashiniUnavailable as err:
+        st.session_state[error_key] = t("ui.lang.bhashini_down", language=language_name(language)) + f" ({err})"
+        return None
+
+
+def show_translation_note(translated_from, translation):
+    if translated_from:
+        st.info(t("ui.lang.translated_note", language=language_name(translated_from)))
+        with st.expander(t("ui.lang.show_translation")):
+            st.text(translation)
+
+
 def read_general():
     """Runs when "Read the story" is clicked."""
     st.session_state.pop("gen_error", None)
+    prepared = prepare_notes("g_notes", "gen_error")
+    if prepared is None:
+        return
     try:
-        notes_reading = llm.read_general_notes(st.session_state.get("g_notes", ""), output_lang=code())
+        notes_reading = llm.read_general_notes(prepared.text, output_lang=code() if code() in ("en", "hi") else "en")
     except llm.AIUnavailable as err:
         st.session_state["gen_error"] = str(err)
         return
     reading = general.check_general_answer(notes_reading.answer, notes_reading.notes_sent)
-    _start_general(reading, notes_reading.model, notes_reading.removed)
+    removed = dict(prepared.removed)
+    for kind, n in notes_reading.removed.items():
+        removed[kind] = removed.get(kind, 0) + n
+    _start_general(reading, notes_reading.model, removed)
+    st.session_state["gen"].update(translated_from=prepared.translated_from, translation=prepared.text)
 
 
 def start_general_without_ai():
@@ -323,6 +363,7 @@ def general_screen():
     with st.expander(t("ui.general.story_box"), expanded=gen is None):
         st.warning(t("ui.general.names_warning"))
         if llm.available():
+            notes_language_choice("g_notes_lang")
             voice_box("g_audio", "g_notes")
             st.text_area(t("ui.general.story_label"), key="g_notes", height=220,
                          placeholder=t("ui.general.story_placeholder"))
@@ -342,6 +383,7 @@ def general_screen():
 
     if gen["removed"]:
         st.caption(t("ui.removed_before_sending") + ", ".join(f"{n} × {k}" for k, n in gen["removed"].items()))
+    show_translation_note(gen.get("translated_from"), gen.get("translation", ""))
 
     question = general_question(gen)
     if question:
@@ -446,19 +488,25 @@ def apply_to_form(values: dict):
 def read_notes():
     """Runs when "Read notes" is clicked, before the page is drawn again."""
     st.session_state.pop("ai_error", None)
+    prepared = prepare_notes("f_notes", "ai_error")
+    if prepared is None:
+        return
     try:
-        notes_reading = llm.read_undertrial_notes(st.session_state.get("f_notes", ""))
+        notes_reading = llm.read_undertrial_notes(prepared.text)
     except llm.AIUnavailable as err:
         st.session_state["ai_error"] = str(err)
         return
     reading = intake.check_ai_answer(notes_reading.answer, notes_reading.notes_sent)
-    removed = notes_reading.removed
+    removed = dict(prepared.removed)
+    for kind, n in notes_reading.removed.items():
+        removed[kind] = removed.get(kind, 0) + n
     for key, value in FORM_DEFAULTS.items():  # start from an empty form
         st.session_state[key] = value
     st.session_state["f_today"] = date.today()
     st.session_state["ai"] = {"reading": reading, "removed": removed, "skipped": set(),
                               "values": dict(reading.values), "model": notes_reading.model,
-                              "read_at": audit.now()}
+                              "read_at": audit.now(), "translated_from": prepared.translated_from,
+                              "translation": prepared.text}
     st.session_state.pop("draft", None)
     if not intake.missing_facts(reading.values):
         apply_to_form(reading.values)
@@ -476,6 +524,7 @@ def notes_box():
         if not llm.available():
             st.info(t("ui.notes.no_ai"))
             return
+        notes_language_choice("f_notes_lang")
         voice_box("f_audio", "f_notes")
         st.text_area(t("ui.notes.label"), key="f_notes", height=220, placeholder=t("ui.notes.placeholder"))
         col1, col2 = st.columns(2)
@@ -532,6 +581,7 @@ def ask_missing_facts() -> bool:
 
     fact = missing[0]
     number = dict(intake.FACT_QUESTIONS)[fact]
+    show_translation_note(ai.get("translated_from"), ai.get("translation", ""))
     st.subheader(t("ui.missing.title", n=len(missing)))
     if ai["removed"]:
         st.caption(t("ui.removed_before_sending") + ", ".join(f"{n} × {k}" for k, n in ai["removed"].items()))
@@ -612,6 +662,7 @@ def checked_by_volunteer() -> bool:
     if not ai:
         return True
     reading = ai["reading"]
+    show_translation_note(ai.get("translated_from"), ai.get("translation", ""))
     with st.container(border=True):
         st.markdown(f"**{t('ui.check.title')}**")
         rows = [f"- {fact_label(f)}: {show_value(v)} — {t('ui.check.notes')}: “{reading.evidence[f]}”"
