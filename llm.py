@@ -1,7 +1,7 @@
 """Every AI call in the app lives in this file, so the model can be swapped.
 
-Provider: Google Gemini API (free tier). Model gemini-3.8-flash; if Google says it is
-busy or it is too slow, the same request goes once to gemini-3.5-flash-lite.
+Provider: Google Gemini API (free tier). Model gemini-3.5-flash-lite (fast); if Google says
+it is busy or it is too slow, the same request goes once to gemini-3.8-flash.
 The key is read from the environment variable GEMINI_API_KEY, or from a .env file
 in the project folder (kept out of git). It is never written in the code.
 
@@ -26,8 +26,8 @@ from typing import Dict, Optional, Tuple
 import privacy
 
 HERE = Path(__file__).resolve().parent
-DEFAULT_MODEL = "gemini-3.8-flash"
-FALLBACK_MODEL = "gemini-3.5-flash-lite"  # used when the main model is busy or too slow
+DEFAULT_MODEL = "gemini-3.5-flash-lite"
+FALLBACK_MODEL = "gemini-3.8-flash"  # used when the main model is busy or too slow
 API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 TIMEOUT_SECONDS = 25
 BUSY_CODES = {429, 500, 503, 504}  # worth trying the other model

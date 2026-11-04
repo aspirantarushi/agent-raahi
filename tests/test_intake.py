@@ -237,24 +237,24 @@ def gemini_reply(answer: dict):
     return Response()
 
 
-def test_busy_main_model_falls_back_to_flash_lite(fake_key, monkeypatch):
+def test_busy_main_model_falls_back_to_flash(fake_key, monkeypatch):
     tried = []
 
     def urlopen(request, **k):
         tried.append(request.full_url.split("/models/")[1].split(":")[0])
-        if "gemini-3.8-flash" in request.full_url:
+        if "gemini-3.5-flash-lite" in request.full_url:
             raise urllib.error.HTTPError("url", 503, "busy", {}, None)
         return gemini_reply(practice_answer())
 
     monkeypatch.setattr(llm.urllib.request, "urlopen", urlopen)
     answer, clean, removed = llm.read_undertrial_notes(NOTES)
-    assert tried == ["gemini-3.8-flash", "gemini-3.5-flash-lite"]
+    assert tried == ["gemini-3.5-flash-lite", "gemini-3.8-flash"]
     assert answer["lawyer"]["value"] == "Legal aid lawyer"
 
 
 def test_slow_main_model_falls_back(fake_key, monkeypatch):
     def urlopen(request, **k):
-        if "gemini-3.8-flash" in request.full_url:
+        if "gemini-3.5-flash-lite" in request.full_url:
             raise urllib.error.URLError(llm.socket.timeout("timed out"))
         return gemini_reply(practice_answer())
 
@@ -320,7 +320,7 @@ def test_key_is_never_in_the_url(fake_key, monkeypatch):
     with pytest.raises(llm.AIUnavailable):
         llm.read_undertrial_notes(NOTES)
     assert "test-key-not-real" not in seen["url"]
-    assert "gemini-3.8-flash" in seen["url"]
+    assert "gemini-3.5-flash-lite" in seen["url"]
 
 
 def test_dotenv_file_is_read(tmp_path, monkeypatch):
