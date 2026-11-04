@@ -324,7 +324,7 @@ def button(at, label):
 def pretend_ai(monkeypatch, tmp_path):
     answers = {UNDERTRIAL: UNDERTRIAL_ANSWER, UPI: UPI_ANSWER, WAGES: WAGES_ANSWER}
     monkeypatch.setattr(llm, "available", lambda: True)
-    monkeypatch.setattr(llm, "read_general_notes", lambda notes: llm.NotesReading(answers[notes], notes, {}, MODEL))
+    monkeypatch.setattr(llm, "read_general_notes", lambda notes, output_lang="en": llm.NotesReading(answers[notes], notes, {}, MODEL))
     original_submit = store.submit
     monkeypatch.setattr(store, "submit", lambda *a, **k: original_submit(*a, base=tmp_path, **k))
     return tmp_path
@@ -373,7 +373,7 @@ def test_screen_upi_shows_1930_at_the_top_and_cyber_note(pretend_ai):
 
 def test_screen_eligibility_questions_when_needed(pretend_ai, monkeypatch):
     raw = answer(issues=[{"category": "other", "name": "land dispute"}])
-    monkeypatch.setattr(llm, "read_general_notes", lambda notes: llm.NotesReading(raw, notes, {}, MODEL))
+    monkeypatch.setattr(llm, "read_general_notes", lambda notes, output_lang="en": llm.NotesReading(raw, notes, {}, MODEL))
     at = read_story(WAGES)
     assert any("Is the person needing help in jail or police custody now?" in m.value for m in at.markdown)
     at.radio(key="ge-in_custody").set_value("No")

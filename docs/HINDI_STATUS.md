@@ -1,19 +1,45 @@
-# Hindi and voice: where we paused (4 November 2026)
+# Hindi and voice: status and files to check
 
-Done:
-- Privacy: Devanagari digits (०-९) and spaced-out numbers are caught (privacy.py), with tests.
-- knowledge_hi/: Hindi versions of the 7 knowledge entries the app shows (each "Hindi translation
-  checked: no"); knowledge.get(..., lang="hi") falls back to English when missing.
-- templates_hi/: Hindi Section 479 note and DLSA application (marker on line 1).
-- tests/test_hindi_files.py: numbers, Source/Link/Checked lines and markers match the English.
-- lang.py: reads i18n/<language>.json (the i18n files are not written yet; lang.py is not used yet).
+All seven parts of the Hindi and voice request are built and tested (5 November 2026).
 
-Still to do (in order):
-1. i18n/en.json (today's English wording exactly) and i18n/hi.json; language switch on every screen.
-2. Section 479 reasons, draft phrases and the AI disclosure through lang.py; Hindi drafts from
-   templates_hi/ with the "translation checked: no" label; draft-language choice.
-3. General summary labels and next steps in Hindi.
-4. AI reading of Hindi / Hinglish notes (prompt, Hindi month and state names, आईपीसी/बीएनएस).
-5. Voice input with st.audio_input (Gemini transcription, recording never saved).
-6. Tests incl. a Hindi practice case; then the list of Hindi files to check.
-The app itself is unchanged and English-only until step 1.
+## How it works
+- Language switch "Language / भाषा" at the top of every screen. All screen text, the safety
+  messages (112, 1930, 15100), the Section 479 reasons, draft phrases and the AI disclosure come
+  from `i18n/en.json` and `i18n/hi.json`. To add a language, copy `en.json` (for example to
+  `bn.json`), translate the values and add it to `LANGUAGES` in `lang.py`. Missing keys fall back
+  to English.
+- Hindi legal content: `knowledge_hi/` and `templates_hi/`, each marked
+  "Hindi translation checked: no". The label is shown next to Hindi legal text (summaries) and at
+  the top of Hindi drafts until the file says "yes". Source and Link lines stay in English. A test
+  checks that every section number, date and amount matches the English file.
+- Notes in Hindi, Hinglish or mixed are read by the AI and checked by plain code (Hindi and
+  Hinglish month names, आईपीसी / बीएनएस, Hindi state names, amounts like "10 हज़ार").
+- Privacy: Devanagari digits and numbers split by spaces are removed before anything reaches the AI.
+- Voice: "Speak the story" records in the browser; the recording goes to Gemini only to become
+  text (Devanagari on the Hindi screen, as spoken on the English screen) and is never saved; the
+  text goes through the privacy filter into the notes box for the volunteer to correct.
+- Drafts: the volunteer chooses the draft language. A Hindi draft keeps "DRAFT — to be checked by
+  a lawyer" as its first line, then the Hindi line and the translation label.
+
+## Hindi files a Hindi speaker who knows the law should check
+When an entry or template is checked, change "Hindi translation checked: no" to "yes" in it.
+1. `knowledge_hi/undertrial_bail.md` — 3 entries: rights on arrest; free legal aid from the first
+   court appearance; who to approach for an undertrial
+2. `knowledge_hi/cyber_fraud.md` — 3 entries: call 1930 at once; stop further loss; evidence to keep
+3. `knowledge_hi/legal_aid_eligibility.md` — 1 entry: what to carry
+4. `templates_hi/section479_note.md` — the Section 479 note (marker on line 1)
+5. `templates_hi/dlsa_application.md` — the DLSA application (marker on line 1)
+6. `i18n/hi.json` — all screen text, and the legal wording used in drafts and summaries: the keys
+   starting `s479.` (Section 479 reasons), `draft.` and `sec.` (draft phrases), `disclosure.`
+   (AI disclosure), `elig.` and `group.` (free legal aid), `next:` (next steps), `doc:` (documents)
+   and `intake.q.` (intake questions)
+7. `case_notes_hi.txt` and `practice_stories/upi_fraud_hinglish.txt` — fake practice stories (only
+   check that they read naturally)
+
+## Known limits
+- The follow-up question from the sentence table ("ask_to_decide") and the offence names come from
+  `knowledge/sentence_table.csv` and stay in English in Hindi drafts.
+- Name spotting relies on capital letters, which Devanagari doesn't have; for Hindi notes the
+  "no names" tick box is the safeguard.
+- Case files, audit records and the supervisor's audit view stay in English.
+- Steps in a general summary's timeline are saved in English and shown in Hindi where hi.json has them.

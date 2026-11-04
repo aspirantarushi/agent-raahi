@@ -410,7 +410,15 @@ class Transcript:
     model: str
 
 
-def transcribe(audio: bytes, mime_type: str = "audio/wav") -> Transcript:
+SCRIPT_HINTS = {
+    "hi": "Write Hindi speech in Devanagari script (for example: \"मेरे भाई को गिरफ़्तार किया गया\"), "
+          "keep English words in English, and write numbers and dates in digits.",
+    "en": "Write Hindi or Hinglish speech in Roman letters as it is spoken, English in English, and numbers "
+          "and dates in digits.",
+}
+
+
+def transcribe(audio: bytes, mime_type: str = "audio/wav", script: str = "en") -> Transcript:
     """Send a recording to Gemini only to turn it into text. The recording is not saved anywhere;
     the text goes through the same privacy filter as typed notes."""
     if not audio:
@@ -419,7 +427,8 @@ def transcribe(audio: bytes, mime_type: str = "audio/wav") -> Transcript:
         raise AIUnavailable("The recording is too long. Please record a shorter part of the story.")
     part = {"inline_data": {"mime_type": mime_type or "audio/wav",
                             "data": base64.b64encode(audio).decode("ascii")}}
-    answer, model = _generate_json(TRANSCRIBE_PROMPT, TRANSCRIBE_SCHEMA, extra_parts=[part])
+    prompt = TRANSCRIBE_PROMPT + "\n" + SCRIPT_HINTS.get(script, SCRIPT_HINTS["en"])
+    answer, model = _generate_json(prompt, TRANSCRIBE_SCHEMA, extra_parts=[part])
     text = answer.get("text", "") if isinstance(answer, dict) else ""
     if not isinstance(text, str):
         raise AIUnavailable("AI reading failed: the answer could not be read.")

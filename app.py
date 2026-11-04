@@ -1,6 +1,10 @@
 """Legal aid agent: Streamlit web app.
 
 Run with:  streamlit run app.py
+
+All visible text comes from i18n/<language>.json through t("key"). Widget keys and the values
+the code checks (for example "Yes", "Undertrial", "None") stay in English; only what is shown
+is translated.
 """
 
 import hmac
@@ -15,6 +19,7 @@ import audit
 import drafts
 import general
 import intake
+import lang
 import llm
 import section479
 import store
@@ -32,11 +37,50 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-DATE_FORMAT = "%d %B %Y"  # 15 July 2026
+
+# ---------- language ----------
+
+def code() -> str:
+    return st.session_state.get("ui_lang", lang.DEFAULT)
+
+
+def t(key: str, **params) -> str:
+    return lang.t(key, code(), **params)
 
 
 def show_date(d: date) -> str:
-    return d.strftime(DATE_FORMAT).lstrip("0")
+    return lang.show_date(d, code())
+
+
+# Choice buttons (radios) and lists whose wording changes with the language. In Streamlit, a radio's
+# identity includes its label and option wording, so a new language would reset it to its default.
+# When the language is switched, these are saved again first, so the new-language widgets keep them.
+KEEP_ON_LANGUAGE_SWITCH = ("case_type", "screen", "f_lawyer", "f_draft_lang", "g_draft_lang", "f_offence_pick",
+                           "ge-", "q-never", "q-other_cases_pending", "q-delay_days_by_accused", "q-lawyer",
+                           "tl-action-", "tl-step-", "action-")
+LANGUAGE_LABEL = "Language / \u092d\u093e\u0937\u093e"  # the same in every language, so the switch never resets
+
+
+def keep_choices():
+    for key in list(st.session_state.keys()):
+        if isinstance(key, str) and key.startswith(KEEP_ON_LANGUAGE_SWITCH):
+            try:
+                st.session_state[key] = st.session_state[key]
+            except Exception:  # some widgets (buttons) can't be set; they hold no choice anyway
+                pass
+
+
+def language_switch():
+    """English / हिंदी at the top of every screen, remembered for the session."""
+    st.radio(LANGUAGE_LABEL, list(lang.LANGUAGES), format_func=lang.LANGUAGES.get, horizontal=True,
+             key="ui_lang", on_change=keep_choices)
+
+
+def option_text(prefix: str):
+    """format_func for a radio whose values stay in English: shows the value in the current language.
+    The language is fixed when the widget is drawn, so the same value always shows the same words."""
+    language = code()
+    return lambda value: lang.t(prefix + value, language) if (prefix + value) in lang.strings("en") else value
 
 
 # ---------- New case ----------
@@ -54,13 +98,12 @@ FACT_TO_KEY = {
     "other_cases_pending": "f_other", "more_than_one_section": "f_many",
     "delay_days_by_accused": "f_delay", "answer": "f_answer", "lawyer": "f_lawyer",
 }
-FACT_LABELS = {
-    "custody_began": "Date custody began", "offence_date": "Date of the offence", "today": "Today's date",
-    "section": "Section", "law": "Law", "more_than_one_section": "More than one section charged",
-    "never_convicted": "Never convicted", "other_cases_pending": "Other cases pending",
-    "delay_days_by_accused": "Days of delay caused by the accused", "lawyer": "Lawyer",
-    "answer": "Answer to the deciding question",
-}
+FACT_LABEL_KEYS = ["custody_began", "offence_date", "today", "section", "law", "more_than_one_section",
+                   "never_convicted", "other_cases_pending", "delay_days_by_accused", "lawyer", "answer"]
+
+
+def fact_label(fact: str) -> str:
+    return t(f"fact.{fact}")
 
 
 def init_form():
@@ -74,20 +117,19 @@ def save_problem(key: str, case_id, where: str):
     text = st.session_state.get(f"problem-{key}", "")
     try:
         audit.report_problem(text, case_id, where)
-    except ValueError as err:
-        st.session_state[f"problem-msg-{key}"] = ("error", str(err))
+    except ValueError:
+        st.session_state[f"problem-msg-{key}"] = ("error", t("ui.problem.empty"))
         return
     st.session_state[f"problem-{key}"] = ""
-    st.session_state[f"problem-msg-{key}"] = ("ok", "Thank you. The problem was saved for the supervisor.")
+    st.session_state[f"problem-msg-{key}"] = ("ok", t("ui.problem.thanks"))
 
 
 def report_problem_box(key: str, where: str, case_id=None):
     """A small "Report a problem" box. Saved to the problems log with the case number and date."""
-    with st.expander("\u26a0\ufe0f Report a problem"):
-        st.caption("Describe the problem in a few words. Do not include names, phone numbers, "
-                   "Aadhaar numbers, addresses or prisoner IDs.")
-        st.text_area("What went wrong?", key=f"problem-{key}", max_chars=audit.MAX_PROBLEM_LENGTH, height=100)
-        st.button("Send report", key=f"problem-send-{key}", on_click=save_problem, args=(key, case_id, where))
+    with st.expander(t("ui.problem.title")):
+        st.caption(t("ui.problem.caption"))
+        st.text_area(t("ui.problem.what"), key=f"problem-{key}", max_chars=audit.MAX_PROBLEM_LENGTH, height=100)
+        st.button(t("ui.problem.send"), key=f"problem-send-{key}", on_click=save_problem, args=(key, case_id, where))
         msg = st.session_state.pop(f"problem-msg-{key}", None)
         if msg:
             (st.success if msg[0] == "ok" else st.error)(msg[1])
@@ -104,11 +146,11 @@ def ai_info_for_audit():
 
 
 def new_case_screen():
-    st.title("New case")
-    st.caption("Use only case numbers (CNR, FIR). Do not type names, phone numbers, "
-               "Aadhaar numbers, addresses or prisoner IDs.")
+    st.title(t("ui.new_case.title"))
+    st.caption(t("ui.new_case.caption"))
 
-    case_type = st.radio("What kind of case is it?", CASE_TYPES, horizontal=True, key="case_type")
+    case_type = st.radio(t("ui.new_case.kind"), CASE_TYPES, horizontal=True, key="case_type",
+                         format_func=option_text("case_type."))
     if case_type == ANY_CASE:
         general_screen()
     else:
@@ -121,20 +163,56 @@ def new_case_screen():
     report_problem_box("new-case", "New case", case_id)
 
 
-# ----- reading pasted case notes with the AI -----
+# ----- voice: "Speak the story" -----
+
+def transcribe_recording(audio_key: str, target_key: str):
+    """Runs when "Turn speech into text" is clicked. The recording is only sent to Gemini to become
+    text; it is never saved. The text goes through the privacy filter, then into the notes box."""
+    st.session_state.pop(f"{audio_key}-msg", None)
+    recording = st.session_state.get(audio_key)
+    if recording is None:
+        st.session_state[f"{audio_key}-msg"] = ("error", t("ui.voice.nothing"))
+        return
+    try:
+        transcript = llm.transcribe(recording.getvalue(), getattr(recording, "type", None) or "audio/wav",
+                                    script=code())
+    except llm.AIUnavailable as err:
+        st.session_state[f"{audio_key}-msg"] = ("error", f"{err} {t('ui.voice.type_instead')}")
+        return
+    if not transcript.text:
+        st.session_state[f"{audio_key}-msg"] = ("error", t("ui.voice.nothing_heard"))
+        return
+    before = st.session_state.get(target_key, "").rstrip()
+    st.session_state[target_key] = (before + "\n" if before else "") + transcript.text
+    msg = t("ui.voice.done")
+    if transcript.removed:
+        msg += " " + t("ui.voice.removed", what=", ".join(f"{n} × {k}" for k, n in transcript.removed.items()))
+    st.session_state[f"{audio_key}-msg"] = ("ok", msg)
+
+
+def voice_box(audio_key: str, target_key: str):
+    with st.expander(t("ui.voice.title")):
+        st.warning(t("ui.voice.warning"))
+        if not llm.available():
+            st.info(t("ui.voice.no_ai"))
+            return
+        st.audio_input(t("ui.voice.record"), key=audio_key)
+        st.button(t("ui.voice.convert"), key=f"{audio_key}-go", on_click=transcribe_recording,
+                  args=(audio_key, target_key))
+        st.caption(t("ui.voice.caption"))
+        msg = st.session_state.pop(f"{audio_key}-msg", None)
+        if msg:
+            (st.success if msg[0] == "ok" else st.error)(msg[1])
+
 
 # ----- any case: general intake -----
 
 ANY_CASE = "Any case (start here)"
 CASE_TYPES = [ANY_CASE, "Undertrial"]
-NAMES_WARNING = ("**Do not type names**, phone numbers, Aadhaar numbers, addresses or prisoner IDs. "
-                 "Describe people by their role (\"the employer\", \"the husband\"). Phone numbers, Aadhaar "
-                 "numbers and email addresses are removed before the story is sent to the AI (Google Gemini), "
-                 "but names cannot be removed automatically. The story itself is never saved.")
 
 
 def case_type_label(case_type: str) -> str:
-    return general.CASE_TYPE_LABEL if case_type == general.CASE_TYPE else case_type
+    return t("case_type.General") if case_type == general.CASE_TYPE else t(f"case_type.{case_type}")
 
 
 def _start_general(reading, model, removed):
@@ -149,7 +227,7 @@ def read_general():
     """Runs when "Read the story" is clicked."""
     st.session_state.pop("gen_error", None)
     try:
-        notes_reading = llm.read_general_notes(st.session_state.get("g_notes", ""))
+        notes_reading = llm.read_general_notes(st.session_state.get("g_notes", ""), output_lang=code())
     except llm.AIUnavailable as err:
         st.session_state["gen_error"] = str(err)
         return
@@ -160,8 +238,8 @@ def read_general():
 def start_general_without_ai():
     text = st.session_state.get("g_manual", "")
     reading = general.GeneralReading(
-        what_happened=[general.clean(t) for t in re.split(r"(?<=[.!?])\s+", text) if t.strip()][:6],
-        issues=[("other", "the problem described")])
+        what_happened=[general.clean(x) for x in re.split(r"(?<=[.!?।])\s+", text) if x.strip()][:6],
+        issues=[("other", t("ui.general.problem_described"))])
     st.session_state.pop("gen_error", None)
     _start_general(reading, None, {})
 
@@ -188,7 +266,7 @@ def general_question(gen):
         return ("ai", gen["q_index"], questions[gen["q_index"]])
     missing = [m for m in general.check_eligibility(gen["facts"]).missing if m not in gen["skipped"]]
     if missing:
-        return ("eligibility", missing[0], general.ELIGIBILITY_QUESTIONS[missing[0]])
+        return ("eligibility", missing[0], t(f"elig.q.{missing[0]}"))
     return None
 
 
@@ -230,58 +308,71 @@ def skip_general_questions():
     gen["done"] = True
 
 
+URGENT_KEYS = {general.CALL_112: "safety.call112", general.CALL_1930: "safety.call1930"}
+
+
 def general_screen():
-    st.header("Any case: summary and next steps")
+    st.header(t("ui.general.header"))
     gen = st.session_state.get("gen")
     if gen:  # urgent actions always at the top
         for action in general.urgent_actions(gen["facts"]):
-            st.error(f"## \U0001F6A8 {action}")
+            st.error(f"## \U0001F6A8 {t(URGENT_KEYS[action])}")
 
-    with st.expander("Paste or type the story", expanded=gen is None):
-        st.warning(NAMES_WARNING)
+    with st.expander(t("ui.general.story_box"), expanded=gen is None):
+        st.warning(t("ui.general.names_warning"))
         if llm.available():
-            st.text_area("The story, in the volunteer's words", key="g_notes", height=220,
-                         placeholder="For example: The employer has not paid the worker for three months ...")
+            voice_box("g_audio", "g_notes")
+            st.text_area(t("ui.general.story_label"), key="g_notes", height=220,
+                         placeholder=t("ui.general.story_placeholder"))
             col1, col2 = st.columns(2)
-            col1.button("Read the story", type="primary", on_click=read_general)
+            col1.button(t("ui.general.read"), type="primary", on_click=read_general)
             if gen:
-                col2.button("Clear and start again", on_click=clear_general)
+                col2.button(t("ui.general.clear"), on_click=clear_general)
         else:
-            st.info("AI reading is not set up on this computer. You can type a short summary yourself below.")
+            st.info(t("ui.general.no_ai"))
         if not llm.available() or st.session_state.get("gen_error"):
-            st.text_area("What happened, in your own words (no names)", key="g_manual", height=120)
-            st.button("Start without AI", on_click=start_general_without_ai)
+            st.text_area(t("ui.general.manual_label"), key="g_manual", height=120)
+            st.button(t("ui.general.start_without_ai"), on_click=start_general_without_ai)
     if st.session_state.get("gen_error"):
-        st.error(st.session_state["gen_error"] + " You can type a short summary yourself instead.")
+        st.error(st.session_state["gen_error"] + " " + t("ui.general.type_instead"))
     if not gen:
         return
 
     if gen["removed"]:
-        st.caption("Removed before sending: " + ", ".join(f"{n} \u00d7 {k}" for k, n in gen["removed"].items()))
+        st.caption(t("ui.removed_before_sending") + ", ".join(f"{n} × {k}" for k, n in gen["removed"].items()))
 
     question = general_question(gen)
     if question:
         kind, ref, text = question
-        st.subheader("A few questions, one at a time")
+        st.subheader(t("ui.general.questions"))
         with st.container(border=True):
             st.markdown(f"**{text}**")
             if kind == "ai":
-                st.text_input("Answer (no names or phone numbers)", key=f"gq-{ref}", max_chars=300)
+                st.text_input(t("ui.general.answer_no_names"), key=f"gq-{ref}", max_chars=300)
             elif ref == "state":
-                st.selectbox("State or union territory", general.state_names(), index=None, key="ge-state")
+                st.selectbox(t("ui.general.state"), general.state_names(), index=None, key="ge-state")
             elif ref == "annual_income":
                 col1, col2 = st.columns(2)
-                col1.number_input("Amount in \u20b9", min_value=0, step=500, value=None, key="ge-income")
-                col2.radio("Per", ["per month", "per year"], index=None, key="ge-income-per", horizontal=True)
+                col1.number_input(t("ui.general.amount"), min_value=0, step=500, value=None, key="ge-income")
+                col2.radio(t("ui.general.per"), ["per month", "per year"], index=None, key="ge-income-per",
+                           horizontal=True, format_func=option_text("opt."))
             else:
-                st.radio("Answer", ["Yes", "No", "Not sure"], index=None, key=f"ge-{ref}", horizontal=True)
+                st.radio(t("ui.answer"), ["Yes", "No", "Not sure"], index=None, key=f"ge-{ref}", horizontal=True,
+                         format_func=option_text("opt."))
             col1, col2, col3 = st.columns([1, 1, 2])
-            col1.button("Next", type="primary", key=f"gnext-{kind}-{ref}", on_click=answer_general, args=(kind, ref))
-            col2.button("Don't know", key=f"gskip-{kind}-{ref}", on_click=answer_general, args=(kind, ref, True))
-            col3.button("Skip the rest and see the summary", key="gskip-all", on_click=skip_general_questions)
+            col1.button(t("ui.next"), type="primary", key=f"gnext-{kind}-{ref}", on_click=answer_general,
+                        args=(kind, ref))
+            col2.button(t("ui.dont_know"), key=f"gskip-{kind}-{ref}", on_click=answer_general, args=(kind, ref, True))
+            col3.button(t("ui.general.skip_rest"), key="gskip-all", on_click=skip_general_questions)
         return
 
     general_summary(gen)
+
+
+def draft_language_choice(key: str) -> str:
+    st.session_state.setdefault(key, code())
+    return st.radio(t("ui.draft_language"), list(lang.LANGUAGES), format_func=lang.LANGUAGES.get,
+                    horizontal=True, key=key)
 
 
 def general_summary(gen):
@@ -289,38 +380,37 @@ def general_summary(gen):
     eligibility = general.check_eligibility(gen["facts"])
     still_to_ask = gen["unanswered"] + [general.ELIGIBILITY_QUESTIONS[m] for m in eligibility.missing]
     facts = general.build_facts(reading, gen["answers"], still_to_ask, gen["facts"], date.today())
-    draft = general.make_summary_draft(facts, gen["model"])
 
     categories = [c for c, _ in reading.issues]
     if "arrest_or_custody" in categories:
-        st.info("Someone is in custody. You can work out the Section 479 dates with the facts already filled in.")
-        st.button("Open Section 479 check", on_click=open_section479, disabled=not llm.available())
+        st.info(t("ui.general.custody_info"))
+        st.button(t("ui.general.open_479"), on_click=open_section479, disabled=not llm.available())
     if "online_or_financial_fraud" in categories:
-        st.info("Money was lost online. The cyber fraud module (complaint and bank letter) is coming next. "
-                "Until then: call 1930 or report on cybercrime.gov.in, and tell the bank in writing.")
+        st.info(t("ui.general.cyber_info"))
 
-    st.subheader("Case summary (draft)")
+    st.subheader(t("ui.general.summary"))
+    draft_lang = draft_language_choice("g_draft_lang")
+    draft = general.make_summary_draft(facts, gen["model"], draft_lang)
+    if draft_lang == "hi":
+        st.caption(t("ui.hindi_label_note"))
     st.code(draft, language=None, wrap_lines=True)
     names = general.possible_names(draft, st.session_state.get("g_notes", ""))
     if names:
-        st.warning("These words from the notes appear in the summary and might be names: " + ", ".join(names)
-                   + ". If any is a person's name, start again and describe them by role.")
+        st.warning(t("ui.general.possible_names", names=", ".join(names)))
 
     sent = st.session_state.get("gen_sent")
     if sent:
-        st.success(f"Sent to the supervisor as case {sent}. See its status on \"My cases\".")
+        st.success(t("ui.sent", case_id=sent))
         report_problem_box("gen-draft", "Any-case summary", sent)
         return
-    checked = st.checkbox("I have checked this summary against the notes, and it contains no names of people",
-                          key="g_checked")
-    if st.button("Send to supervisor", disabled=not checked):
+    checked = st.checkbox(t("ui.general.checked_no_names"), key="g_checked")
+    if st.button(t("ui.send_to_supervisor"), disabled=not checked):
         ai = None
         if gen["model"]:
-            extracted = dict(reading.facts)
-            ai = {"model": gen["model"], "read_at": gen["read_at"], "extracted": extracted,
+            ai = {"model": gen["model"], "read_at": gen["read_at"], "extracted": dict(reading.facts),
                   "not_accepted": sorted(set(reading.dropped))}
         try:
-            case_id = store.submit(draft, facts, ai=ai)
+            case_id = store.submit(draft, facts, ai=ai, draft_lang=draft_lang)
         except ValueError as err:
             st.error(str(err))
             return
@@ -329,9 +419,11 @@ def general_summary(gen):
     report_problem_box("gen-draft", "Any-case summary", None)
 
 
+# ----- the undertrial notes -----
+
 def show_value(value) -> str:
     if isinstance(value, bool):
-        return "yes" if value else "no"
+        return t("yes") if value else t("no")
     if isinstance(value, date):
         return show_date(value)
     return str(value)
@@ -374,21 +466,19 @@ def clear_notes():
 
 def notes_box():
     ai = st.session_state.get("ai")
-    with st.expander("Paste case notes (optional): the AI fills in the form for you", expanded=ai is None):
-        st.warning("**Do not type names**, phone numbers, Aadhaar numbers, addresses or prisoner IDs. "
-                   "Phone numbers, Aadhaar numbers and email addresses are removed before the notes are "
-                   "sent to the AI (Google Gemini), but names cannot be removed automatically.")
+    with st.expander(t("ui.notes.box"), expanded=ai is None):
+        st.warning(t("ui.notes.warning"))
         if not llm.available():
-            st.info("AI reading is not set up on this computer, so please fill in the form below by hand.")
+            st.info(t("ui.notes.no_ai"))
             return
-        st.text_area("Case notes", key="f_notes", height=220,
-                     placeholder="For example: He was arrested on 15 March 2024 and is charged under IPC 380 ...")
+        voice_box("f_audio", "f_notes")
+        st.text_area(t("ui.notes.label"), key="f_notes", height=220, placeholder=t("ui.notes.placeholder"))
         col1, col2 = st.columns(2)
-        col1.button("Read notes", type="primary", on_click=read_notes)
+        col1.button(t("ui.notes.read"), type="primary", on_click=read_notes)
         if ai:
-            col2.button("Clear notes and start again", on_click=clear_notes)
+            col2.button(t("ui.notes.clear"), on_click=clear_notes)
     if st.session_state.get("ai_error"):
-        st.error(st.session_state["ai_error"] + " You can fill in the form below by hand.")
+        st.error(st.session_state["ai_error"] + " " + t("ui.notes.by_hand"))
 
 
 # ----- asking for missing facts, one at a time -----
@@ -420,6 +510,12 @@ def skip_all():
     apply_to_form(ai["values"])
 
 
+def intake_question(number: int) -> str:
+    """The question from knowledge/intake_undertrial.md, in Hindi from hi.json when chosen."""
+    english = intake.intake_questions()[number]
+    return lang.strings(code()).get(f"intake.q.{number}", english) if code() != "en" else english
+
+
 def ask_missing_facts() -> bool:
     """Ask the first missing fact. Returns True while questions remain."""
     ai = st.session_state.get("ai")
@@ -430,52 +526,52 @@ def ask_missing_facts() -> bool:
         return False
 
     fact = missing[0]
-    questions = intake.intake_questions()
     number = dict(intake.FACT_QUESTIONS)[fact]
-    st.subheader(f"A few facts are missing ({len(missing)} to go)")
+    st.subheader(t("ui.missing.title", n=len(missing)))
     if ai["removed"]:
-        st.caption("Removed before sending: " + ", ".join(f"{n} × {k}" for k, n in ai["removed"].items()))
-    found = {f: v for f, v in ai["values"].items() if f in FACT_LABELS}
+        st.caption(t("ui.removed_before_sending") + ", ".join(f"{n} × {k}" for k, n in ai["removed"].items()))
+    found = {f: v for f, v in ai["values"].items() if f in FACT_LABEL_KEYS}
     if found:
-        st.caption("Found in the notes so far: "
-                   + "; ".join(f"{FACT_LABELS[f]}: {show_value(v)}" for f, v in found.items()))
+        st.caption(t("ui.missing.found") + "; ".join(f"{fact_label(f)}: {show_value(v)}" for f, v in found.items()))
 
     with st.container(border=True):
-        question = questions[number]
+        question = intake_question(number)
         if fact == "answer":
             question = intake.offence_question(ai["values"])
         st.markdown(f"**{question}**")
         if fact in ai["reading"].notes_say:
-            st.caption(f"The notes say: “{ai['reading'].notes_say[fact]}”")
+            st.caption(t("ui.missing.notes_say", quote=ai["reading"].notes_say[fact]))
         question_widget(fact)
         col1, col2, col3 = st.columns([1, 1, 2])
-        col1.button("Next", type="primary", key=f"next-{fact}", on_click=answer_fact, args=(fact,))
-        col2.button("Don't know", key=f"skip-{fact}", on_click=answer_fact, args=(fact, True))
-        col3.button("Skip the rest and check the form", key="skip-all", on_click=skip_all)
+        col1.button(t("ui.next"), type="primary", key=f"next-{fact}", on_click=answer_fact, args=(fact,))
+        col2.button(t("ui.dont_know"), key=f"skip-{fact}", on_click=answer_fact, args=(fact, True))
+        col3.button(t("ui.missing.skip_rest"), key="skip-all", on_click=skip_all)
     return True
 
 
 def question_widget(fact: str):
     """Draw one input for one missing fact."""
+    opt = option_text("opt.")
     if fact in ("custody_began", "offence_date"):
-        st.date_input("Date", value=None, format="DD/MM/YYYY", key=f"q-{fact}",
+        st.date_input(t("ui.date"), value=None, format="DD/MM/YYYY", key=f"q-{fact}",
                       min_value=date(1990, 1, 1), max_value=date.today())
     elif fact == "section":
         col1, col2 = st.columns([1, 2])
-        col1.selectbox("Law", ["IPC", "BNS"], key="q-law")
-        col2.text_input("Section number", key="q-section", placeholder="for example 380")
-        st.checkbox("More than one section is charged in this case", key="q-many")
+        col1.selectbox(t("fact.law"), ["IPC", "BNS"], key="q-law")
+        col2.text_input(t("ui.form.section"), key="q-section", placeholder=t("ui.missing.section_example"))
+        st.checkbox(t("ui.missing.many"), key="q-many")
     elif fact == "never_convicted":
-        st.radio("Answer", ["Never", "Yes", "Not sure"], index=None, key="q-never", horizontal=True)
+        st.radio(t("ui.answer"), ["Never", "Yes", "Not sure"], index=None, key="q-never", horizontal=True,
+                 format_func=opt)
     elif fact in ("other_cases_pending", "delay_days_by_accused"):
-        st.radio("Answer", ["No", "Yes", "Not sure"], index=None, key=f"q-{fact}", horizontal=True)
+        st.radio(t("ui.answer"), ["No", "Yes", "Not sure"], index=None, key=f"q-{fact}", horizontal=True,
+                 format_func=opt)
         if fact == "delay_days_by_accused" and st.session_state.get("q-delay_days_by_accused") == "Yes":
-            st.number_input("About how many days of delay?", min_value=1, step=1, value=None,
-                            key="q-delay-days")
+            st.number_input(t("ui.missing.delay_days"), min_value=1, step=1, value=None, key="q-delay-days")
     elif fact == "answer":
-        st.text_input("Answer", key="q-answer", max_chars=200)
+        st.text_input(t("ui.answer"), key="q-answer", max_chars=200)
     elif fact == "lawyer":
-        st.radio("Answer", drafts.LAWYER_OPTIONS, index=None, key="q-lawyer")
+        st.radio(t("ui.answer"), drafts.LAWYER_OPTIONS, index=None, key="q-lawyer", format_func=option_text("lawyer."))
 
 
 def read_answer(fact: str):
@@ -512,59 +608,55 @@ def checked_by_volunteer() -> bool:
         return True
     reading = ai["reading"]
     with st.container(border=True):
-        st.markdown("**Filled in from the notes. Check every field above against the notes and correct "
-                    "anything wrong before going on.**")
-        rows = [f"- {FACT_LABELS[f]}: {show_value(v)} — notes: “{reading.evidence[f]}”"
-                for f, v in reading.values.items() if f in FACT_LABELS and f in reading.evidence]
-        asked = [f for f in ai["values"] if f not in reading.values and f in FACT_LABELS]
+        st.markdown(f"**{t('ui.check.title')}**")
+        rows = [f"- {fact_label(f)}: {show_value(v)} — {t('ui.check.notes')}: “{reading.evidence[f]}”"
+                for f, v in reading.values.items() if f in FACT_LABEL_KEYS and f in reading.evidence]
+        asked = [f for f in ai["values"] if f not in reading.values and f in FACT_LABEL_KEYS]
         if rows:
-            st.markdown("Found in the notes:\n" + "\n".join(rows))
+            st.markdown(t("ui.check.found") + "\n" + "\n".join(rows))
         if asked:
-            st.markdown("You answered: " + ", ".join(FACT_LABELS[f] for f in asked))
-        unknown = [FACT_LABELS[f] for f in ai["skipped"] if f in FACT_LABELS]
+            st.markdown(t("ui.check.you_answered") + ", ".join(fact_label(f) for f in asked))
+        unknown = [fact_label(f) for f in ai["skipped"] if f in FACT_LABEL_KEYS]
         if unknown:
-            st.warning("Still not known: " + ", ".join(unknown) + ".")
+            st.warning(t("ui.check.still_unknown", what=", ".join(unknown)))
         if reading.values.get("all_sections"):
-            st.warning("The notes name more than one section: " + ", ".join(reading.values["all_sections"])
-                       + ". The form uses the first; a lawyer must check whether Section 479(2) bars release.")
-        return st.checkbox("I have checked every field against the notes", key="f_checked")
+            st.warning(t("ui.check.many_sections", sections=", ".join(reading.values["all_sections"])))
+        return st.checkbox(t("ui.check.box"), key="f_checked")
 
 
 def undertrial_form():
-    st.header("Undertrial: Section 479 BNSS dates")
+    st.header(t("ui.form.header"))
 
     col1, col2 = st.columns([1, 2])
-    law = col1.selectbox("Law", ["IPC", "BNS"], key="f_law")
-    section = col2.text_input("Section number", placeholder="for example 380 or 117(2)", key="f_section")
+    law = col1.selectbox(t("fact.law"), ["IPC", "BNS"], key="f_law")
+    section = col2.text_input(t("ui.form.section"), placeholder=t("ui.form.section_example"), key="f_section")
 
-    offence_date = st.date_input("Date of the offence", format="DD/MM/YYYY", key="f_offence_date",
+    offence_date = st.date_input(t("fact.offence_date"), format="DD/MM/YYYY", key="f_offence_date",
                                  min_value=date(1990, 1, 1), max_value=date.today(),
-                                 help="Before 1 July 2024 the IPC applies; from 1 July 2024 the BNS.")
-    custody_began = st.date_input("Date custody began", format="DD/MM/YYYY", key="f_custody",
+                                 help=t("ui.form.offence_date_help"))
+    custody_began = st.date_input(t("fact.custody_began"), format="DD/MM/YYYY", key="f_custody",
                                   min_value=date(1990, 1, 1), max_value=date.today())
-    today = st.date_input("Today's date", format="DD/MM/YYYY", key="f_today")
+    today = st.date_input(t("fact.today"), format="DD/MM/YYYY", key="f_today")
 
-    never_convicted = st.checkbox("Never convicted of any offence before", key="f_never")
-    other_cases = st.checkbox("Other cases pending against the person", key="f_other")
-    many_sections = st.checkbox("More than one section charged in this case", key="f_many")
-    delay_days = st.number_input("Days of delay caused by the accused (0 if none or not known)",
-                                 min_value=0, step=1, key="f_delay")
+    never_convicted = st.checkbox(t("ui.form.never"), key="f_never")
+    other_cases = st.checkbox(t("ui.form.other"), key="f_other")
+    many_sections = st.checkbox(t("ui.form.many"), key="f_many")
+    delay_days = st.number_input(t("ui.form.delay"), min_value=0, step=1, key="f_delay")
 
     if not section.strip():
-        st.info("Type the IPC or BNS section to see the dates.")
+        st.info(t("ui.form.type_section"))
         return
 
     matches = section479.find_offences(law, section)
     if not matches:
-        st.warning(
-            f"{law} {section} is not in our sentence table yet, so we can't work out the dates. "
-            "Please ask a lawyer, or call NALSA's free legal aid helpline on 15100."
-        )
+        st.warning(t("ui.form.not_in_table", law=law, section=section))
         return
 
     if len(matches) > 1:
         labels = [f"BNS {o.bns_section} / IPC {o.ipc_section}: {o.offence}" for o in matches]
-        picked = st.radio("This section covers more than one offence. Which one fits?", labels)
+        picked = st.radio(t("ui.form.which_offence"), labels, key="f_offence_pick")
+        if picked not in labels:
+            picked = labels[0]
         offence = matches[labels.index(picked)]
     else:
         offence = matches[0]
@@ -572,22 +664,22 @@ def undertrial_form():
     question_answered = False
     answer = ""
     if offence.ask_to_decide:
-        st.markdown(f"**Question that decides the maximum term:** {offence.ask_to_decide}")
+        st.markdown(f"**{t('ui.form.deciding_question')}** {offence.ask_to_decide}")
         if offence.notes:
             st.caption(offence.notes)
-        answer = st.text_input("Answer (leave empty if not known)", max_chars=200,
-                               placeholder="for example: No, no one was hurt", key="f_answer")
-        confirmed = st.checkbox("With this answer, the offence above is the right one", key="f_confirm")
+        answer = st.text_input(t("ui.form.answer_empty"), max_chars=200,
+                               placeholder=t("ui.form.answer_example"), key="f_answer")
+        confirmed = st.checkbox(t("ui.form.confirm_row"), key="f_confirm")
         question_answered = bool(answer.strip()) and confirmed
         if not question_answered:
-            st.caption("Until the question is answered and confirmed, the dates are to be checked by a lawyer.")
+            st.caption(t("ui.form.until_answered"))
 
     if not checked_by_volunteer():
-        st.info("Tick the box above once you have checked every field. Then the dates are worked out.")
+        st.info(t("ui.check.tick_first"))
         return
 
     if custody_began is None:
-        st.info("Pick the date custody began to see the dates.")
+        st.info(t("ui.form.pick_custody"))
         return
 
     try:
@@ -602,6 +694,9 @@ def undertrial_form():
             delay_days_by_accused=int(delay_days),
             offence_date=offence_date,
         )
+    except section479.InputError as err:
+        st.error(t(err.key))
+        return
     except ValueError as err:
         st.error(str(err))
         return
@@ -630,43 +725,44 @@ def undertrial_form():
 
 def draft_section(known: dict, result: section479.Result):
     st.divider()
-    st.subheader("Draft")
+    st.subheader(t("ui.draft.title"))
     if known["offence_date"] is None:
-        st.info("Pick the date of the offence (at the top) to make the draft. "
-                "It decides whether the note names the IPC or the BNS section first.")
+        st.info(t("ui.draft.need_offence_date"))
         return
-    lawyer = st.radio("Does the person have a lawyer?", drafts.LAWYER_OPTIONS, key="f_lawyer")
+    lawyer = st.radio(t("ui.draft.lawyer_question"), drafts.LAWYER_OPTIONS, key="f_lawyer",
+                      format_func=option_text("lawyer."))
     if lawyer is None:
-        st.info("Answer the question above to make the draft.")
+        st.info(t("ui.draft.answer_first"))
         return
+    draft_lang = draft_language_choice("f_draft_lang")
     facts = drafts.UndertrialFacts(lawyer=lawyer, **known)
     ai_info = ai_info_for_audit()
     ai_model = ai_info["model"] if ai_info else None
-    signature = json.dumps({**facts.to_dict(), "ai_model": ai_model}, sort_keys=True)
+    signature = json.dumps({**facts.to_dict(), "ai_model": ai_model, "lang": draft_lang}, sort_keys=True)
 
-    if st.button("Make draft", type="primary"):
-        st.session_state["draft"] = {"sig": signature,
-                                     "text": drafts.make_undertrial_draft(facts, result, ai_model=ai_model)}
+    if st.button(t("ui.draft.make"), type="primary"):
+        st.session_state["draft"] = {"sig": signature, "text": drafts.make_undertrial_draft(
+            facts, result, ai_model=ai_model, code=draft_lang)}
 
     draft = st.session_state.get("draft")
     if not draft or draft["sig"] != signature:
         return  # no draft yet, or the facts changed since it was made
 
     if lawyer == "None":
-        st.caption("The person has no lawyer, so a DLSA application for free legal aid is added after the note.")
+        st.caption(t("ui.draft.dlsa_added"))
+    if draft_lang == "hi":
+        st.caption(t("ui.hindi_label_note"))
     st.code(draft["text"], language=None, wrap_lines=True)
-    st.caption("Blanks in [square brackets] are left for a person to fill. "
-               "Names, phone numbers, Aadhaar numbers and addresses are filled by hand, never in this app. "
-               "The supervisor's approval date is filled in when the draft is approved.")
+    st.caption(t("ui.draft.blanks"))
 
     sent = st.session_state.get("sent")
     report_problem_box("draft", "Draft on New case",
                        sent["id"] if sent and sent["sig"] == signature else None)
     if sent and sent["sig"] == signature:
-        st.success(f"Sent to the supervisor as case {sent['id']}. See its status on \"My cases\".")
-    elif st.button("Send to supervisor"):
+        st.success(t("ui.sent", case_id=sent["id"]))
+    elif st.button(t("ui.send_to_supervisor")):
         try:
-            case_id = store.submit(draft["text"], facts, ai=ai_info)
+            case_id = store.submit(draft["text"], facts, ai=ai_info, draft_lang=draft_lang)
         except ValueError as err:
             st.error(str(err))
             return
@@ -677,74 +773,87 @@ def draft_section(known: dict, result: section479.Result):
 def show_result(result: section479.Result):
     o = result.offence
     st.divider()
-    st.subheader("Result")
+    st.subheader(t("ui.result.title"))
     st.markdown(
-        f"- **Offence:** {o.offence}\n"
-        f"- **BNS section:** {o.bns_section}\n"
-        f"- **IPC section:** {o.ipc_section}\n"
-        f"- **Maximum prison term used:** "
-        + (f"{result.maximum.months} months, as per {result.maximum.section}"
+        f"- **{t('ui.result.offence')}** {o.offence}\n"
+        f"- **{t('ui.result.bns')}** {o.bns_section}\n"
+        f"- **{t('ui.result.ipc')}** {o.ipc_section}\n"
+        f"- **{t('ui.result.maximum')}** "
+        + (t("ui.result.maximum_value", months=result.maximum.months, section=result.maximum.section)
            if result.maximum.months is not None else result.maximum.value)
     )
-    if result.maximum.reason:
-        st.caption(result.maximum.reason
-                   + (f"  \n{result.maximum.source_line}" if result.maximum.source_line else ""))
+    reason = section479.maximum_reason(result.maximum, code())
+    if reason:
+        st.caption(reason + (f"  \n{result.maximum.source_line}" if result.maximum.source_line else ""))
 
+    reasons = section479.texts(result, code())
     if not result.applies:
-        for reason in result.reasons:
-            st.error(reason)
+        for r in reasons:
+            st.error(r)
     else:
         if result.lawyer_check:
-            st.warning("These dates are **to be checked by a lawyer**.")
+            st.warning(t("ui.result.lawyer_check"))
         for m in (result.one_third, result.one_half):
+            name = t(m.key) if m.key else m.name
+            note = t(m.note_key) if m.note_key else m.note
             if m.when is None:
-                st.markdown(f"**{m.name}:** not available. {m.note}")
+                st.markdown(f"**{name}:** {t('ui.result.not_available')} {note}")
                 continue
-            status = "✅ reached" if m.reached else "⏳ not yet reached"
-            st.markdown(
-                f"**{m.name}** ({section479.format_months(m.months)}): "
-                f"{show_date(m.when)} — {status}"
-            )
-            if m.note:
-                st.caption(m.note)
-        for reason in result.reasons:
-            st.caption(reason)
+            status = t("ui.result.reached") if m.reached else t("ui.result.not_reached")
+            st.markdown(f"**{name}** ({t('ui.result.months', months=section479.format_months(m.months))}): "
+                        f"{show_date(m.when)} — {status}")
+            if note:
+                st.caption(note)
+        for r in reasons:
+            st.caption(r)
 
-    st.info(section479.NOT_AUTOMATIC)
+    st.info(t("s479.not_automatic"))
 
     src = section479.knowledge_source("How to work out the Section 479 dates")
     st.caption(
         f"Source: {src['source']} — {src['link']}  \n"
-        f"Sentence table source: {o.source_url}  \n"
-        f"Checked: {src.get('checked', 'not stated')}"
+        f"{t('ui.result.table_source')} {o.source_url}  \n"
+        f"{t('ui.result.checked')} {src.get('checked', 'not stated')}"
     )
 
 
 # ---------- other screens ----------
 
-STATUS_LABELS = {
-    store.WAITING: "⏳ Waiting for the supervisor",
-    store.APPROVED: "✅ Approved",
-    store.SENT_BACK: "↩️ Sent back",
-}
+STATUS_KEYS = {store.WAITING: "ui.status.waiting", store.APPROVED: "ui.status.approved",
+               store.SENT_BACK: "ui.status.sent_back"}
+STEP_ICONS = {timeline.TO_DO: "⬜", timeline.DONE: "✅", timeline.NOT_NEEDED: "➖"}
 
 
-STEP_ICONS = {timeline.TO_DO: "\u2b1c", timeline.DONE: "\u2705", timeline.NOT_NEEDED: "\u2796"}
+def step_title(s: timeline.Step) -> str:
+    """Fixed steps (Section 479, DLSA) in the chosen language; summary steps as they were written."""
+    if code() == "en":
+        return s.title
+    return lang.strings(code()).get(f"step.{s.id}") or lang.strings(code()).get(f"next:{s.title}") or s.title
+
+
+def step_label(s: timeline.Step) -> str:
+    if not s.due:
+        return ""
+    if s.eligibility_date:
+        return t("tl.eligibility")
+    if s.kind == timeline.LEGAL:
+        return t("tl.legal")
+    return t("tl.entered") if s.kind == timeline.ENTERED else t("tl.suggested")
 
 
 def step_due_text(s: timeline.Step) -> str:
-    return f" \u2014 due {show_date(s.due_date())} ({s.label()})" if s.due else ""
+    return " — " + t("tl.due", date=show_date(s.due_date()), label=step_label(s)) if s.due else ""
 
 
 def due_this_week_box():
-    st.subheader("Due this week")
+    st.subheader(t("ui.cases.due_this_week"))
     items = timeline.due_this_week(date.today())
     if not items:
-        st.caption("Nothing overdue or due in the next 7 days.")
+        st.caption(t("ui.cases.nothing_due"))
     for case_id, s, state in items:
-        line = f"**{show_date(s.due_date())}** \u00b7 case {case_id} \u00b7 {s.title} ({s.label()})"
+        line = f"**{show_date(s.due_date())}** · {t('ui.case')} {case_id} · {step_title(s)} ({step_label(s)})"
         if state == timeline.OVERDUE:
-            st.error("\u26a0\ufe0f OVERDUE \u00b7 " + line)
+            st.error(t("tl.overdue") + " · " + line)
         elif state == timeline.ELIGIBILITY:
             st.warning(line)
         else:
@@ -770,91 +879,93 @@ def save_step(case_id: str):
         elif action == "Undo (back to to do)":
             timeline.reopen(case_id, step_id, by)
         else:
-            raise ValueError("Choose what happened.")
+            raise ValueError(t("tl.choose"))
     except ValueError as err:
         st.session_state[f"tl-msg-{case_id}"] = ("error", str(err))
         return
-    st.session_state[f"tl-msg-{case_id}"] = ("ok", "Saved, and added to the case's audit record.")
+    st.session_state[f"tl-msg-{case_id}"] = ("ok", t("tl.saved"))
     st.session_state[f"tl-step-{case_id}"] = None
 
 
 def timeline_box(case_id: str):
     record = timeline.load(case_id)
     if not record:
-        st.caption("No next-step timeline (this case was approved before timelines were added).")
+        st.caption(t("tl.none"))
         return
     steps = timeline.steps_of(record)
     today = date.today()
-    with st.expander("Next steps", expanded=True):
+    with st.expander(t("tl.title"), expanded=True):
         nxt = timeline.next_due(steps, today)
         if nxt:
-            text = f"**Next:** {nxt.title}{step_due_text(nxt)}"
+            text = f"**{t('tl.next')}** {step_title(nxt)}{step_due_text(nxt)}"
             (st.error if timeline.is_overdue(nxt, today) else st.success)(text)
         for s in timeline.ordered(steps):
-            line = f"{STEP_ICONS[s.status]} **{s.title}**{step_due_text(s)}"
+            line = f"{STEP_ICONS[s.status]} **{step_title(s)}**{step_due_text(s)}"
             if s.status == timeline.DONE:
-                line += f" \u2014 done{' on ' + show_date(date.fromisoformat(s.done_on)) if s.done_on else ''}"
-                line += f" by {s.done_by}" if s.done_by else ""
+                line += " — " + t("tl.done")
+                line += f" {t('tl.on')} {show_date(date.fromisoformat(s.done_on))}" if s.done_on else ""
+                line += f" {t('tl.by')} {s.done_by}" if s.done_by else ""
                 if s.details:
                     line += " (" + "; ".join(f"{k}: {v}" for k, v in s.details.items()) + ")"
             elif s.status == timeline.NOT_NEEDED:
-                line += " \u2014 not needed"
+                line += " — " + t("tl.not_needed")
             if timeline.is_overdue(s, today):
-                st.error("\u26a0\ufe0f OVERDUE \u00b7 " + line)
+                st.error(t("tl.overdue") + " · " + line)
             elif timeline.is_reached(s, today):
-                st.warning(f"Reached on {show_date(s.due_date())}: check whether an application has been made"
-                           f" \u00b7 {line}")
+                st.warning(t("tl.reached", date=show_date(s.due_date())) + f" · {line}")
             else:
                 st.markdown(line)
-            notes = [n for n in (s.note, s.source_line) if n]
+            note = lang.strings(code()).get(f"step_note.{s.id}") if code() != "en" else None
+            notes = [n for n in (note or s.note, s.source_line) if n]
             if notes:
                 st.caption("  \n".join(notes))
 
-        st.markdown("**Update a step**")
+        st.markdown(f"**{t('tl.update')}**")
         by_id = {s.id: s for s in steps}
-        step_id = st.selectbox("Step", list(by_id), index=None, key=f"tl-step-{case_id}",
-                               format_func=lambda i: f"{by_id[i].title} ({by_id[i].status})")
+        step_id = st.selectbox(t("tl.step"), list(by_id), index=None, key=f"tl-step-{case_id}",
+                               format_func=lambda i: f"{step_title(by_id[i])} ({t('tl.status.' + by_id[i].status)})")
         if step_id:
             step = by_id[step_id]
             if step.status == timeline.TO_DO:
                 actions = ["Mark done", "Not needed"] + (["Set date"] if step.due_editable else [])
             else:
                 actions = ["Undo (back to to do)"]
-            action = st.radio("What happened?", actions, index=None, horizontal=True, key=f"tl-action-{case_id}")
+            action = st.radio(t("tl.what_happened"), actions, index=None, horizontal=True,
+                              key=f"tl-action-{case_id}", format_func=option_text("tl.action."))
             if action in ("Mark done", "Set date"):
-                st.date_input("Date done" if action == "Mark done" else "Date to follow up", value=date.today(),
-                              format="DD/MM/YYYY", key=f"tl-date-{case_id}")
+                st.date_input(t("tl.date_done") if action == "Mark done" else t("tl.date_follow_up"),
+                              value=date.today(), format="DD/MM/YYYY", key=f"tl-date-{case_id}")
             if action == "Mark done" and step_id == "dlsa-lawyer":
-                st.date_input("First meeting with the lawyer", value=None, format="DD/MM/YYYY",
-                              key=f"tl-meeting-{case_id}")
-                st.checkbox("Documents handed over to the lawyer", key=f"tl-docs-{case_id}")
-            st.text_input("Done by (your name or initials)", max_chars=60, key=f"tl-by-{case_id}")
-            st.button("Save", key=f"tl-save-{case_id}", on_click=save_step, args=(case_id,))
+                st.date_input(t("tl.first_meeting"), value=None, format="DD/MM/YYYY", key=f"tl-meeting-{case_id}")
+                st.checkbox(t("tl.documents_handed"), key=f"tl-docs-{case_id}")
+            st.text_input(t("tl.done_by"), max_chars=60, key=f"tl-by-{case_id}")
+            st.button(t("tl.save"), key=f"tl-save-{case_id}", on_click=save_step, args=(case_id,))
         msg = st.session_state.pop(f"tl-msg-{case_id}", None)
         if msg:
             (st.success if msg[0] == "ok" else st.error)(msg[1])
 
 
 def my_cases_screen():
-    st.title("My cases")
+    st.title(t("ui.cases.title"))
     due_this_week_box()
     cases = store.list_cases()
     if not cases:
-        st.info("No cases yet. Make a draft on \"New case\" and send it to the supervisor.")
+        st.info(t("ui.cases.none"))
         return
     for c in cases:
         with st.container(border=True):
-            st.markdown(f"**Case {c['id']}** · {case_type_label(c['case_type'])}  \n{STATUS_LABELS[c['status']]}")
+            st.markdown(f"**{t('ui.case_title', case_id=c['id'])}** · {case_type_label(c['case_type'])}  \n"
+                        f"{t(STATUS_KEYS[c['status']])}")
             if c["status"] == store.SENT_BACK:
-                st.warning(f"Supervisor's reason: {c['reason']}")
+                st.warning(t("ui.cases.reason", reason=c["reason"]))
                 fix_and_resend(c["id"])
             if c["status"] == store.APPROVED:
                 timeline_box(c["id"])
-                with st.expander("Case file"):
+                with st.expander(t("ui.cases.case_file")):
                     st.markdown(c["file"].read_text(encoding="utf-8"))
                 draft_file = c["file"].parent.parent / "drafts" / c["file"].name
                 if draft_file.exists():
-                    with st.expander("Approved draft"):
+                    with st.expander(t("ui.cases.approved_draft")):
                         st.code(draft_file.read_text(encoding="utf-8"), language=None, wrap_lines=True)
             report_problem_box(f"case-{c['id']}", "My cases", c["id"])
 
@@ -862,16 +973,15 @@ def my_cases_screen():
 def fix_and_resend(case_id: str):
     flag = f"fixing-{case_id}"
     if not st.session_state.get(flag):
-        if st.button("Fix and resend", key=f"fix-{case_id}"):
+        if st.button(t("ui.cases.fix"), key=f"fix-{case_id}"):
             st.session_state[flag] = True
             st.rerun()
         return
     record = store.get_pending(case_id)
-    fixed = st.text_area("Fix the draft", value=record["draft"], height=500, key=f"fixtext-{case_id}")
-    st.caption("Do not add names, phone numbers, Aadhaar numbers, addresses or prisoner IDs. "
-               "To change the facts (dates, sections, answers), make a new draft on \"New case\" instead.")
+    fixed = st.text_area(t("ui.cases.fix_label"), value=record["draft"], height=500, key=f"fixtext-{case_id}")
+    st.caption(t("ui.cases.fix_caption"))
     col1, col2 = st.columns(2)
-    if col1.button("Resend to supervisor", type="primary", key=f"resend-{case_id}"):
+    if col1.button(t("ui.cases.resend"), type="primary", key=f"resend-{case_id}"):
         try:
             store.resend(case_id, fixed)
         except ValueError as err:
@@ -879,14 +989,14 @@ def fix_and_resend(case_id: str):
             return
         st.session_state[flag] = False
         st.rerun()
-    if col2.button("Cancel", key=f"cancel-{case_id}"):
+    if col2.button(t("ui.cancel"), key=f"cancel-{case_id}"):
         st.session_state[flag] = False
         st.rerun()
 
 
 def learn_screen():
-    st.title("Learn")
-    st.info("Coming soon: explainers, quizzes and practice cases.")
+    st.title(t("ui.learn.title"))
+    st.info(t("ui.learn.soon"))
 
 
 def supervisor_password() -> str:
@@ -901,24 +1011,23 @@ def supervisor_password() -> str:
 
 
 def supervisor_screen():
-    st.title("Supervisor")
+    st.title(t("ui.sup.title"))
     expected = supervisor_password()
     if not expected:
-        st.warning("The supervisor password has not been set up yet. "
-                   "Put SUPERVISOR_PASSWORD in .streamlit/secrets.toml (see the example file).")
+        st.warning(t("ui.sup.no_password"))
         return
     if not st.session_state.get("supervisor_ok"):
-        typed = st.text_input("Supervisor password", type="password")
-        if st.button("Sign in"):
+        typed = st.text_input(t("ui.sup.password"), type="password")
+        if st.button(t("ui.sup.sign_in")):
             if hmac.compare_digest(typed, expected):
                 st.session_state["supervisor_ok"] = True
                 st.rerun()
             else:
-                st.error("Wrong password.")
+                st.error(t("ui.sup.wrong"))
         return
     top1, top2 = st.columns([3, 1])
-    top1.success("Signed in as supervisor.")
-    if top2.button("Sign out"):
+    top1.success(t("ui.sup.signed_in"))
+    if top2.button(t("ui.sup.sign_out")):
         st.session_state["supervisor_ok"] = False
         st.rerun()
 
@@ -928,62 +1037,59 @@ def supervisor_screen():
 
     waiting = store.list_pending()
     if not waiting:
-        st.info("No drafts are waiting for approval.")
+        st.info(t("ui.sup.none_waiting"))
     else:
-        st.subheader(f"Drafts waiting for approval: {len(waiting)}")
+        st.subheader(t("ui.sup.waiting", n=len(waiting)))
         for record in waiting:
             review_one(record)
 
-    st.subheader("Problems reported")
+    st.subheader(t("ui.sup.problems"))
     problems = audit.list_problems()
     if not problems:
-        st.caption("No problems reported.")
+        st.caption(t("ui.sup.no_problems"))
     for p in problems:
-        st.markdown(f"- **{p['time'].replace('T', ' ')}** · case {p['case_id']} · {p['where']}: {p['text']}"
-                    + (f" _(removed: {p['removed']})_" if p.get("removed") else ""))
+        st.markdown(f"- **{p['time'].replace('T', ' ')}** · {t('ui.case')} {p['case_id']} · {p['where']}: {p['text']}"
+                    + (f" _({t('ui.sup.removed')} {p['removed']})_" if p.get("removed") else ""))
 
-    st.subheader("Audit records of all cases")
+    st.subheader(t("ui.sup.audit_all"))
     records = audit.list_records()
     if not records:
-        st.caption("No audit records yet.")
+        st.caption(t("ui.sup.no_audit"))
     for r in records:
-        with st.expander(f"Case {r['case_id']} · AI: {r['model']} · last: {r['events'][-1]['event']}"):
+        with st.expander(t("ui.sup.audit_row", case_id=r["case_id"], model=r["model"], last=r["events"][-1]["event"])):
             st.markdown(audit.describe(r))
 
 
 def review_one(record: dict):
     case_id = record["id"]
-    with st.expander(f"Case {case_id} · {case_type_label(record['case_type'])} · "
-                     f"sent {record['submitted'].replace('T', ' ')}",
-                     expanded=True):
+    with st.expander(t("ui.sup.case_row", case_id=case_id, kind=case_type_label(record["case_type"]),
+                       sent=record["submitted"].replace("T", " ")), expanded=True):
         for h in record.get("history", []):
-            st.caption(f"Sent back earlier, then fixed and resent ({h['resent'].replace('T', ' ')}). "
-                       f"Your reason then: {h['sent_back_reason']}")
+            st.caption(t("ui.sup.resent", when=h["resent"].replace("T", " "), reason=h["sent_back_reason"]))
         st.code(record["draft"], language=None, wrap_lines=True)
         audit_record = audit.read_record(case_id)
-        with st.expander("Audit record: what the AI and the volunteer did"):
-            st.markdown(audit.describe(audit_record) if audit_record else "No audit record for this case.")
-        action = st.radio("Your decision", ["Approve", "Edit then Approve", "Reject with a reason"],
-                          index=None, horizontal=True, key=f"action-{case_id}")
+        with st.expander(t("ui.sup.audit_one")):
+            st.markdown(audit.describe(audit_record) if audit_record else t("ui.sup.no_audit_one"))
+        action = st.radio(t("ui.sup.decision"), ["Approve", "Edit then Approve", "Reject with a reason"],
+                          index=None, horizontal=True, key=f"action-{case_id}", format_func=option_text("sup."))
         try:
             if action == "Approve":
-                if st.button("Approve and save", type="primary", key=f"approve-{case_id}"):
+                if st.button(t("ui.sup.approve_save"), type="primary", key=f"approve-{case_id}"):
                     store.approve(case_id)
-                    st.session_state["supervisor_flash"] = f"Case {case_id} approved and saved."
+                    st.session_state["supervisor_flash"] = t("ui.sup.approved", case_id=case_id)
                     st.rerun()
             elif action == "Edit then Approve":
-                edited = st.text_area("Edit the draft", value=record["draft"], height=500,
-                                      key=f"edit-{case_id}")
-                st.caption("Do not add names, phone numbers, Aadhaar numbers, addresses or prisoner IDs.")
-                if st.button("Save edits and approve", type="primary", key=f"edit-approve-{case_id}"):
+                edited = st.text_area(t("ui.sup.edit"), value=record["draft"], height=500, key=f"edit-{case_id}")
+                st.caption(t("ui.sup.no_personal"))
+                if st.button(t("ui.sup.save_approve"), type="primary", key=f"edit-approve-{case_id}"):
                     store.approve(case_id, edited_text=edited)
-                    st.session_state["supervisor_flash"] = f"Case {case_id} edited, approved and saved."
+                    st.session_state["supervisor_flash"] = t("ui.sup.edited_approved", case_id=case_id)
                     st.rerun()
             elif action == "Reject with a reason":
-                reason = st.text_area("Reason (shown on \"My cases\")", key=f"reason-{case_id}")
-                if st.button("Send back", key=f"reject-{case_id}"):
+                reason = st.text_area(t("ui.sup.reason"), key=f"reason-{case_id}")
+                if st.button(t("ui.sup.send_back"), key=f"reject-{case_id}"):
                     store.reject(case_id, reason)
-                    st.session_state["supervisor_flash"] = f"Case {case_id} sent back."
+                    st.session_state["supervisor_flash"] = t("ui.sup.sent_back", case_id=case_id)
                     st.rerun()
         except ValueError as err:
             st.error(str(err))
@@ -998,8 +1104,9 @@ SCREENS = {
     "Supervisor": supervisor_screen,
 }
 
-st.sidebar.title("Legal aid agent")
-choice = st.sidebar.radio("Go to", list(SCREENS))
+st.sidebar.title(t("ui.app_title"))
+choice = st.sidebar.radio(t("ui.go_to"), list(SCREENS), format_func=option_text("screen."), key="screen")
 st.sidebar.markdown("---")
-st.sidebar.markdown("**In danger? Call 112 now.**  \nFree legal aid helpline: **15100**")
+st.sidebar.markdown(f"**{t('ui.sidebar.danger')}**  \n{t('ui.sidebar.helpline')}")
+language_switch()
 SCREENS[choice]()
