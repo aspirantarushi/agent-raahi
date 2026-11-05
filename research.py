@@ -210,7 +210,7 @@ STATE_SITES = {
     "Andaman and Nicobar Islands": ["and", "andaman"], "Andhra Pradesh": ["ap", "andhra", "aponline"],
     "Arunachal Pradesh": ["arunachal", "arn"], "Assam": ["assam"], "Bihar": ["bihar", "bih", "br"],
     "Chandigarh": ["chandigarh", "chd"], "Chhattisgarh": ["cg", "chhattisgarh"], "Delhi": ["delhi"],
-    "Goa": ["goa"], "Gujarat": ["gujarat", "gj"], "Haryana": ["haryana", "hr", "hry"],
+    "Goa": ["goa"], "Gujarat": ["gujarat", "gj"], "Haryana": ["haryana", "hr", "hry", "hrylabour"],
     "Himachal Pradesh": ["hp", "himachal"], "Jammu and Kashmir": ["jk", "jammu", "jkgad"],
     "Jharkhand": ["jharkhand", "jh"], "Karnataka": ["karnataka", "kar"], "Kerala": ["kerala"],
     "Ladakh": ["ladakh"], "Madhya Pradesh": ["mp", "mponline"], "Maharashtra": ["maharashtra", "mahakamgar", "mh"],
@@ -237,6 +237,13 @@ def point_warnings(p: dict, state: str = "") -> List[dict]:
     import replaced_laws
     out = [{"kind": "replaced", "text": r.warning(), "old": r.old, "new": r.new, "since": r.since.isoformat()}
            for r in replaced_laws.found_in(p["text"])]
+    named = {w["old"] for w in out}
+    titles = " | ".join(s.get("title", "") for s in p.get("sources", []))
+    for r in replaced_laws.found_in(titles):  # the point may say only "the Act": its source shows which
+        if r.old not in named:
+            out.append({"kind": "replaced", "in_source": True, "old": r.old, "new": r.new, "since": r.since.isoformat(),
+                        "text": f"Its source is the {r.old} (or rules under it), replaced by the {r.new} on "
+                                f"{r.since.day} {r.since:%B %Y}: check before approving."})
     for name in dict.fromkeys(m.group(1).strip() for m in LAW_NAME.finditer(p["text"])):
         keys = [w for w in re.findall(r"[A-Za-z]{3,}", name.casefold()) if w not in LAW_STOP]
         titled = [s for s in p.get("sources", []) if re.search(r"\b(Act|Rules|Code|Regulations)\b", s.get("title", ""))]
@@ -382,6 +389,54 @@ def decide(research_id: str, point_id: str, decision: str, text: Optional[str] =
         details += f": {point['original']} -> {point['text']}"
     audit.add_event(record["case_id"], f"research point {point['status']}", audit.SUPERVISOR, details, base=base)
     return point
+
+
+# ---------- the volunteer's look at the research, before it goes to the supervisor ----------
+
+VOLUNTEER_LABEL = "AI research, not yet checked by a lawyer"
+KEPT, LEFT_OUT = "kept by the volunteer", "left out by the volunteer"
+
+
+def waiting_for_case(case_id: Optional[str], base: Path = HERE) -> Optional[dict]:
+    """The case's latest research still waiting for the supervisor (the one the volunteer sees)."""
+    briefs = [r for r in (for_case(case_id, base) if case_id else []) if r.get("status") == WAITING]
+    return briefs[-1] if briefs else None
+
+
+def default_keep(point: dict) -> bool:
+    """Pre-ticked for the letter unless it names a replaced law (the volunteer can still change it)."""
+    return point.get("kind") != "letter" and not blocked(point)
+
+
+def points_for_letter(record: Optional[dict], ticks: Dict[str, bool]) -> List[dict]:
+    """The points the volunteer kept ({point id: ticked}), labelled as not yet checked by a lawyer.
+    Draft-letter points from the AI are never used: the letter is made by code from the case facts."""
+    if not record:
+        return []
+    return [dict(p, unchecked=True) for p in record["points"]
+            if p.get("kind") != "letter" and ticks.get(p["id"], default_keep(p))]
+
+
+def volunteer_review(research_id: str, ticks: Dict[str, bool], reasons: Dict[str, str], by: str,
+                     base: Path = HERE) -> dict:
+    """Saved when the volunteer sends the case: which points they kept for the letter and which they
+    left out, with their reason. The volunteer never edits a point; the supervisor still decides each."""
+    record = load(research_id, base)
+    left = []
+    for p in record["points"]:
+        if p.get("kind") == "letter":  # the AI's own letter text is never used (the letter is made by code)
+            continue
+        keep = ticks.get(p["id"], default_keep(p))
+        p["volunteer"] = KEPT if keep else LEFT_OUT
+        p["volunteer_reason"] = "" if keep else privacy.redact(_norm(reasons.get(p["id"], "")))[0][:200]
+        if not keep:
+            left.append(f"{p['id']} ({p['volunteer_reason'] or 'no reason given'})")
+    record["volunteer_reviewed"] = {"by": by, "on": date.today().isoformat()}
+    storage.write_json("research", research_id, record, base)
+    audit.add_event(record["case_id"], "research looked at by the volunteer", audit.VOLUNTEER,
+                    f"{research_id}: kept {sum(p.get('volunteer') == KEPT for p in record['points'])}; "
+                    f"left out: {', '.join(left) or 'none'}", base=base)
+    return record
 
 
 def approved_points(case_id: str, base: Path = HERE) -> List[dict]:

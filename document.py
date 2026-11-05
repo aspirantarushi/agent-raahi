@@ -171,6 +171,11 @@ def _bold_runs(text: str) -> List[Tuple[str, str]]:
 
 # ---------- the page preview (HTML) ----------
 
+def inline_html(text: str) -> str:
+    """Escaped text with dates, amounts and urgent words in bold and [blanks] highlighted."""
+    return _inline_html(text)
+
+
 def _inline_html(text: str) -> str:
     return "".join(f'<mark class="blank">{html.escape(t)}</mark>' if s == "blank" else
                    f"<b>{html.escape(t)}</b>" if s == "bold" else html.escape(t) for t, s in runs(text))

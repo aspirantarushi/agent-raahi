@@ -230,31 +230,47 @@ def test_research_on_screen(monkeypatch, fake_ai):
     assert fake_ai == [("Bihar", "electricity connection cut")]
     at.run()
     assert len(fake_ai) == 1                                       # not again on a page reload
-    assert "Not covered by our verified files yet" in at.session_state["shown_drafts"][0]
-    assert "Write first to the Assistant Engineer" not in at.session_state["shown_drafts"][0]  # not approved yet
-    assert len(at.session_state["shown_drafts"]) == 2                                       # summary + free legal aid application (no letter yet)
+    shown = at.session_state["shown_drafts"]
+    assert "Not covered by our verified files yet" in shown[0]
+    # New order: the research is shown to the volunteer and the letter is drafted straight away from it
+    assert len(shown) == 3                                         # summary + draft letter + free legal aid application
+    letter = shown[1]
+    assert "Write first to the Assistant Engineer" in letter and "AI research, not yet checked by a lawyer" in letter
+    assert any("AI research, not yet checked by a lawyer" in w.value for w in at.warning)
     at.button(key="rs-again-go").click().run()                     # "Research again" on request
     assert len(fake_ai) == 2
 
     case_id = at.session_state["case_id"]
     for r in research.for_case(case_id)[1:]:                       # keep one brief for the review
         storage.backend().delete("research", r["id"])
+    at.run()
+    rid = research.for_case(case_id)[0]["id"]
+    at.checkbox(key=f"rsv-{rid}-p2").uncheck().run()               # the volunteer thinks p2 is wrong
+    letter = at.session_state["shown_drafts"][1]
+    assert "Consumer Grievance Redressal Forum" not in letter       # unticked: out of the letter
     at.checkbox(key="g_checked").check().run()
+    assert next(b for b in at.button if b.key == "send-g").disabled  # a reason is needed for the left-out point
+    at.text_input(key=f"rsvr-{rid}-p2").set_value("the forum is for a later step").run()
     next(b for b in at.button if b.key == "send-g").click().run()
-    assert store.get_pending(case_id)["draft"].count("DRAFT — to be checked by a lawyer") == 2
+    assert not at.exception, at.exception[0].stack_trace
+    assert store.get_pending(case_id)["draft"].count("DRAFT — to be checked by a lawyer") == 3
+    record = research.load(rid)
+    assert [p["volunteer"] for p in record["points"] if p["kind"] != "letter"] == \
+        [research.KEPT, research.LEFT_OUT]
+    assert record["points"][1]["volunteer_reason"] == "the forum is for a later step"
 
     # One combined review: research points and the drafts together; approval waits for the points
-    rid = research.for_case(case_id)[0]["id"]
     at.button(key="nav-supervisor").click().run()
     next(t for t in at.text_input if t.label == "Supervisor password").set_value("practice-sup")
     next(b for b in at.button if b.label == "Sign in").click().run()
     assert not any(r.key == f"action-{case_id}" for r in at.radio)  # no approve until the points are decided
+    assert any("left this point out of the letter. Reason: the forum is for a later step" in w.value for w in at.warning)
     for point, choice in (("p1", "Approve"), ("p2", "Reject"), ("p3", "Approve")):
         at.radio(key=f"rsd-{rid}-{point}").set_value(choice).run()
         at.button(key=f"rss-{rid}-{point}").click().run()
     assert not at.exception, at.exception[0].stack_trace
     packet = store.get_pending(case_id)["draft"]
-    assert packet.count("DRAFT — to be checked by a lawyer") == 3   # the letter was added for this review
+    assert packet.count("DRAFT — to be checked by a lawyer") == 3   # the letter, rebuilt from the approved points
     letter = next(p for p in casework.split_bundle(packet) if "Complaint about" in p)
     assert "Write first to the Assistant Engineer" in letter and "energy.bihar.gov.in" in letter
     assert "Consumer Grievance Redressal Forum" not in letter      # rejected: not in the letter

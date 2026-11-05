@@ -329,15 +329,17 @@ LETTER_BLANKS = {
 
 def complaint_letter(g, approved: List[dict], issue: str, ai_model: Optional[str], code: str = "en") -> str:
     """The complaint letter. Its body holds only facts of the case (what happened, dates, documents
-    the person has, what they want); where to send it and the legal basis are only the supervisor's
-    approved points, listed for the volunteer at the end. Blanks for name, address and numbers."""
+    the person has, what they want); where to send it and the legal basis are only the research points
+    given: the volunteer's ticked points (marked "AI research, not yet checked by a lawyer") until the
+    supervisor decides, then only the supervisor's approved points. Blanks for name, address and numbers."""
     def t(key, **p):
         return lang.t(key, code, **p)
     b = LETTER_BLANKS[code]
     kind = problem_type(g)
     facts = [f"- {s}" for s in g.what_happened] + [f"- {w}: {x}" for w, x in g.timeline]
     routes = [p for p in approved if p.get("kind") in ("route", "how_to_file")]
-    basis = [f"- {p['text']} ({_source_line(p)}; {t('cw.approved_on', date=p.get('approved_on', ''))})"
+    basis = [f"- {p['text']} ({_source_line(p)}; " + (t("cw.not_checked_yet") if p.get("unchecked") else
+                                                     t("cw.approved_on", date=p.get("approved_on", ""))) + ")"
              for p in approved if p.get("kind") != "letter"]
     reference = t(f"cw.ref.{kind}") if kind in HAS_REFERENCE_NUMBER else ""
     held = t("cw.letter_documents", docs="; ".join(g.documents_held)) if g.documents_held else ""

@@ -36,14 +36,25 @@ size of the problem, severity, quality of the solution, proven impact (real use 
 - Every draft starts with "DRAFT — to be checked by a lawyer". Name, phone, Aadhaar and address
   blanks stay empty for the person to fill by hand.
 - Legal points come only from the files in knowledge/, each with its Source line, or from AI
-  research the supervisor has approved ("Research this issue", research.py). If neither covers
-  something, say so and point to NALSA's free helpline 15100.
+  research from official sources (research.py): shown to the volunteer and used in a draft only
+  with the label "AI research, not yet checked by a lawyer", and final only once the supervisor
+  approves it. If neither covers something, say so and point to NALSA's free helpline 15100.
 - Research: only the state and the issue in plain words are sent (never names or personal numbers).
   Every point needs an official source (gov.in, nic.in, India Code, state regulators, courts, NALSA,
   legal services authorities) that came from the actual search results; plain code checks this and
-  drops points without one, and points that predict outcomes. The brief is labelled "AI research,
-  not yet checked: for supervisor approval"; only points the supervisor approves (or edits) go into
-  the case and drafts, with their sources. Every step is in the audit record.
+  drops points without one, and points that predict outcomes. Replaced laws, a source that names a
+  different law, and a source from another state's website are flagged.
+- The flow for problems not in knowledge/: story read → questions → "Research from official
+  sources" runs once by itself → the points are shown to the volunteer, each with its source link,
+  the warnings and the label "AI research, not yet checked by a lawyer" → the volunteer may untick
+  points they think are wrong (with a short reason); they can never add or edit a legal point →
+  the complaint letter is drafted at once from the ticked points and the facts of the case (no
+  legal claim beyond the ticked points) → "Send to supervisor" sends the summary, the letter, the
+  DLSA application, every research point, and which points the volunteer left out and why → the
+  supervisor approves, edits or rejects each point; the letter is then rebuilt from the approved
+  points only (or taken out if all are rejected), and the supervisor approves, edits or rejects
+  the drafts. Only approved points reach the case record and the knowledge base. Every step is in
+  the audit record.
 - Safety first: if anyone is in danger, show "Call 112 now." For cyber fraud with money lost in
   the last few days and 1930 not yet called, show "Call 1930 now."
 - Drafts and case files are saved only after the supervisor clicks Approve.
@@ -83,7 +94,8 @@ size of the problem, severity, quality of the solution, proven impact (real use 
   file (llm.py) so the model can be swapped; the AI provider for the cloud version is not decided
   yet. Never put API keys in code: read them from environment variables, and keep .env out of git.
 - A source check: every legal statement shown to users must match an entry in knowledge/ or a
-  supervisor-approved research point, and its Source line is shown.
+  research point from official sources, and its Source line is shown; a research point the
+  supervisor has not approved yet is always labelled "AI research, not yet checked by a lawyer".
 - Keep it simple: Python, with a Streamlit web app, unless Arushi agrees to something else.
   Mobile-friendly, large text.
 
@@ -93,7 +105,8 @@ size of the problem, severity, quality of the solution, proven impact (real use 
   knowledge lives in the shared database (record kind "knowledge_added"), not in these files; the
   supervisor can export it as Markdown to add to knowledge/ by hand after a check.
 - templates/  draft templates with [square-bracket] blanks (complaint_letter.md: step 3 letters, filled
-  only with facts of the case and supervisor-approved research points; Hindi in templates_hi/).
+  only with facts of the case and research points: the volunteer's ticked points, labelled as not yet
+  checked, until the supervisor decides, then only the approved ones; Hindi in templates_hi/).
 - learner/    learner-mode explainers, quizzes and practice cases.
 - lite/       small files for the AgentFoundry Build-tab demo. Leave as they are.
 - case_notes.txt  a fake practice case. cases/ and drafts/ hold saved output (never real data).

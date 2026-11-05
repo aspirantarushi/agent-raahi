@@ -30,8 +30,9 @@ REPLACED = [
      BNSS, CRIMINAL, SRC_CRIMINAL),
     ("Indian Evidence Act, 1872", ["Indian Evidence Act", "Evidence Act"], BSA, CRIMINAL, SRC_CRIMINAL),
     # Code on Wages, 2019
-    ("Payment of Wages Act, 1936", ["Payment of Wages Act"], WAGES, LABOUR, SRC_WAGES),
-    ("Minimum Wages Act, 1948", ["Minimum Wages Act"], WAGES, LABOUR, SRC_WAGES),
+    ("Payment of Wages Act, 1936", ["Payment of Wages Act", "Payment of Wages (Procedures) Rules",
+                                    "Payment of Wages (Procedure) Rules"], WAGES, LABOUR, SRC_WAGES),
+    ("Minimum Wages Act, 1948", ["Minimum Wages Act", "Minimum Wages (Central) Rules"], WAGES, LABOUR, SRC_WAGES),
     ("Payment of Bonus Act, 1965", ["Payment of Bonus Act"], WAGES, LABOUR, SRC_WAGES),
     ("Equal Remuneration Act, 1976", ["Equal Remuneration Act"], WAGES, LABOUR, SRC_WAGES),
     # Industrial Relations Code, 2020

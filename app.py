@@ -791,9 +791,12 @@ def general_summary(gen):
 
     documents = [(t("cw.doc_summary"), readiness.add_gaps_to_draft(
         general.make_summary_draft(facts, gen["model"], draft_lang), items, draft_lang, send_reason))]
-    if approved:
-        documents.append((t("cw.doc_letter"), casework.complaint_letter(facts, approved, issue, gen["model"],
-                                                                         draft_lang)))
+    waiting_rs = research.waiting_for_case(case_id) if not approved else None
+    rs_ticks, rs_reasons = research_ticks(waiting_rs)
+    letter_points = approved or research.points_for_letter(waiting_rs, rs_ticks)
+    if letter_points:  # drafted straight away from the volunteer's ticked points (or the approved ones)
+        documents.append((t("cw.doc_letter") if approved else t("cw.doc_letter_draft"),
+                          casework.complaint_letter(facts, letter_points, issue, gen["model"], draft_lang)))
     if eligibility.status == "eligible":
         documents.append((t("cw.doc_dlsa"), casework.dlsa_application(facts, eligibility, issue, gen["model"],
                                                                        draft_lang)))
@@ -806,7 +809,7 @@ def general_summary(gen):
         fix_checklist(app_items, facts, eligibility, kind, missing_years, approved, gen)
     research_slot = st.container(key="research-slot")
     with research_slot:
-        research_panel(facts, uncovered, "loading" if research_now else status, case_id, state)
+        research_panel(facts, uncovered, "loading" if research_now else status, case_id, state, waiting_rs)
     drafts_panel(documents, "loading" if research_now else status, uncovered)
     entries = ledger.general(facts, reading.facts, eligibility, ai_checked=bool(gen["model"]))
     ledger_box(entries)
@@ -825,13 +828,17 @@ def general_summary(gen):
     if unticked:  # sending with unticked items needs a short reason; the supervisor sees both
         st.warning(t("ready.sup_unticked", items="; ".join(i.label(code()) for i in unticked)), icon=":material/rule:")
         st.text_input(t("ready.send_reason"), key="g_send_reason", max_chars=200)
+    left_out = [pid for pid, keep in rs_ticks.items() if not keep]
+    no_reason = [pid for pid in left_out if not rs_reasons.get(pid)]
+    if no_reason:
+        st.caption(t("rs.left_out_needs_reason", points=", ".join(no_reason)))
     checked = st.checkbox(t("ui.general.checked_no_names"), key="g_checked")
     label = f"{t('ui.send_to_supervisor')} \u2014 " + (t("ready.button_unticked", n=len(unticked)) if unticked
                                                       else t("ready.button_ready"))
     if unticked and checked and not send_reason:
         st.caption(t("ready.send_reason_needed"))
-    if st.button(label, disabled=not checked or bool(research_now) or (bool(unticked) and not send_reason),
-                 key="send-g", type="primary", icon=":material/send:"):
+    if st.button(label, disabled=not checked or bool(research_now) or (bool(unticked) and not send_reason)
+                 or bool(no_reason), key="send-g", type="primary", icon=":material/send:"):
         ai = None
         if gen["model"]:
             ai = {"model": gen["model"], "read_at": gen["read_at"], "extracted": dict(reading.facts),
@@ -843,7 +850,9 @@ def general_summary(gen):
                                                                         "note": send_reason}] if unticked else []),
                                    ledger=[e.as_dict() for e in entries], case_id=case_id, by=who())
             tracker.confirm_facts(case_id, gen["facts"], who())
-        except (ValueError, storage.StorageError) as err:
+            if waiting_rs:  # every point goes to the supervisor, with which ones the volunteer left out and why
+                research.volunteer_review(waiting_rs["id"], rs_ticks, rs_reasons, who())
+        except (ValueError, storage.StorageError, research.ResearchFailed) as err:
             st.error(str(err))
             return
         st.session_state["gen_sent"] = case_id
@@ -857,47 +866,62 @@ def general_summary(gen):
 
 
 def case_cards(g, eligibility, approved, kind, code_):
-    """At a glance, Facts, Timeline, Documents, Free legal aid, For the lawyer, Next steps (with dates)."""
+    """At a glance, Facts, Timeline, Documents, Free legal aid, For the lawyer, Next steps (with dates).
+    Labels in a narrow grey column; lists as bullets; dates, amounts and urgency in bold."""
     e = html.escape
+    rich = document.inline_html  # escaped, with dates, amounts and urgent words in bold
+
+    def kv(label, value_html):
+        return f'<span class="k">{e(label)}</span>{value_html}'
+
+    def bullets(items, ordered=False):
+        tag = "ol" if ordered else "ul"
+        return f'<{tag} class="bl">' + "".join(f"<li>{i}</li>" for i in items) + f"</{tag}>"
+
     today = date.fromisoformat(g.today)
     u = casework.urgency(g, today, code_)
-    glance = [f'<span class="k">{e(t("cw.g_problem"))}</span>{e("; ".join(n for _, n in g.issues) or t("cw.not_stated"))}',
-              f'<span class="k">{e(t("cw.g_wants"))}</span>{e(g.outcome or t("cw.not_stated"))}',
-              f'<span class="k">{e(t("cw.g_how_long"))}</span>{e(casework.duration_text(g, today, code_) or t("cw.not_known_yet"))}',
-              f'<span class="k">{e(t("cw.g_urgency"))}</span>{e(" ".join(u.reasons))}']
+    glance = [kv(t("cw.g_problem"), rich("; ".join(n for _, n in g.issues) or t("cw.not_stated"))),
+              kv(t("cw.g_wants"), rich(g.outcome or t("cw.not_stated"))),
+              kv(t("cw.g_how_long"), rich(casework.duration_text(g, today, code_) or t("cw.not_known_yet"))),
+              kv(t("cw.g_urgency"), f'<b class="{"urgent" if u.level != "normal" else ""}">{e(" ".join(u.reasons))}</b>'
+                 if u.level != "normal" else rich(" ".join(u.reasons)))]
     st.markdown(ui.info_card(t("cw.glance"), glance, "glance" + (" urgent" if u.level != "normal" else ""), "bolt"),
                 unsafe_allow_html=True)
-    rows = [f'<span class="k">{e(t("cw.person"))}</span>{e(g.person or t("cw.person_not_stated"))}']
-    rows += [e(x) for x in g.what_happened]
+    rows = [kv(t("cw.person"), rich(g.person or t("cw.person_not_stated")))]
     if g.facts.get("state"):
-        rows.append(f'<span class="k">{e(t("rs.state"))}</span>{e(g.facts["state"])}')
+        rows.append(kv(t("rs.state"), rich(g.facts["state"])))
+    if g.what_happened:
+        rows.append(bullets([rich(x) for x in g.what_happened]))
     st.markdown(ui.info_card(t("cw.facts"), rows, icon_name="description"), unsafe_allow_html=True)
     if g.timeline or g.coming_dates:
-        tl = [f'<span class="when">{e(w)}</span> · {e(x)}' for w, x in g.timeline + g.coming_dates]
-        tl += [f'<span class="k">{e(t("cw.year_missing"))}</span>{e(w)}' for w, _ in casework.missing_years(g)]
-        st.markdown(ui.info_card(t("cw.timeline"), tl, icon_name="calendar_month"), unsafe_allow_html=True)
+        tl = [f'<b>{e(w)}</b> \u2014 {rich(x)}' for w, x in g.timeline + g.coming_dates]
+        tl += [f'<span class="miss">{e(t("cw.year_missing"))}: {e(w)}</span>' for w, _ in casework.missing_years(g)]
+        st.markdown(ui.info_card(t("cw.timeline"), [bullets(tl)], icon_name="calendar_month"), unsafe_allow_html=True)
     needed, origin = casework.documents_needed(g, approved, code_)
-    docs = [f'<span class="k">{e(t("cw.docs_has"))}</span>{e("; ".join(g.documents_held) or t("sum.none_mentioned_short"))}',
-            f'<span class="k">{e(t("cw.docs_needed"))}</span>{e("; ".join(needed) or t("cw.nothing_more"))}']
+    docs = [kv(t("cw.docs_has"), bullets([rich(d) for d in g.documents_held]) if g.documents_held
+               else e(t("sum.none_mentioned_short"))),
+            kv(t("cw.docs_needed"), bullets([rich(d) for d in needed]) if needed else e(t("cw.nothing_more")))]
     if origin == "plain":
         docs.append(f'<span class="src">{e(t("cw.docs_plain_note"))}</span>')
     st.markdown(ui.info_card(t("cw.documents"), docs, icon_name="folder"), unsafe_allow_html=True)
-    aid = [e(eligibility_text(eligibility)), *[f'<span class="src">{e(s)}</span>' for s in eligibility.sources[:1]]]
+    aid = [rich(eligibility_text(eligibility)), *[f'<span class="src">{e(s)}</span>' for s in eligibility.sources[:1]]]
     st.markdown(ui.info_card(t("sum.legal_aid_short"), aid, icon_name="balance"), unsafe_allow_html=True)
     flags = casework.lawyer_flags(g, code_)
     if flags:
-        st.markdown(ui.info_card(t("cw.for_lawyer"), [e(f) for f in flags], "lawyer", "gavel"), unsafe_allow_html=True)
+        st.markdown(ui.info_card(t("cw.for_lawyer"), [bullets([rich(f) for f in flags])], "lawyer", "gavel"),
+                    unsafe_allow_html=True)
     steps = casework.next_steps(g, eligibility, general._approved_points(g), g.research_state, today, code_)
     srows = []
-    for i, s in enumerate(steps, 1):
-        text = e(s.text)
+    for s in steps:
+        text = rich(s.text)
         if s.due:  # "Collect the documents (by 13 November 2026, suggested follow-up)."
             when = t("cw.by_date_suggested" if s.suggested else "cw.by_date", date=show_date(s.due))
             body = s.text.rstrip()
             end = body[-1] if body and body[-1] in ".।" else "."
-            text = f'{e(body.rstrip(".।"))} <span class="when">({e(when)})</span>{end}'
-        srows.append(f"{i}. {text}" + (f'<span class="src">{e(s.source)}</span>' if s.source else ""))
-    st.markdown(ui.info_card(t("cw.next_steps"), srows, icon_name="checklist"), unsafe_allow_html=True)
+            text = f'{rich(body.rstrip(".।"))} <span class="when">({rich(when)})</span>{end}'
+        srows.append(text + (f'<span class="src">{e(s.source)}</span>' if s.source else ""))
+    st.markdown(ui.info_card(t("cw.next_steps"), [bullets(srows, ordered=True)], icon_name="checklist"),
+                unsafe_allow_html=True)
 
 
 def eligibility_text(eligibility) -> str:
@@ -1005,17 +1029,56 @@ def fix_checklist(items, g, eligibility, kind, missing_years, approved, gen):
                     st.text_input(t("ready.reason"), max_chars=120, key=f"cantr-g-{item.key}")
 
 
-def research_panel(g, uncovered, status, case_id, state):
+def research_ticks(record) -> tuple:
+    """({point id: ticked}, {point id: reason}) from the volunteer's tick boxes (pre-ticked except points
+    naming a replaced law)."""
+    if not record:
+        return {}, {}
+    ticks, reasons = {}, {}
+    for p in record["points"]:
+        if p.get("kind") == "letter":
+            continue
+        key = f"rsv-{record['id']}-{p['id']}"
+        st.session_state.setdefault(key, research.default_keep(p))
+        if not research.default_keep(p):
+            st.session_state.setdefault(f"rsvr-{record['id']}-{p['id']}", t("rs.left_replaced"))
+        ticks[p["id"]] = bool(st.session_state[key])
+        reasons[p["id"]] = (st.session_state.get(f"rsvr-{record['id']}-{p['id']}") or "").strip()
+    return ticks, reasons
+
+
+def research_points_for_volunteer(record: dict):
+    """Each point with its source links, the label, the warnings, and a tick box: unticked points stay
+    out of the letter (with a short reason). The volunteer cannot add or edit a legal point."""
+    st.warning(t("rs.volunteer_label"), icon=":material/pending:")
+    st.caption(t("rs.volunteer_caption"))
+    for p in record["points"]:
+        if p.get("kind") == "letter":
+            continue
+        key = f"rsv-{record['id']}-{p['id']}"
+        with st.container(border=True, key=f"rsp-{record['id']}-{p['id']}"):
+            st.checkbox(f"{research.KINDS[p['kind']]}: {p['text']}", key=key)
+            st.markdown("  \n".join(f":material/link: [{html.escape(s['title'])}]({s['url']})" for s in p["sources"]))
+            for w in p.get("warnings", []):
+                (st.error if w["kind"] == "replaced" else st.warning)(
+                    warning_text(w), icon=":material/gavel:" if w["kind"] == "replaced" else ":material/rule:")
+            if not st.session_state.get(key):
+                st.text_input(t("rs.left_out_reason"), key=f"rsvr-{record['id']}-{p['id']}", max_chars=200)
+
+
+def research_panel(g, uncovered, status, case_id, state, waiting_rs=None):
     if not uncovered and status in ("none", "not started"):
         return
     with st.container(border=True, key="research-panel"):
-        st.markdown(f"**{t('rs.title')}**")
-        msg = {"waiting": "rs.status_waiting", "approved": "rs.status_approved", "failed": "rs.failed",
+        st.markdown(ui.step_heading("travel_explore", t("rs.title")), unsafe_allow_html=True)
+        msg = {"approved": "rs.status_approved", "failed": "rs.failed",
                "not started": "rs.need_state" if not state else "rs.status_not_started"}.get(status)
         if status == "loading":
             st.caption(t("rs.loading_caption"))
             return
-        if msg:
+        if waiting_rs:
+            research_points_for_volunteer(waiting_rs)
+        elif msg:
             (st.error if status == "failed" else st.info)(t(msg), icon=":material/travel_explore:")
         with st.container(horizontal=True, gap="small", key="research-actions"):
             if uncovered and state and case_id:
@@ -2296,7 +2359,10 @@ def add_letter_to_pending(case_id: str, issue: str):
     except ValueError:
         return
     approved = research.approved_points(case_id)
-    if not approved or pending.get("case_type") != general.CASE_TYPE:
+    if pending.get("case_type") != general.CASE_TYPE:
+        return
+    if not approved:  # every point rejected: the draft letter made from them goes
+        store.remove_letter(case_id)
         return
     g = general.GeneralFacts.from_dict(pending["facts"])
     letter = casework.complaint_letter(g, approved, issue, pending.get("ai_model"), pending.get("draft_lang", "en"))
@@ -2316,6 +2382,10 @@ def save_research_knowledge(research_id: str, point_id: str):
 
 def research_point_view(record: dict, p: dict):
     st.markdown(f"**{p['id']} · {research.KINDS[p['kind']]}** {status_chip_text(p['status'])}", unsafe_allow_html=True)
+    if p.get("volunteer") == research.LEFT_OUT:
+        st.warning(t("rs.sup_left_out", reason=p.get("volunteer_reason") or t("rs.no_reason")), icon=":material/remove_done:")
+    elif p.get("volunteer") == research.KEPT:
+        st.caption(t("rs.sup_kept"))
     if p["kind"] == "letter":  # a draft letter from research: shown as a page, like every draft
         st.markdown(document.to_html(p["text"]), unsafe_allow_html=True)
     else:
@@ -2331,6 +2401,8 @@ def research_point_view(record: dict, p: dict):
 def warning_text(w: dict) -> str:
     """A research warning in the screen's language (the saved English text if it is an older record)."""
     try:
+        if w["kind"] == "replaced" and w.get("in_source"):
+            return t("rs.warn_replaced_source", old=w["old"], new=w["new"], date=show_date(date.fromisoformat(w["since"])))
         if w["kind"] == "replaced":
             return t("rs.warn_replaced", new=w["new"], date=show_date(date.fromisoformat(w["since"])))
         if w["kind"] == "mismatch":
