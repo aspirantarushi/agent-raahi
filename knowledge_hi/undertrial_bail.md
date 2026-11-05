@@ -12,16 +12,16 @@ English heading: Rights on arrest
 - 24 घंटे के अंदर मजिस्ट्रेट के सामने पेश किया जाए, सफ़र का समय छोड़कर (BNSS 58)।
 - किसी महिला को सूरज डूबने के बाद और सूरज निकलने से पहले गिरफ़्तार नहीं करना चाहिए, सिवाय ख़ास हालात के, जब महिला अफ़सर की लिखित रिपोर्ट हो और मजिस्ट्रेट की पहले से अनुमति हो (BNSS 43(5))।
 - अपने ही ख़िलाफ़ गवाह बनने के लिए मजबूर न किया जाए (संविधान, अनुच्छेद 20(3)), और वकील से सलाह लेने का हक़ (अनुच्छेद 22(1))।
-Source: BNSS, 2023, Sections 35–58 (as summarised by LawSikho)
-Link: https://lawsikho.com/blog/?p=6885
+Source: BNSS, 2023, Sections 35(3), 36, 38, 43(5), 47(1), 47(2), 48, 53 and 58; Constitution of India, Articles 20(3) and 22(1)
+Link: https://www.indiacode.nic.in/handle/123456789/21615
 Checked: 2026-11-02 · Lawyer checked: no
 Hindi translation checked: no
 
 ### मुफ़्त क़ानूनी मदद पहली पेशी से ही शुरू होती है
 English heading: Free legal aid starts at the first court appearance
 जो आरोपी वकील का ख़र्च नहीं उठा सकता, उसे मजिस्ट्रेट के सामने पहली बार पेश होने से ही मुफ़्त क़ानूनी मदद का हक़ है, और मजिस्ट्रेट को उसे यह हक़ बताना होगा। इसके लिए उसे माँगना ज़रूरी नहीं है। जेलों में यह मदद जेल की क़ानूनी सहायता क्लिनिक और ज़िला विधिक सेवा प्राधिकरण (DLSA) देते हैं।
-Source: Khatri (II) v. State of Bihar (1981); Suk Das v. Union Territory of Arunachal Pradesh (1986); Legal Services Authorities Act, Section 12(g)
-Link: https://lawsikho.com/blog/?p=6885
+Source: Khatri (II) v. State of Bihar (1981), Supreme Court (Digital SCR); Suk Das v. Union Territory of Arunachal Pradesh (1986) (secondary: official copy not yet found); Legal Services Authorities Act, 1987, Section 12(g)
+Link: https://digiscr.sci.gov.in/admin/judgement_file/judgement_pdf/1981/volume%202/Part%20I/khatri%20and%20others_state%20of%20bihar%20&%20ors._1698995482.pdf
 Checked: 2026-11-02 · Lawyer checked: no
 Hindi translation checked: no
 

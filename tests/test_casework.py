@@ -241,3 +241,14 @@ def test_letter_card_keeps_lines_as_written():
     import ui
     page = ui.letter_html("DRAFT — to be checked by a lawyer\n\n- one fact\n- another <b>")
     assert "\n" not in page and "- one fact<br>- another &lt;b&gt;" in page
+
+
+def test_knowledge_links_are_official_except_the_three_kept_as_secondary():
+    knowledge._entries.cache_clear()
+    secondary = sorted(e.heading for f in ("legal_aid_eligibility.md", "undertrial_bail.md", "cyber_fraud.md",
+                                           "helplines.md")
+                       for e in knowledge.entries(f) if not e.official)
+    assert secondary == ['"Digital arrest" calls are always fraud', "Bail granted but still in jail",
+                         "Getting held money back usually needs a court order"]
+    assert "casemine" not in (knowledge.HERE / "templates" / "dlsa_application.md").read_text(encoding="utf-8")
+    assert "?locale=hi" not in knowledge.all_text()

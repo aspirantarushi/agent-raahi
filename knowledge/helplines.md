@@ -7,7 +7,7 @@ Module: all · Checked: 2026-11-02 · Lawyer checked: no
 | 112 | Any emergency: police, fire, ambulance | https://india.gov.in/directory/helpline |
 | 1930 | Cyber fraud and cybercrime; also cybercrime.gov.in | https://india.gov.in/directory/helpline |
 | 15100 | NALSA free legal aid helpline | https://nalsa.gov.in/?p=10080 |
-| 14454 | Tele-Law: free legal advice from a panel lawyer before a case is filed | https://www.policyedge.in/p/disha-20-approved-to-expand-technology-enabled-access-to-justice-across-india |
+| 14454 | Tele-Law: free legal advice from a panel lawyer before a case is filed | https://www.pib.gov.in/PressReleasePage.aspx?PRID=2227723 |
 | 7217711814 | Nyaya Setu, the Ministry of Law and Justice's legal information chatbot on WhatsApp | https://www.outlookbusiness.com/ampstories/news/how-does-nyaya-setu-work-on-whatsapp-to-provide-instant-legal-guidance-explained |
 | 181 | Women's helpline, including domestic violence | https://india.gov.in/directory/helpline |
 | 7827170170 | National Commission for Women helpline | https://india.gov.in/directory/helpline |

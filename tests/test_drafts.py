@@ -396,7 +396,7 @@ def old_maximum_source_line():
 def test_source_line_comes_from_knowledge_entry():
     line = old_maximum_source_line()
     assert line.startswith("Source: Constitution of India, Article 20(1)")
-    assert "https://www.constitutionofindia.net/articles/article-20" in line
+    assert "https://legislative.gov.in/constitution-of-india" in line
 
 
 def test_note_shows_source_line_under_why_this_maximum():

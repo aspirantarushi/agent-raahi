@@ -32,4 +32,4 @@ Notes for the volunteer
 - A person in custody, a woman or a child qualifies whatever their income.
 - A decision must be taken immediately, within seven days at most (Regulation 7, as substituted in 2018).
 - A self-certificate with self-attested copies of documents is ordinarily enough proof of eligibility (Regulation 5, as amended in 2018).
-- Source (current amended text): https://www.casemine.com/act/in/5f5f117e9fca195c05cce4a9
+- Source (current amended text): https://nalsa.gov.in/regulations/

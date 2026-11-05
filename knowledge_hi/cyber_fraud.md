@@ -1,10 +1,10 @@
 # साइबर और पैसों की धोखाधड़ी: पहले क़दम (Cyber and financial fraud: first response)
 
-### तुरंत 1930 पर कॉल करें: शुरू के घंटे सबसे ज़रूरी हैं
-English heading: Call 1930 at once: the first hours matter most
-अगर ऑनलाइन धोखाधड़ी से पैसे लिए गए हैं (UPI, कार्ड, नेट बैंकिंग, वॉलेट), तो तुरंत राष्ट्रीय साइबर-धोखाधड़ी हेल्पलाइन 1930 पर कॉल करें, या cybercrime.gov.in पर शिकायत करें। जितनी जल्दी हो सके शिकायत करें, हो सके तो कुछ घंटों के अंदर: शिकायत जितनी जल्दी होगी, धोखेबाज़ के पैसे निकालने से पहले उन्हें रोकने का मौक़ा उतना ज़्यादा होगा।
-Source: Moneylife, "Fraud alert: use golden hour to report scam"
-Link: https://moneylife.in/article/fraud-alert-use-golden-hour-to-report-scam-and-increase-your-chances-to-get-money-back/74091.html
+### तुरंत 1930 पर कॉल करें: फ़ौरन शिकायत करें
+English heading: Call 1930 at once: report immediately
+अगर ऑनलाइन धोखाधड़ी से पैसे लिए गए हैं (UPI, कार्ड, नेट बैंकिंग, वॉलेट), तो तुरंत राष्ट्रीय साइबर-धोखाधड़ी हेल्पलाइन 1930 पर कॉल करें, या cybercrime.gov.in पर शिकायत करें। फ़ौरन शिकायत करें: यह व्यवस्था इसीलिए है कि धोखेबाज़ों के पैसे निकाल ले जाने से पहले उन्हें रोका जा सके।
+Source: Ministry of Home Affairs, Press Information Bureau release on the Citizen Financial Cyber Fraud Reporting and Management System
+Link: https://pib.gov.in/PressReleasePage.aspx?PRID=2110809
 Checked: 2026-11-02 · Lawyer checked: no
 Hindi translation checked: no
 
@@ -24,7 +24,7 @@ English heading: Evidence to keep
 - धोखेबाज़ के फ़ोन नंबर, UPI ID, खाता नंबर, वेबसाइट लिंक या ऐप के नाम
 - चैट, कॉल लॉग और पेमेंट स्क्रीन के स्क्रीनशॉट
 - 1930 या cybercrime.gov.in की शिकायत (पावती) का नंबर
-Source: Moneylife; cybercrime.gov.in reporting form fields
-Link: https://moneylife.in/article/fraud-alert-use-golden-hour-to-report-scam-and-increase-your-chances-to-get-money-back/74091.html
+Source: cybercrime.gov.in reporting form fields
+Link: https://cybercrime.gov.in/
 Checked: 2026-11-02 · Lawyer checked: no
 Hindi translation checked: no

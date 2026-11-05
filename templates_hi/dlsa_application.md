@@ -34,4 +34,4 @@ DRAFT — to be checked by a lawyer
 - हिरासत में व्यक्ति, महिला या बच्चा, आय कितनी भी हो, हक़दार हैं।
 - फ़ैसला तुरंत लिया जाना चाहिए, ज़्यादा से ज़्यादा सात दिनों में (Regulation 7, as substituted in 2018)।
 - ख़ुद से सत्यापित काग़ज़ों की कॉपी के साथ स्व-प्रमाणपत्र आमतौर पर हक़दारी के सबूत के लिए काफ़ी है (Regulation 5, as amended in 2018)।
-- Source (current amended text): https://www.casemine.com/act/in/5f5f117e9fca195c05cce4a9
+- Source (current amended text): https://nalsa.gov.in/regulations/

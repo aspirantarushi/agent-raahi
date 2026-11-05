@@ -72,7 +72,8 @@ def test_facts_band_source_names_are_links_in_italics(at):
     html = page_html(at)
     for _, source, link in home.facts("en"):
         name = source.replace("&", "&amp;").replace(chr(34), "&quot;")
-        assert (f'<em>Source: <a href="{link}" target="_blank" rel="noopener noreferrer">{name}</a></em>') in html
+        href = link.replace("&", "&amp;")
+        assert (f'<em>Source: <a href="{href}" target="_blank" rel="noopener noreferrer">{name}</a></em>') in html
         assert f"({link})" not in html  # no web address in brackets
 
 
@@ -120,7 +121,7 @@ def test_facts_come_word_for_word_from_knowledge_with_sources(at):
 
 
 def test_a_changed_knowledge_entry_stops_the_fact(monkeypatch):
-    monkeypatch.setattr(home, "FACTS", [("cyber_fraud.md", "Call 1930 at once: the first hours matter most",
+    monkeypatch.setattr(home, "FACTS", [("cyber_fraud.md", "Call 1930 at once: report immediately",
                                          ["Report within 2 hours, always."], "Report within 2 hours.", None)])
     with pytest.raises(ValueError, match="not found word for word"):
         home.facts()

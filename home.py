@@ -37,14 +37,14 @@ FACTS = [
      "यह उन अपराधों पर लागू नहीं होता जिनमें मौत या उम्रक़ैद की सज़ा हो सकती है।"),
     ("undertrial_bail.md", "When Section 479 does not apply",
      ["The offence can be punished with death or life imprisonment."], None, None),  # the exception above
-    ("cyber_fraud.md", "Call 1930 at once: the first hours matter most",
+    ("cyber_fraud.md", "Call 1930 at once: report immediately",
      ["call the national cyber-fraud helpline 1930 immediately",
-      "Report as early as possible, ideally within a few hours: the faster the report, the better the chance the "
-      "money can be stopped before the fraudster withdraws it."],
-     "Lost money online? Call 1930 straight away, ideally within the first few hours. The sooner it is reported, "
-     "the better the chance of stopping the money before the fraudster withdraws it.",
-     "ऑनलाइन पैसे गए? तुरंत 1930 पर कॉल करें, हो सके तो पहले कुछ घंटों में। जितनी जल्दी शिकायत होगी, धोखेबाज़ के पैसे "
-     "निकालने से पहले उन्हें रोकने का मौक़ा उतना ज़्यादा होगा।"),
+      "Report immediately: the reporting system exists so that the money can be stopped before the fraudsters siphon "
+      "it off."],
+     "Lost money online? Call 1930 or report on cybercrime.gov.in immediately, so the money can be stopped before "
+     "the fraudsters siphon it off.",
+     "ऑनलाइन पैसे गए? तुरंत 1930 पर कॉल करें या cybercrime.gov.in पर शिकायत करें, ताकि धोखेबाज़ों के पैसे निकाल ले जाने "
+     "से पहले उन्हें रोका जा सके।"),
     ("legal_aid_eligibility.md", "The legal aid lawyer cannot charge any fee",
      ["A panel lawyer assigned through legal aid must not take any fee or anything of value from the person."],
      "A legal aid lawyer must not take any fee, or anything of value, from the person they are helping.",

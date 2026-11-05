@@ -61,7 +61,7 @@ def test_general_uncovered_issue_is_unresolved_covered_is_verified():
     reading, upi, _ = summarise(UPI_ANSWER, UPI)
     issue = [x for x in ledger.general(upi, reading.facts, general.check_eligibility(upi.facts))
              if x.fact == "ledger.issue"][0]
-    assert issue.source == ledger.VERIFIED and "Source: Moneylife" in issue.source_line
+    assert issue.source == ledger.VERIFIED and "Source: Ministry of Home Affairs" in issue.source_line
 
 
 def test_general_facts_answers_and_precautions():

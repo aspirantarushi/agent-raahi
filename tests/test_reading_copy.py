@@ -53,7 +53,7 @@ def test_paragraph_with_a_changed_number_stays_english():
 def test_summary_reading_copy_keeps_knowledge_sources():
     _, _, summary = summarise(UPI_ANSWER, UPI)
     copy = multilingual.reading_copy(summary, "bn", marked)
-    assert "Source: Moneylife" in copy.text and "<bn>Source:" not in copy.text
+    assert "Source: Ministry of Home Affairs" in copy.text and "<bn>Source:" not in copy.text
 
 
 def test_numbers_check_reads_every_script():

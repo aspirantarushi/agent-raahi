@@ -4,17 +4,16 @@ Module: cyber fraud · Checked: 2026-11-02 · Lawyer checked: no (every entry be
 
 ---
 
-### Call 1930 at once: the first hours matter most
-If money has been taken through online fraud (UPI, card, net banking, wallet), call the national cyber-fraud helpline 1930 immediately, or report it on cybercrime.gov.in. Report as early as possible, ideally within a few hours: the faster the report, the better the chance the money can be stopped before the fraudster withdraws it.
-Source: Moneylife, "Fraud alert: use golden hour to report scam"
-Link: https://moneylife.in/article/fraud-alert-use-golden-hour-to-report-scam-and-increase-your-chances-to-get-money-back/74091.html
+### Call 1930 at once: report immediately
+If money has been taken through online fraud (UPI, card, net banking, wallet), call the national cyber-fraud helpline 1930 immediately, or report it on cybercrime.gov.in. Report immediately: the reporting system exists so that the money can be stopped before the fraudsters siphon it off.
+Source: Ministry of Home Affairs, Press Information Bureau release on the Citizen Financial Cyber Fraud Reporting and Management System
+Link: https://pib.gov.in/PressReleasePage.aspx?PRID=2110809
 Checked: 2026-11-02 · Lawyer checked: no
 
 ### What happens after a 1930 report
-The complaint is sent to the bank or payment company involved. If the money is still in the receiving account, the bank puts a hold on it so it can't be withdrawn. If it has already moved, the next bank in the chain is asked to hold it, and so on. Banks then tell the police how much was blocked. Since this system started in 2021, more than ₹11,158 crore has been saved across more than 32.8 lakh complaints (up to 30 June 2026, as the Home Ministry told the Lok Sabha on 11 August 2026). In 2025 alone, about 24 lakh fraud complaints reported losses of ₹22,495 crore.
-Source: Lok Sabha written reply of the Minister of State for Home, 11 August 2026 (ANI report); Dynamite News report on 2025 cyber-fraud figures
-Link: https://news.webindia123.com/news/Articles/India/20260811/4485786.html
-Also: https://www.dynamitenews.com/national/cyber-frauds-mount-to-rs22495-crore-in-2025-over-rs8000-crore-saved-through-rapid-response-system
+The complaint is sent to the bank or payment company involved. If the money is still in the receiving account, the bank puts a hold on it so it can't be withdrawn. If it has already moved, the next bank in the chain is asked to hold it, and so on. Banks then tell the police how much was blocked.
+Source: Ministry of Home Affairs, Press Information Bureau release on the Citizen Financial Cyber Fraud Reporting and Management System
+Link: https://pib.gov.in/PressReleasePage.aspx?PRID=2110809
 Checked: 2026-11-02 · Lawyer checked: no
 
 ### Getting held money back usually needs a court order
@@ -74,8 +73,8 @@ Keep, and don't delete:
 - the fraudster's phone numbers, UPI IDs, account numbers, website links or app names
 - screenshots of chats, call logs and payment screens
 - the 1930 or cybercrime.gov.in complaint (acknowledgement) number
-Source: Moneylife; cybercrime.gov.in reporting form fields
-Link: https://moneylife.in/article/fraud-alert-use-golden-hour-to-report-scam-and-increase-your-chances-to-get-money-back/74091.html
+Source: cybercrime.gov.in reporting form fields
+Link: https://cybercrime.gov.in/
 Checked: 2026-11-02 · Lawyer checked: no
 
 ### "Digital arrest" calls are always fraud
@@ -87,7 +86,7 @@ Checked: 2026-11-02 · Lawyer checked: no
 ### Which laws apply
 Online fraud is usually charged as cheating (BNS Section 318; IPC 420 for offences before 1 July 2024) together with the Information Technology Act, 2000: Section 66C (identity theft, such as misusing someone's password) and Section 66D (cheating by impersonation using a computer or phone).
 Source: Bharatiya Nyaya Sanhita, 2023, Section 318; Information Technology Act, 2000, Sections 66C and 66D
-Link: https://www.vidhijudicial.com/section-318-of-the-bharatiya-nyaya-sanhita-(bns)-of-2023.html
+Link: https://www.indiacode.nic.in/handle/123456789/21420
 Checked: 2026-11-02 · Lawyer checked: no
 
 ### Free legal help for fraud victims

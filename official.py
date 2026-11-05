@@ -7,7 +7,8 @@ address was confirmed is noted beside it.
 import urllib.parse
 
 # Official sites only. A link counts when its host is one of these or ends with "." + one of these.
-ALLOWED_SUFFIXES = ("gov.in", "nic.in")  # central and state government, India Code, NALSA, SLSAs, most courts
+# central and state government, India Code, NALSA, SLSAs, most courts; the last is सरकार.भारत (gov.bharat)
+ALLOWED_SUFFIXES = ("gov.in", "nic.in", "xn--11b7cb3a6a.xn--h2brj9c")
 ALLOWED_HOSTS = (
     "indiacode.nic.in", "nalsa.gov.in", "sci.gov.in", "ecourts.gov.in",
     "rbi.org.in",             # Reserve Bank of India (the banking regulator)

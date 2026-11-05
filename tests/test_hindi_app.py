@@ -168,7 +168,7 @@ def test_general_screen_in_hindi_shows_1930_and_no_names_box(monkeypatch, tmp_pa
     assert at.checkbox(key="g_checked").label == "मैंने यह सार नोट्स से मिलाकर जाँच लिया है, और इसमें किसी का नाम नहीं है"
     summary = at.code[0].value
     assert "ऑनलाइन धोखाधड़ी" in summary and "(हिंदी अनुवाद की जाँच: नहीं)" in summary
-    assert "Source: Moneylife" in summary  # Source lines stay in English
+    assert "Source: Ministry of Home Affairs" in summary  # Source lines stay in English
 
 
 def general_answer_for_hinglish():

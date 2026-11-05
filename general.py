@@ -68,7 +68,7 @@ ISSUE_KNOWLEDGE = {
         ("undertrial_bail.md", "Who to approach for an undertrial"),
     ],
     "online_or_financial_fraud": [
-        ("cyber_fraud.md", "Call 1930 at once: the first hours matter most"),
+        ("cyber_fraud.md", "Call 1930 at once: report immediately"),
         ("cyber_fraud.md", "Stop further loss straight away"),
         ("cyber_fraud.md", "Evidence to keep"),
     ],

@@ -123,7 +123,7 @@ def test_upi_fraud_story():
     assert general.urgent_actions(reading.facts) == [general.CALL_1930]
     assert "URGENT\n- Call 1930 now." in text
     assert "Online fraud — to discuss with a lawyer." in text
-    assert knowledge.get("cyber_fraud.md", "Call 1930 at once: the first hours matter most").source_line in text
+    assert knowledge.get("cyber_fraud.md", "Call 1930 at once: report immediately").source_line in text
     assert "Qualifies for free legal aid whatever the income, as a woman." in text
     assert "Bihar: Bihar residents only" in text      # the state note from income_limits.csv ...
     assert "Confirmed on BSLSA" not in text            # ... without our own working notes
