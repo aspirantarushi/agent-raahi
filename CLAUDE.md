@@ -92,7 +92,8 @@ size of the problem, severity, quality of the solution, proven impact (real use 
   sentence_table.csv, income_limits.csv. Do not edit without asking. Approved research saved as
   knowledge lives in the shared database (record kind "knowledge_added"), not in these files; the
   supervisor can export it as Markdown to add to knowledge/ by hand after a check.
-- templates/  draft templates with [square-bracket] blanks.
+- templates/  draft templates with [square-bracket] blanks (complaint_letter.md: step 3 letters, filled
+  only with facts of the case and supervisor-approved research points; Hindi in templates_hi/).
 - learner/    learner-mode explainers, quizzes and practice cases.
 - lite/       small files for the AgentFoundry Build-tab demo. Leave as they are.
 - case_notes.txt  a fake practice case. cases/ and drafts/ hold saved output (never real data).

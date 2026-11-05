@@ -30,7 +30,7 @@ def yn(value, quote=None):
 
 def answer(**fields):
     base = {
-        "person_needing_help": "the person seeking help", "what_happened": [], "timeline": [],
+        "person_needing_help": "the person in the practice story", "what_happened": [], "timeline": [],
         "danger_now": yn("unknown"), "in_custody": yn("unknown"), "money_lost_online": yn("unknown"),
         "money_lost_in_last_few_days": yn("unknown"), "called_1930": yn("unknown"), "coming_dates": [],
         "sections_charged": [], "issues": [], "documents_held": [], "questions_to_ask": [],
@@ -125,9 +125,10 @@ def test_upi_fraud_story():
     assert "Online fraud — to discuss with a lawyer." in text
     assert knowledge.get("cyber_fraud.md", "Call 1930 at once: the first hours matter most").source_line in text
     assert "Qualifies for free legal aid whatever the income, as a woman." in text
-    assert "Bihar: Confirmed on BSLSA site" in text  # the state note from income_limits.csv
+    assert "Bihar: Bihar residents only" in text      # the state note from income_limits.csv ...
+    assert "Confirmed on BSLSA" not in text            # ... without our own working notes
     assert "- The person has: bank SMS alerts; screenshot of the UPI request" in text
-    assert "the bank SMS and email alerts" not in text.split("Still to collect:")[1].split("\n")[0]
+    assert "the bank SMS and email alerts" not in text.split("Usually needed:")[1].split("\n")[0]
     assert refs_not_from_knowledge(text, reading) == []
 
 
@@ -142,9 +143,9 @@ def test_unpaid_wages_story():
     assert reading.facts["annual_income"] == 120000
     assert ("Qualifies on income: about ₹120,000 a year is below Maharashtra's limit of ₹300,000."
             in text)
-    assert ("- Documents that often help (a lawyer will confirm): Appointment letter or ID card; Pay slips; "
-            "Bank statements; Attendance records; Messages with the employer; ID proof; "
-            "Income proof (for free legal aid)") in text
+    assert ("- Usually needed: Appointment letter or work ID card; Pay slips; "
+            "Bank statements showing earlier payments; Messages with the employer or contractor; ID proof; "
+            "Income proof, or a self-declaration (for free legal aid)") in text
     assert refs_not_from_knowledge(text, reading) == []
 
 
@@ -440,7 +441,7 @@ def test_live_ai_three_stories(notes, urgent, words):
 # ---------- documents for problems our files don't cover ----------
 
 def documents_line(text):
-    return next(l for l in text.splitlines() if l.startswith("- Documents that often help"))
+    return next(l for l in text.splitlines() if l.startswith("- Usually needed"))
 
 
 def test_unpaid_wages_gets_no_fir_or_court_papers():
@@ -465,7 +466,9 @@ def legal_refs_free(line):
     ("land dispute", "The neighbour took the land. The police refused to file an FIR.",
      ["Ownership or rent papers", "FIR copy", "Court orders"], []),
     ("unpaid wages", "There is a court hearing next month about the wages.",
-     ["Pay slips", "FIR copy", "Court orders"], []),
+     ["Pay slips", "FIR copy", "Court orders"], ["Latest electricity bill"]),
+    ("electricity cut", "The electricity line was cut five weeks ago although the bills were paid.",
+     ["Latest electricity bill", "Receipts of bills paid", "Disconnection notice"], ["Pay slips", "FIR copy"]),
     ("noise from a factory", "The factory runs machines all night.",
      ["Any papers, receipts or messages about the problem"], ["FIR copy"]),
 ])
@@ -473,7 +476,7 @@ def test_documents_by_type_of_problem(issue, story, expected, not_expected):
     raw = answer(what_happened=[story], issues=[{"category": "other", "name": issue}])
     _, _, text = summarise(raw, story)
     line = documents_line(text)
-    for d in expected + ["ID proof", "Income proof (for free legal aid)"]:
+    for d in expected + ["ID proof", "Income proof"]:
         assert d in line, d
     for d in not_expected:
         assert d not in line, d
@@ -489,9 +492,9 @@ def test_first_does_not_mean_fir():
 
 def test_covered_issue_keeps_its_knowledge_list_and_source():
     _, _, text = summarise(UPI_ANSWER, UPI)
-    assert "- Still to collect:" in text
+    assert "- Usually needed:" in text
     assert knowledge.get("cyber_fraud.md", "Evidence to keep").source_line in text
-    assert "Documents that often help" not in text
+    assert "a plain list for this kind of problem" not in text
 
 
 def test_documents_held_are_not_listed_again():
@@ -533,7 +536,7 @@ def test_unconfirmed_money_loss_adds_the_1930_next_step():
     raw = dict(UPI_ANSWER)
     raw["money_lost_online"] = yn("yes", "words that are not in the notes")
     _, facts, text = summarise(raw, UPI)
-    assert "Money was lost online: call 1930 now" in text.split("Next steps")[1]
+    assert "Call 1930 now." in text.split("Next steps")[1]
 
 
 

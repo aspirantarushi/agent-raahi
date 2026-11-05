@@ -256,6 +256,24 @@ div[class*="st-key-learn-card-"] .stButton > button p { white-space: nowrap; }
 .st-key-camp-row > div { width: auto !important; flex: 0 0 auto; }
 .st-key-case-actions { flex-wrap: wrap; }
 
+/* ---------- step 3, "Draft and research": cards and letters ---------- */
+.infocard { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 18px 22px; margin: 0 0 14px 0; }
+.infocard .head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.infocard .head .mi { color: var(--teal); font-size: 22px; }
+.infocard h4 { margin: 0 !important; padding: 0 !important; font-size: 17px !important; font-weight: 650 !important; color: var(--ink); }
+.infocard .row { font-size: 15.5px; line-height: 1.55; color: var(--ink); padding: 3px 0; }
+.infocard .row .k { color: var(--muted2); font-weight: 600; margin-right: 6px; }
+.infocard .row .src { display: block; color: var(--muted2); font-size: 13px; font-style: italic; overflow-wrap: anywhere; }
+.infocard .row .when { color: var(--teal-dark); font-weight: 600; white-space: nowrap; }
+.infocard.glance { border: 2px solid var(--teal); background: #F4FAF8; }
+.infocard.urgent { border-color: var(--amber-ink); }
+.infocard.lawyer { background: var(--amber-bg); border-color: #EAD3A8; }
+.infocard ol, .infocard ul { margin: 0 0 0 1.1rem; padding: 0; }
+.letter { background: #FFFFFF; border: 1px solid var(--line2); border-radius: 12px; padding: 22px 26px; white-space: normal;
+  font-size: 15.5px; line-height: 1.65; color: var(--ink); box-shadow: 0 6px 18px rgba(19,33,59,.05); overflow-wrap: anywhere; }
+.draft-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 14px 0 6px; }
+.draft-head h4 { margin: 0 !important; font-size: 17px !important; }
+
 /* ---------- case tracker table: overdue in red, and the word "Overdue" (never colour alone) ---------- */
 .tracker-wrap { overflow-x: auto; margin: .5rem 0 1.25rem 0; }
 .tracker { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--card); border: 1px solid var(--line);

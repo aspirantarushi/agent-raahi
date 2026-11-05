@@ -27,10 +27,19 @@ class Entry:
     translation_checked: Optional[bool] = None  # Hindi entries: "Hindi translation checked: yes/no"
 
     @property
+    def official(self) -> bool:
+        import official
+        return not self.link or self.link.lower() == "none" or official.allowed_link(self.link)
+
+    @property
     def source_line(self) -> str:
+        """"Source: ... (link)". A link that is not on an official site is marked until it is replaced."""
+        import official
         line = f"Source: {self.source}"
         if self.link and self.link.lower() != "none":
             line += f" ({self.link})"
+            if not self.official:
+                line += " " + official.SECONDARY
         return line
 
     def excerpt(self, max_lines: int = 6) -> str:

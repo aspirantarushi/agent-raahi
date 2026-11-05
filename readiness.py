@@ -100,6 +100,44 @@ def general_items(g, eligibility, cannot=None) -> List[Item]:
     return apply_cannot(items, cannot)
 
 
+# ---------- step 3, "Draft and research": items that fit the case type, each with a fix ----------
+
+# key -> how the volunteer fixes it on the spot (the screen draws the matching field)
+FIXES = {"case_story": "back", "case_person": "text", "case_outcome": "text", "case_state": "state",
+         "case_dates": "dates", "case_reference": "yesno", "case_documents": "documents",
+         "case_legal_aid": "eligibility", "case_questions": "back", "case_danger": "yesno", "case_custody": "yesno",
+         "case_1930": "yesno"}
+TYPE_ITEMS = {
+    "electricity": ["case_reference"], "water": ["case_reference"], "ration": ["case_reference"],
+    "custody": ["case_custody", "case_danger"], "fraud": ["case_danger", "case_1930"],
+    "family": ["case_danger"], "land": [], "wages": [], "other": ["case_danger"],
+}
+
+
+def case_items(g, eligibility, kind: str, missing_years, cannot=None) -> List[Item]:
+    """The checklist for step 3 in plain words, with only the items that fit the problem type
+    (no "in custody" for an electricity case). The consumer / application number is recorded only as
+    "has it: yes or no"; the number itself is never typed or stored."""
+    f = g.facts
+    items = [
+        Item("case_story", PRESENT if g.what_happened else MISSING),
+        Item("case_person", PRESENT if _given(g.person) else MISSING),
+        Item("case_outcome", PRESENT if _given(g.outcome) else MISSING),
+        Item("case_state", PRESENT if _given(f.get("state")) else MISSING),
+        Item("case_dates", PRESENT if not missing_years else MISSING,
+             "" if not missing_years else "; ".join(w for w, _ in missing_years)),
+        Item("case_documents", PRESENT if g.documents_held else MISSING),
+        Item("case_legal_aid", PRESENT if eligibility.status != "not decided yet" else MISSING),
+        Item("case_questions", PRESENT if not g.still_to_ask else MISSING,
+             "" if not g.still_to_ask else str(len(g.still_to_ask))),
+    ]
+    for key in TYPE_ITEMS.get(kind, []):
+        fact = {"case_reference": "has_reference_number", "case_danger": "danger_now", "case_custody": "in_custody",
+                "case_1930": "called_1930"}[key]
+        items.append(Item(key, PRESENT if f.get(fact) is not None else MISSING))
+    return apply_cannot(items, cannot)
+
+
 # ---------- the verdict and the gaps block ----------
 
 def gaps(items: List[Item]) -> List[Item]:

@@ -131,7 +131,8 @@ def test_strict_json_schema_for_groq(services):
     assert schema["additionalProperties"] is False and set(schema["required"]) == set(schema["properties"])
     assert schema["properties"]["state"]["properties"]["value"]["type"] == ["string", "null"]
     issue = schema["properties"]["issues"]["items"]["properties"]["category"]
-    assert issue == {"type": "string", "enum": ["arrest_or_custody", "online_or_financial_fraud", "other"]}
+    assert issue == {"type": "string", "enum": ["arrest_or_custody", "online_or_financial_fraud", "electricity_or_water",
+                                             "wages_or_work", "ration_or_welfare", "other"]}
 
 
 def test_other_groq_models_use_json_mode(services, monkeypatch):

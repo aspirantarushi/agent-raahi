@@ -482,7 +482,9 @@ GENERAL_SCHEMA = {
             "items": {"type": "OBJECT",
                       "properties": {
                           "category": {"type": "STRING",
-                                       "enum": ["arrest_or_custody", "online_or_financial_fraud", "other"]},
+                                       "enum": ["arrest_or_custody", "online_or_financial_fraud",
+                                                "electricity_or_water", "wages_or_work", "ration_or_welfare",
+                                                "other"]},
                           "name": {"type": "STRING"}},
                       "required": ["category", "name"]},
         },
@@ -496,6 +498,8 @@ GENERAL_SCHEMA = {
         "under_18": _YES_NO,
         "sc_st": _YES_NO,
         "disability": _YES_NO,
+        "essential_service_cut": _YES_NO,
+        "unofficial_payment_demand": _YES_NO,
         "state": {"type": "OBJECT",
                   "properties": {"value": {"type": "STRING", "nullable": True},
                                  "quote": {"type": "STRING", "nullable": True}},
@@ -508,7 +512,8 @@ GENERAL_SCHEMA = {
     },
     "required": ["person_needing_help", "what_happened", "timeline", "danger_now", "in_custody",
                  "money_lost_online", "money_lost_in_last_few_days", "called_1930", "coming_dates",
-                 "sections_charged", "issues", "documents_held", "questions_to_ask", "outcome_wanted", "woman", "under_18",
+                 "sections_charged", "issues", "documents_held", "questions_to_ask", "outcome_wanted",
+                 "essential_service_cut", "unofficial_payment_demand", "woman", "under_18",
                  "sc_st", "disability", "state", "income"],
 }
 
@@ -540,7 +545,15 @@ Rules:
   7 days ("today", "yesterday", "two days ago"...).
 - coming_dates: hearings, deadlines or other dates still to come, as written.
 - issues: one entry per problem. category "arrest_or_custody" for arrest, jail or bail; category
-  "online_or_financial_fraud" for money taken by online or payment fraud; otherwise "other".
+  "online_or_financial_fraud" for money taken by online or payment fraud; "electricity_or_water" for an
+  electricity or water connection or bill; "wages_or_work" for unpaid wages or work problems;
+  "ration_or_welfare" for a ration card, pension or other government scheme; otherwise "other".
+- person_needing_help: the role of the person who needs the help, as the notes describe them (for
+  example "the speaker's husband, a labourer"); "unknown" if the notes don't say who it is.
+- essential_service_cut: "yes" only if the notes say the person's electricity or water is cut off now.
+- unofficial_payment_demand: "yes" only if the notes say someone asked for an unofficial payment, a
+  bribe, "kharcha-pani" or similar to do their work. Copy the exact words as quote. Never judge anyone.
+- Never write any ID number, consumer number or account number: leave such numbers out.
 - documents_held: papers or evidence the notes say the person already has.
 - questions_to_ask: up to 5 short questions the volunteer should still ask, most important first.
   Never ask about anything the notes already answer. Ask what the person wants to happen (the outcome

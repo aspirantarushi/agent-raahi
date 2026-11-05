@@ -440,6 +440,14 @@ def filter_rows(all_rows: List[dict], status: Optional[str] = None, camp: Option
             and not (hide_intake and r["status"] in (INTAKE, INTAKE_DONE))]
 
 
+# ---------- research runs (once per case; "Research again" adds another) ----------
+
+def note_research_run(case_id: str, by: str, result: str, base: Path = HERE) -> None:
+    record = _must_load(case_id, base)
+    record.setdefault("research_runs", []).append({"on": now(), "by": clean_name(by), "result": result})
+    _save(record, base)
+
+
 # ---------- finishing the intake ----------
 
 DEFAULT_FOLLOW_UP_DAYS = 7

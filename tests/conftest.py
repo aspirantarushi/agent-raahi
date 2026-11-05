@@ -19,3 +19,17 @@ os.environ.pop("CLINIC_PASSCODE", None)
 # Never call the real Groq service from tests: an empty value stops llm._load_dotenv reading the real
 # key from .env. The one live Groq test reads the key itself (tests/test_groq.py).
 os.environ["GROQ_API_KEY"] = ""
+
+
+import pytest  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def no_real_research(monkeypatch):
+    """Step 3 starts research by itself: in tests it never reaches the real AI or Google Search
+    (tests that need research set their own pretend research)."""
+    import llm
+
+    def not_in_tests(*a, **k):
+        raise llm.AIUnavailable("Research is not run in tests.")
+    monkeypatch.setattr(llm, "research_issue", not_in_tests)

@@ -318,6 +318,19 @@ def guide_card(name: str, title: str, text: str) -> str:
     return f'<div class="card guide">{icon(name)}<h3>{html.escape(title)}</h3><p>{html.escape(text)}</p></div>'
 
 
+def info_card(title: str, rows: List[str], kind: str = "", icon_name: str = "") -> str:
+    """A step-3 card: a heading and rows (each row already safe HTML)."""
+    head = (icon(icon_name) if icon_name else "") + f"<h4>{html.escape(title)}</h4>"
+    body = "".join(f"<div class=\"row\">{r}</div>" for r in rows)
+    return f'<div class="infocard {html.escape(kind)}"><div class="head">{head}</div>{body}</div>'
+
+
+def letter_html(text: str) -> str:
+    """A draft letter shown as a readable page (not typewriter text); line breaks kept."""
+    lines = "<br>".join(html.escape(line) if line.strip() else "&nbsp;" for line in text.strip().split("\n"))
+    return f'<div class="letter">{lines}</div>'
+
+
 def tag(text: str) -> str:
     """A small label with a light tinted background, like "added 2026-11-05 by Volunteer A"."""
     return f'<span class="tag">{html.escape(text)}</span>'

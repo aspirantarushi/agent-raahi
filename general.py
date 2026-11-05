@@ -54,7 +54,11 @@ POLICE_OR_COURT_WORDS = ["police", "fir", "arrest", "arrested", "court", "hearin
 POLICE_OR_COURT_DOCUMENTS = ["FIR copy", "Court orders", "Notices received"]
 ALWAYS_DOCUMENTS = ["ID proof", "Income proof (for free legal aid)"]
 YES_NO_FACTS = ["danger_now", "in_custody", "money_lost_online", "money_lost_in_last_few_days", "called_1930",
-                "woman", "under_18", "sc_st", "disability"]
+                "woman", "under_18", "sc_st", "disability", "essential_service_cut", "unofficial_payment_demand"]
+ISSUE_CATEGORIES = {"arrest_or_custody", "online_or_financial_fraud", "electricity_or_water", "wages_or_work",
+                    "ration_or_welfare", "other"}
+GENERIC_PERSON = {"the person seeking help", "person seeking help", "the person", "unknown", "not stated",
+                  "the person needing help", "व्यक्ति", "मदद चाहने वाला व्यक्ति"}
 
 # Which knowledge entries cover which kind of issue.
 ISSUE_KNOWLEDGE = {
@@ -184,7 +188,8 @@ def check_general_answer(raw: dict, notes: str, code: str = "en") -> GeneralRead
     r = GeneralReading()
     if not isinstance(raw, dict):
         return r
-    r.person = clean(raw.get("person_needing_help"), 120) or r.person
+    person = clean(raw.get("person_needing_help"), 120)
+    r.person = "" if not person or person.casefold().strip(" .") in GENERIC_PERSON else person
     r.what_happened = [c for c in (clean(s) for s in (raw.get("what_happened") or [])[:6]) if c]
     for t in (raw.get("timeline") or [])[:10]:
         if isinstance(t, dict) and clean(t.get("what")):
@@ -238,7 +243,7 @@ def check_general_answer(raw: dict, notes: str, code: str = "en") -> GeneralRead
 
     for i in (raw.get("issues") or [])[:5]:
         if isinstance(i, dict) and clean(i.get("name"), 80):
-            category = i.get("category") if i.get("category") in ISSUE_KNOWLEDGE else "other"
+            category = i.get("category") if i.get("category") in ISSUE_CATEGORIES else "other"
             r.issues.append((category, clean(i.get("name"), 80)))
     if r.facts.get("in_custody") and not any(c == "arrest_or_custody" for c, _ in r.issues):
         r.issues.insert(0, ("arrest_or_custody", "someone is in custody"))
@@ -282,6 +287,8 @@ def follow_up_questions(r: GeneralReading, code: str = "en") -> List[str]:
 
     questions = [q for q in r.questions
                  if not any(fact in r.facts and has(q, words) for fact, words in FACT_WORDS.items())]
+    if not r.person and not any(has(q, ["who needs", "who is the person", "किसे मदद"]) for q in questions):
+        questions.append(t("q.person"))
     if not r.outcome and not any(has(q, OUTCOME_WORDS) for q in questions):
         questions.append(t("q.outcome"))
     for when, what in (r.timeline + r.coming_dates):
@@ -327,6 +334,14 @@ def _words(texts: List[str]) -> List[str]:
     return re.findall(r"[a-z][a-z-]+", " ".join(texts).casefold())
 
 
+_DOC_STOP = ("copy", "copies", "any", "the", "and", "all", "has", "proof", "number", "numbers", "for", "free",
+             "legal", "aid", "received", "with", "given", "one", "was", "if", "latest", "last", "three", "two")
+
+
+def _doc_words(text: str) -> List[str]:
+    return [w.rstrip("s") for w in re.findall(r"[A-Za-z]{3,}", text.casefold()) if w not in _DOC_STOP]
+
+
 def _not_held(items: List[str], held: List[str]) -> List[str]:
     held_words = " ".join(held).casefold()
 
@@ -334,7 +349,10 @@ def _not_held(items: List[str], held: List[str]) -> List[str]:
         keys = [w for w in re.findall(r"[A-Za-z]{3,}", item.casefold())
                 if w not in ("copy", "copies", "any", "the", "and", "all", "has", "proof", "number", "numbers",
                              "for", "free", "legal", "aid", "received", "with")]
-        return bool(keys) and all(k in held_words for k in keys[:2])
+        if bool(keys) and all(k in held_words for k in keys[:2]):
+            return True
+        item_words = set(_doc_words(item))  # "latest bill" covers "Latest electricity bill"
+        return any(h and (h <= item_words or len(h & item_words) >= 2) for h in (set(_doc_words(x)) for x in held))
 
     return [i for i in items if not has(i)]
 
@@ -408,6 +426,15 @@ def income_limit(state: str) -> Tuple[Optional[int], str, str]:
     return None, "", ""
 
 
+INTERNAL_NOTE = re.compile(r"(^|;\s*)(confirmed|checked|verified|seen|todo|note to self)\b[^;]*", re.I)
+
+
+def public_note(note: str) -> str:
+    """A state's note from income_limits.csv without our own working notes ("Confirmed on BSLSA site")."""
+    parts = [p.strip() for p in (note or "").split(";")]
+    return "; ".join(p for p in parts if p and not INTERNAL_NOTE.match(p))
+
+
 def check_eligibility(facts: Dict[str, object]) -> Eligibility:
     """Section 12 groups first (they qualify whatever the income), then the state income limit.
     'missing' lists only the facts still needed to decide, in the order to ask them."""
@@ -421,6 +448,7 @@ def check_eligibility(facts: Dict[str, object]) -> Eligibility:
     limit = None
     if state:
         limit, note, url = income_limit(str(state))
+        note = public_note(note)
         if note:  # state rules (e.g. Bihar's extra groups) and limits flagged for checking
             notes.append(f"{state}: {note}")
 
@@ -531,6 +559,8 @@ class GeneralFacts:
     # (research.items_for_summary). Never AI text the supervisor has not approved.
     research: List[dict] = field(default_factory=list)
     outcome: str = ""  # what the person wants, from the notes (or answered as a question)
+    evidence: Dict[str, str] = field(default_factory=dict)  # quotes kept for the lawyer (e.g. a payment demand)
+    research_state: str = "none"  # "none" (our files cover it), "waiting", "failed", "approved"
 
     def to_dict(self) -> dict:
         d = {k: v for k, v in self.__dict__.items()}
@@ -542,7 +572,8 @@ class GeneralFacts:
         keys = ["person", "what_happened", "timeline", "coming_dates", "issues", "sections", "documents_held",
                 "answers", "still_to_ask", "facts", "today"]
         return cls(**{k: d[k] for k in keys}, precautions=d.get("precautions", []), research=d.get("research", []),
-                   outcome=d.get("outcome", ""))
+                   outcome=d.get("outcome", ""), evidence=d.get("evidence", {}),
+                   research_state=d.get("research_state", "none"))
 
 
 def build_facts(reading: GeneralReading, answers: List[Tuple[str, str]], still_to_ask: List[str],
@@ -556,6 +587,7 @@ def build_facts(reading: GeneralReading, answers: List[Tuple[str, str]], still_t
         still_to_ask=still_to_ask, facts=dict(facts), today=today.isoformat(),
         precautions=[k for k in reading.unconfirmed_yes if k in PRECAUTION_FACTS],
         outcome=reading.outcome,
+        evidence={k: v for k, v in reading.evidence.items() if k == "unofficial_payment_demand"},
     )
 
 
@@ -614,12 +646,16 @@ def summary_body(g: GeneralFacts) -> str:
     out = ["CASE SUMMARY — any case (general intake)",
            f"Date: {drafts.show_date(date.fromisoformat(g.today))}",
            "Prepared from the volunteer's notes. People are described by their role only.",
-           f"Person needing help: {g.person}", ""]
+           f"Person needing help: {g.person or 'Not stated (ask who needs the help)'}", ""]
 
+    out += _glance_lines(g, "en")
     urgent = urgent_actions(facts, g.precautions)
     flags = []
     if facts.get("in_custody") is True:
         flags.append("Someone is in custody now.")
+    if facts.get("essential_service_cut") is True:  # the same rule as "At a glance"
+        flags.append(lang.t("cw.urgent_service", "en", what=lang.t(
+            "cw.service.water" if _is_water(g) else "cw.service.electricity", "en")))
     flags += [f"Coming up: {w} — {what}" for w, what in g.coming_dates]
     out.append("URGENT")
     out += [f"- {a}" for a in urgent + flags] or ["- Nothing urgent found in the notes."]
@@ -652,10 +688,7 @@ def summary_body(g: GeneralFacts) -> str:
 
     out.append("Documents")
     out.append("- The person has: " + ("; ".join(g.documents_held) if g.documents_held else "none mentioned"))
-    for label, items, source_line in doc_lists:
-        out.append(f"- {label}: " + ("; ".join(items) if items else "nothing more listed"))
-        if source_line:
-            out.append(f"  ({source_line})")
+    out += _document_lines(g, doc_lists, "en")
     out.append("")
 
     out.append("Free legal aid")
@@ -680,9 +713,9 @@ def summary_body(g: GeneralFacts) -> str:
         out += [f"- {q}" for q in g.still_to_ask]
         out.append("")
 
+    out += _lawyer_lines(g, "en")
     out.append("Next steps")
-    out += [f"{i}. {s}" for i, s in enumerate(steps, 1)]
-    out.append(f"   ({steps_entry.source_line})")
+    out += _step_lines(g, eligibility, "en")
     out.append("")
     out.append("This summary does not predict the outcome of the case.")
     return "\n".join(out)
@@ -732,11 +765,15 @@ def summary_body_hi(g: "GeneralFacts") -> str:
     docs_missing = [i for _, items, _ in doc_lists for i in items]
     steps, steps_entry = next_steps({**facts, "_precautions": g.precautions}, categories, eligibility, docs_missing)
     out = [_hi("sum.title"), _hi("sum.date", date=lang.show_date(date.fromisoformat(g.today), "hi")),
-           _hi("sum.prepared"), _hi("sum.person", person=g.person), ""]
+           _hi("sum.prepared"), _hi("sum.person", person=g.person or _hi("cw.person_not_stated")), ""]
+    out += _glance_lines(g, "hi")
 
     urgent = [_hi("safety.call112") if a == CALL_112 else _hi("safety.call1930")
               for a in urgent_actions(facts, g.precautions)]
     flags = [_hi("sum.in_custody")] if facts.get("in_custody") is True else []
+    if facts.get("essential_service_cut") is True:
+        flags.append(lang.t("cw.urgent_service", "hi", what=lang.t(
+            "cw.service.water" if _is_water(g) else "cw.service.electricity", "hi")))
     flags += [_hi("sum.coming_up", when=w, what=what) for w, what in g.coming_dates]
     out.append(_hi("sum.urgent"))
     out += [f"- {a}" for a in urgent + flags] or [f"- {_hi('sum.nothing_urgent')}"]
@@ -770,14 +807,7 @@ def summary_body_hi(g: "GeneralFacts") -> str:
 
     out.append(_hi("sum.documents"))
     out.append(_hi("sum.has") + ("; ".join(g.documents_held) if g.documents_held else _hi("sum.none_mentioned")))
-    for label, items, source_line in doc_lists:
-        hindi_items = []
-        for item in items:
-            hindi_items.append(_hindi_document(item, categories))
-        label_hi = _hi("sum.often_help") if label == OFTEN_HELP else _hi("sum.still_to_collect")
-        out.append(f"- {label_hi}: " + ("; ".join(hindi_items) if hindi_items else _hi("sum.nothing_more")))
-        if source_line:
-            out.append(f"  ({source_line})")
+    out += _document_lines(g, doc_lists, "hi", categories)
     out.append("")
 
     out.append(_hi("sum.legal_aid"))
@@ -804,12 +834,78 @@ def summary_body_hi(g: "GeneralFacts") -> str:
         out += [f"- {_hi_known('elig.q_en:', q)}" for q in g.still_to_ask]
         out.append("")
 
+    out += _lawyer_lines(g, "hi")
     out.append(_hi("sum.next_steps"))
-    out += [f"{i}. {_hi_known('next:', x)}" for i, x in enumerate(steps, 1)]
-    out.append(f"   ({steps_entry.source_line})")
+    out += _step_lines(g, eligibility, "hi")
     out.append("")
     out.append(_hi("sum.no_prediction"))
     return "\n".join(out)
+
+
+def _is_water(g: "GeneralFacts") -> bool:
+    import casework
+    return casework.problem_type(g) == "water"
+
+
+def _approved_points(g: "GeneralFacts") -> List[dict]:
+    """Approved research points shown with this case (saved knowledge entries count as approved routes)."""
+    out = []
+    for i in g.research:
+        kind = i.get("kind") or "route"
+        src = i.get("source_line", "")
+        out.append({"kind": kind, "text": i["text"], "approved_on": i.get("approved_on", ""),
+                    "sources": [], "source_line": src})
+    return out
+
+
+def _glance_lines(g: "GeneralFacts", code: str) -> List[str]:
+    import casework
+    today = date.fromisoformat(g.today)
+    label = (lambda k: lang.t(k, code))
+    problem = "; ".join(n for _, n in g.issues) or label("cw.not_stated")
+    lasting = casework.duration(g, today, code) or label("cw.not_known_yet")
+    u = casework.urgency(g, today, code)
+    return [label("cw.glance").upper() if code == "en" else label("cw.glance"),
+            f"- {label('cw.g_problem')}: {problem}",
+            f"- {label('cw.g_wants')}: {g.outcome or label('cw.not_stated')}",
+            f"- {label('cw.g_how_long')}: {lasting}",
+            f"- {label('cw.g_urgency')}: {'; '.join(u.reasons)}", ""]
+
+
+def _document_lines(g: "GeneralFacts", doc_lists, code: str, categories=None) -> List[str]:
+    import casework
+    items, origin = casework.documents_needed(g, _approved_points(g), code)
+    label = lang.t("cw.docs_needed", code)
+    out = [f"- {label}: " + ("; ".join(items) if items else lang.t("cw.nothing_more", code))]
+    if origin == "files":
+        for _, _, source_line in doc_lists[:1]:
+            if source_line:
+                out.append(f"  ({source_line})")
+    elif origin == "plain":
+        out.append("  (" + lang.t("cw.docs_plain_note", code) + ")")
+    return out
+
+
+def _lawyer_lines(g: "GeneralFacts", code: str) -> List[str]:
+    import casework
+    flags = casework.lawyer_flags(g, code)
+    return ([lang.t("cw.for_lawyer", code)] + [f"- {f}" for f in flags] + [""]) if flags else []
+
+
+def _step_lines(g: "GeneralFacts", eligibility, code: str) -> List[str]:
+    import casework
+    steps = casework.next_steps(g, eligibility, _approved_points(g), g.research_state, date.fromisoformat(g.today),
+                                code)
+    out = []
+    for i, s in enumerate(steps, 1):
+        when = ""
+        if s.due:
+            when = " — " + lang.t("cw.by_date" if not s.suggested else "cw.by_date_suggested", code,
+                                  date=lang.show_date(s.due, code))
+        out.append(f"{i}. {s.text}{when}")
+        if s.source:
+            out.append(f"   ({s.source})")
+    return out
 
 
 def _hindi_document(item: str, categories: List[str]) -> str:

@@ -260,10 +260,10 @@ def fill_approval_date(text: str, approved_on: date, ai_model: Optional[str], ru
     blanks = [(APPROVAL_BLANK, f"approved by the supervisor on {show_date(approved_on)}.")]
     hi_blank = lang.t("disclosure.approved", "hi", date=lang.t("disclosure.date_blank", "hi"))
     blanks.append((hi_blank, lang.t("disclosure.approved", "hi", date=lang.show_date(approved_on, "hi"))))
-    for blank, filled in blanks:
-        if blank in text:
-            i = text.rindex(blank)
-            return text[:i] + filled + text[i + len(blank):]
+    if any(blank in text for blank, _ in blanks):  # every draft in a packet gets the approval date
+        for blank, filled in blanks:
+            text = text.replace(blank, filled)
+        return text
     if not any(start in text for start in DISCLOSURE_STARTS):
         return add_disclosure(text, ai_model, approved_on, rules, code)
     return text

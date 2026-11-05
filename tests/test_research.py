@@ -15,8 +15,11 @@ import llm
 import research
 import store
 import tracker
+import casework
+import storage
 
 R = "https://vertexaisearch.cloud.google.com/grounding-api-redirect/"
+REAL_RESEARCH = llm.research_issue  # tests/conftest.py replaces it in every test; this test file needs it once
 
 # ---------- the fake research: Bihar, electricity cut ----------
 
@@ -186,6 +189,7 @@ def test_bihar_points_without_an_official_source_are_dropped(tmp_path, fake_ai):
 
 
 def test_only_state_and_issue_are_sent_never_numbers(monkeypatch):
+    monkeypatch.setattr(llm, "research_issue", REAL_RESEARCH)
     bodies = []
     monkeypatch.setattr(llm, "_generate", lambda body: (bodies.append(body) or (
         {"candidates": [{"content": {"parts": [{"text": "brief"}]},
@@ -208,7 +212,7 @@ def test_research_on_screen(monkeypatch, fake_ai):
     from streamlit.testing.v1 import AppTest
     from test_general import MODEL, answer, yn
     raw = answer(what_happened=["The electricity line was cut."],
-                 issues=[{"category": "other", "name": "electricity connection cut"}],
+                 issues=[{"category": "electricity_or_water", "name": "electricity connection cut"}],
                  state={"value": "Bihar", "quote": "lives in Bihar"}, woman=yn("yes", "The person seeking help"),
                  outcome_wanted={"value": "the connection restored", "quote": "She wants the connection restored."})
     monkeypatch.setattr(llm, "available", lambda: True)
@@ -217,40 +221,50 @@ def test_research_on_screen(monkeypatch, fake_ai):
                         lambda notes, output_lang="en", known=None: llm.NotesReading(raw, notes, {}, MODEL))
     monkeypatch.setattr(research, "resolve_link", resolve)
     monkeypatch.setenv("SUPERVISOR_PASSWORD", "practice-sup")
-    at = AppTest.from_file("../app.py", default_timeout=20).run()
+    at = AppTest.from_file("../app.py", default_timeout=30).run()
     at.text_input(key="volunteer").set_value("Volunteer A").run()
     at.text_area(key="g_notes").set_value(STORY)
     next(b for b in at.button if b.label == "Read the story").click().run()
     assert not at.exception, at.exception[0].stack_trace
+    # Research started by itself, once, with only the state and the issue in plain words
+    assert fake_ai == [("Bihar", "electricity connection cut")]
+    at.run()
+    assert len(fake_ai) == 1                                       # not again on a page reload
     assert "Not covered by our verified files yet" in at.code[0].value
-    assert at.button(key="rs-go").label == "Research this issue"
-    assert at.selectbox(key="rs-state").value == "Bihar"
-
-    at.text_input(key="rs-issue").set_value("Ramesh cut the electricity connection")  # a name: blocked
-    at.button(key="rs-go").click().run()
-    assert any("Ramesh" in e.value for e in at.error) and not fake_ai
-    at.text_input(key="rs-issue").set_value("electricity connection cut, department not responding")
-    at.button(key="rs-go").click().run()
-    assert not at.exception, at.exception[0].stack_trace
-    assert fake_ai == [("Bihar", "electricity connection cut, department not responding")]
-    assert any("Research sent to the supervisor: 3 points" in s.value for s in at.success)
     assert "Write first to the Assistant Engineer" not in at.code[0].value  # not approved yet
+    assert len(at.code) == 2                                       # summary + free legal aid application (no letter yet)
+    at.button(key="rs-again-go").click().run()                     # "Research again" on request
+    assert len(fake_ai) == 2
 
     case_id = at.session_state["case_id"]
+    for r in research.for_case(case_id)[1:]:                       # keep one brief for the review
+        storage.backend().delete("research", r["id"])
+    at.checkbox(key="g_checked").check().run()
+    next(b for b in at.button if b.key == "send-g").click().run()
+    assert store.get_pending(case_id)["draft"].count("DRAFT — to be checked by a lawyer") == 2
+
+    # One combined review: research points and the drafts together; approval waits for the points
     rid = research.for_case(case_id)[0]["id"]
     at.button(key="nav-supervisor").click().run()
     next(t for t in at.text_input if t.label == "Supervisor password").set_value("practice-sup")
     next(b for b in at.button if b.label == "Sign in").click().run()
-    assert any("AI research, not yet checked: for supervisor approval" in s.value for s in at.subheader)
-    at.radio(key=f"rsd-{rid}-p1").set_value("Approve").run()
-    at.button(key=f"rss-{rid}-p1").click().run()
+    assert not any(r.key == f"action-{case_id}" for r in at.radio)  # no approve until the points are decided
+    for point, choice in (("p1", "Approve"), ("p2", "Reject"), ("p3", "Approve")):
+        at.radio(key=f"rsd-{rid}-{point}").set_value(choice).run()
+        at.button(key=f"rss-{rid}-{point}").click().run()
     assert not at.exception, at.exception[0].stack_trace
-    assert at.button(key=f"rsk-{rid}-p1")  # "Save as knowledge for Bihar" is offered for the approved point
-
-    at.button(key="nav-new").click().run()
-    draft = at.code[0].value
-    assert "Write first to the Assistant Engineer" in draft and "https://energy.bihar.gov.in/complaints" in draft
-    assert "Consumer Grievance Redressal Forum" not in draft  # still waiting: not in the case
+    packet = store.get_pending(case_id)["draft"]
+    assert packet.count("DRAFT — to be checked by a lawyer") == 3   # the letter was added for this review
+    letter = next(p for p in casework.split_bundle(packet) if "Complaint about" in p)
+    assert "Write first to the Assistant Engineer" in letter and "energy.bihar.gov.in" in letter
+    assert "Consumer Grievance Redressal Forum" not in letter      # rejected: not in the letter
+    assert "[Name of the person]" in letter and "[Consumer number]" in letter
+    at.radio(key=f"action-{case_id}").set_value("Approve").run()
+    next(b for b in at.button if b.key == f"approve-{case_id}").click().run()
+    assert not at.exception, at.exception[0].stack_trace
+    saved = store.approved_draft(case_id)
+    assert "approved by the supervisor on [date]" not in saved      # every draft in the packet is dated
+    assert saved.count("the draft was reviewed and approved by the supervisor on") == 3
 
 
 # ---------- the supervisor: approve, edit, reject; only approved points reach the case ----------

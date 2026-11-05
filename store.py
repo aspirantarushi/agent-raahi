@@ -184,6 +184,27 @@ def resend(case_id: str, fixed_text: str, base: Path = HERE, by: str = "") -> No
     audit.add_event(case_id, "fixed and resent", audit.VOLUNTEER, f"by {by}" if by else "", base=base)
 
 
+LETTER_MARKERS = ("For the volunteer and the supervisor (remove this part", "स्वयंसेवक और सुपरवाइज़र के लिए (पत्र भेजने")
+
+
+def replace_letter(case_id: str, letter: str, base: Path = HERE) -> None:
+    """Put the complaint letter (made from the supervisor's approved research points) into the draft
+    waiting for review, replacing an earlier version of it. Recorded in the audit record."""
+    import casework
+    record = _load(case_id, base)
+    if record["status"] != WAITING:
+        raise ValueError("Only a waiting draft can get the letter.")
+    if not letter.startswith(drafts.DRAFT_HEADER) or drafts.personal_details_found(letter):
+        raise ValueError("The letter is not a valid draft.")
+    parts = [p.strip() + "\n" for p in casework.split_bundle(record["draft"])
+             if not any(m in p for m in LETTER_MARKERS)]
+    parts.insert(1 if parts else 0, letter.strip() + "\n")
+    record["draft"] = casework.DOC_SEPARATOR.join(parts)
+    _save_pending(record, base)
+    audit.add_event(case_id, "complaint letter added from approved research", audit.SUPERVISOR,
+                    "built only from the facts of the case and the approved points", base=base)
+
+
 def get_pending(case_id: str, base: Path = HERE) -> dict:
     return _load(case_id, base)
 

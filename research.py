@@ -38,35 +38,7 @@ APPROVE, EDIT, REJECT = "approve", "edit", "reject"
 KINDS = {"route": "Route", "documents": "Documents usually needed", "time_limit": "Time limit",
          "how_to_file": "Where and how to file", "letter": "Draft letter"}
 
-# Official sites only. A link counts when its host is one of these or ends with "." + one of these.
-ALLOWED_SUFFIXES = ("gov.in", "nic.in")  # central and state government, India Code, NALSA, SLSAs, most courts
-ALLOWED_HOSTS = (
-    "indiacode.nic.in", "nalsa.gov.in", "sci.gov.in", "ecourts.gov.in",
-    "allahabadhighcourt.in",  # Allahabad High Court
-    "patnahighcourt.gov.in",
-    # Electricity regulators and state power companies whose sites are not under gov.in / nic.in.
-    # Each address was confirmed on 5 November 2026 on a government page, or on the state-owned
-    # holding company's page that a government page links to (where shown):
-    # Bihar
-    "berc.co.in",     # Bihar Electricity Regulatory Commission (also its Ombudsman and CGRF pages):
-                      #   state.bihar.gov.in and cercind.gov.in/serc_hin.html
-    "bsphcl.co.in",   # Bihar State Power (Holding) Company Ltd: state.bihar.gov.in
-    "nbpdcl.co.in",   # North Bihar Power Distribution Company Ltd: bsphcl.co.in/main.htm
-    "sbpdcl.co.in",   # South Bihar Power Distribution Company Ltd: bsphcl.co.in/main.htm
-    "bsptcl.in",      # Bihar State Power Transmission Company Ltd: bsphcl.co.in/main.htm
-    "bspgcl.co.in",   # Bihar State Power Generation Company Ltd: bsphcl.co.in/main.htm
-    # Uttar Pradesh
-    "uperc.org",      # UP Electricity Regulatory Commission (also the Electricity Ombudsman page):
-                      #   cercind.gov.in/serc_hin.html
-    "uppcl.org",      # UP Power Corporation Ltd: cercind.gov.in/sebs.html
-    "pvvnl.org",      # Paschimanchal Vidyut Vitran Nigam Ltd: cercind.gov.in/sebs.html and uppcl.org
-    "mvvnl.in",       # Madhyanchal Vidyut Vitran Nigam Ltd: cercind.gov.in/sebs.html and uppcl.org
-    "dvvnl.org",      # Dakshinanchal Vidyut Vitran Nigam Ltd: cercind.gov.in/sebs.html and uppcl.org
-    "kesco.org.in",   # Kanpur Electricity Supply Company (current address): uppcl.org
-    "kesco.co.in",    # Kanpur Electricity Supply Company (older address, still live): cercind.gov.in/sebs.html
-    "upptcl.org",     # UP Power Transmission Corporation Ltd: uppcl.org
-    # Purvanchal Vidyut Vitran Nigam is puvvnl.up.nic.in (cercind.gov.in/sebs.html): already allowed (nic.in).
-)
+from official import ALLOWED_HOSTS, ALLOWED_SUFFIXES, allowed_link, host  # noqa: F401  (one list)
 REDIRECT_HOSTS = ("vertexaisearch.cloud.google.com",)  # Google's grounding links point here first
 PREDICTION = re.compile(r"\b(chances?|likely|unlikely|guarantee[sd]?|surely|certainly|definitely|assured|"
                         r"win|wins|winning|won|succeed|succeeds|success(?:ful)?|"
@@ -92,20 +64,6 @@ def names_in(question: str, notes: str) -> List[str]:
 
 
 # ---------- links ----------
-
-def host(url: str) -> str:
-    try:
-        return (urllib.parse.urlsplit(url).hostname or "").lower().rstrip(".")
-    except ValueError:
-        return ""
-
-
-def allowed_link(url: str) -> bool:
-    if not url or urllib.parse.urlsplit(url).scheme not in ("http", "https"):
-        return False
-    h = host(url)
-    return any(h == d or h.endswith("." + d) for d in ALLOWED_SUFFIXES + ALLOWED_HOSTS)
-
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *args, **kwargs):

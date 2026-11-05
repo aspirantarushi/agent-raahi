@@ -11,6 +11,8 @@ applies to your organisation.
   anywhere or saved, and the online table refuses text that still looks like one. Names cannot be
   removed automatically: volunteers are told not to type them and must tick "no names" before
   sending a summary.
+- Consumer, account or application numbers (for example an electricity consumer number): the app
+  records only whether the person has one (yes or no). The number stays a [blank] in the letter.
 - The pasted or spoken case notes. They stay in the open browser session only and are gone when the
   page is closed. Voice recordings are sent only to be turned into text and are never saved. From the
   notes, only the checked summary lines and facts are kept.

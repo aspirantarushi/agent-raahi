@@ -18,6 +18,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 import audit
+import casework
 import consistency
 import drafts
 import evaluation
@@ -589,16 +590,62 @@ def reading_copy_box(key: str, text: str):
             st.code(result[1], language=None, wrap_lines=True)
 
 
+def apply_fixes(gen, facts):
+    """What the volunteer fixed on the spot in the checklist (step 3) goes into the case before the drafts."""
+    fix = gen.setdefault("fixes", {})
+    if fix.get("person"):
+        facts.person = fix["person"]
+    if fix.get("outcome"):
+        facts.outcome = fix["outcome"]
+    dates = fix.get("dates", {})
+    facts.timeline = [(dates.get(w) or w, x) for w, x in facts.timeline]
+    facts.coming_dates = [(dates.get(w) or w, x) for w, x in facts.coming_dates]
+    facts.documents_held = list(dict.fromkeys(facts.documents_held + fix.get("documents", [])))
+    return facts
+
+
+def research_status(case_id, record) -> str:
+    """"approved", "waiting", "failed" or "not started" for this case's research."""
+    briefs = research.for_case(case_id) if case_id else []
+    if research.approved_points(case_id) if case_id else []:
+        return "approved"
+    if any(r["status"] == research.WAITING for r in briefs):
+        return "waiting"
+    if (record or {}).get("research_runs"):
+        return "failed" if (record["research_runs"][-1].get("result") == "failed") else "approved"
+    return "not started"
+
+
+def auto_research(case_id: str, issue: str, state: str):
+    """Research runs once per case, by itself, after the questions (not again on page reloads).
+    Only the state and the issue in plain words are sent; never if a name from the story is in it."""
+    notes = st.session_state.get("g_notes", "") or ""
+    if research.names_in(issue, notes) or general.possible_names(issue, notes):
+        tracker.note_research_run(case_id, who(), "failed")
+        return
+    try:
+        with st.spinner(t("rs.working"), show_time=True):
+            record = research.run(case_id, state, issue, who())
+        result = "waiting" if record["points"] else "failed"
+    except research.ResearchFailed:
+        result = "failed"
+    except (tracker.TrackerError, storage.StorageError, ValueError):
+        result = "failed"
+    try:
+        tracker.note_research_run(case_id, who(), result)
+    except (tracker.TrackerError, storage.StorageError):
+        pass
+
+
+def research_again(case_id: str, issue: str, state: str):
+    st.session_state["rs-again"] = (case_id, issue, state)
+
+
 def general_summary(gen):
     reading = gen["reading"]
     eligibility = general.check_eligibility(gen["facts"])
     still_to_ask = gen["unanswered"] + [general.ELIGIBILITY_QUESTIONS[m] for m in eligibility.missing]
-    facts = general.build_facts(reading, gen["answers"], still_to_ask, gen["facts"], date.today())
-    try:  # approved research and saved research knowledge for issues our files don't cover
-        facts.research = research.items_for_summary(st.session_state.get("case_id"), gen["facts"].get("state"),
-                                                    [name for _, name in facts.issues] or ["the problem described"])
-    except storage.StorageError:
-        facts.research = []
+    facts = apply_fixes(gen, general.build_facts(reading, gen["answers"], still_to_ask, gen["facts"], date.today()))
     problems = consistency.general_problems(facts, gen.get("translation", ""))
     if problems:
         cannot_conclude(problems)
@@ -613,24 +660,62 @@ def general_summary(gen):
 
     flow_title(3)
     if gen["reading"].questions or gen["answers"]:
-        st.button(t("ui.back_questions"), key="g-back-questions", on_click=back_to_questions)
+        st.button(t("ui.back_questions"), key="g-back-questions", type="tertiary", icon=":material/arrow_back:",
+                  on_click=back_to_questions)
+
+    # Research: once per case, by itself, when our files don't cover a problem (and again only on request)
+    case_id = st.session_state.get("case_id")
+    state = gen["facts"].get("state")
+    try:
+        facts.research = research.items_for_summary(case_id, state, [n for _, n in facts.issues] or
+                                                    ["the problem described"])
+    except storage.StorageError:
+        facts.research = []
+    uncovered = general.uncovered_issues(facts)
+    record = tracker.load(case_id) if case_id else None
+    again = st.session_state.pop("rs-again", None)
+    if uncovered and state and llm.gemini_available() and (again or not (record or {}).get("research_runs")):
+        case_id = case_id or ensure_case(general.CASE_TYPE)
+        auto_research(case_id, again[1] if again else uncovered[0], state)
+        record = tracker.load(case_id)
+        try:
+            facts.research = research.items_for_summary(case_id, state, [n for _, n in facts.issues])
+        except storage.StorageError:
+            pass
+    status = research_status(case_id, record) if (uncovered or facts.research) else "none"
+    facts.research_state = {"not started": "none" if not uncovered else "failed"}.get(status, status)
+
     draft_lang = draft_language_choice("g_draft_lang")
-    items = readiness.general_items(facts, eligibility, cannot_marks("g"))
-    draft = readiness.add_gaps_to_draft(general.make_summary_draft(facts, gen["model"], draft_lang), items, draft_lang)
     if draft_lang == "hi":
         st.caption(t("ui.hindi_label_note"))
-    col_draft, col_check = st.columns([3, 2])
-    with col_draft:
-        st.code(draft, language=None, wrap_lines=True)
+    kind = casework.problem_type(facts)
+    missing_years = casework.missing_years(facts)
+    items = readiness.case_items(facts, eligibility, kind, missing_years, cannot_marks("g"))
+    approved = research.approved_points(case_id) if case_id else []
+    issue = (uncovered[0] if uncovered else "; ".join(n for _, n in facts.issues)) or t("ui.general.problem_described")
+
+    documents = [(t("cw.doc_summary"), readiness.add_gaps_to_draft(
+        general.make_summary_draft(facts, gen["model"], draft_lang), items, draft_lang))]
+    if approved:
+        documents.append((t("cw.doc_letter"), casework.complaint_letter(facts, approved, issue, gen["model"],
+                                                                         draft_lang)))
+    if eligibility.status == "eligible":
+        documents.append((t("cw.doc_dlsa"), casework.dlsa_application(facts, eligibility, issue, gen["model"],
+                                                                       draft_lang)))
+    documents = [(title, st.session_state.get(f"doc-edit-{i}", text)) for i, (title, text) in enumerate(documents)]
+
+    col_cards, col_check = st.columns([3, 2], gap="medium")
+    with col_cards:
+        case_cards(facts, eligibility, approved, kind, draft_lang)
     with col_check:
-        checklist_box(items, "g")
+        fix_checklist(items, facts, eligibility, kind, missing_years, approved, gen)
+    research_panel(facts, uncovered, status, case_id, state)
+    drafts_panel(documents, status, uncovered)
     entries = ledger.general(facts, reading.facts, eligibility, ai_checked=bool(gen["model"]))
     ledger_box(entries)
-    uncovered = general.uncovered_issues(facts)
-    if uncovered:
-        research_box(uncovered, gen["facts"].get("state"))
-    reading_copy_box("summary", draft)
-    names = general.possible_names(draft, st.session_state.get("g_notes", ""))
+    packet = casework.bundle(documents)
+    reading_copy_box("summary", documents[0][1])
+    names = general.possible_names(packet, st.session_state.get("g_notes", ""))
     if names:
         st.warning(t("ui.general.possible_names", names=", ".join(names)))
 
@@ -640,22 +725,190 @@ def general_summary(gen):
         st.success(t("ui.sent", case_id=sent))
         return
     checked = st.checkbox(t("ui.general.checked_no_names"), key="g_checked")
-    if st.button(send_label(items), disabled=not checked, key="send-g"):
+    if st.button(send_label(items), disabled=not checked, key="send-g", type="primary", icon=":material/send:"):
         ai = None
         if gen["model"]:
             ai = {"model": gen["model"], "read_at": gen["read_at"], "extracted": dict(reading.facts),
                   "not_accepted": sorted(set(reading.dropped))}
         try:
             case_id = ensure_case(general.CASE_TYPE)
-            case_id = store.submit(draft, facts, ai=ai, draft_lang=draft_lang, readiness=readiness_rows(items),
+            case_id = store.submit(packet, facts, ai=ai, draft_lang=draft_lang, readiness=readiness_rows(items),
                                    ledger=[e.as_dict() for e in entries], case_id=case_id, by=who())
             tracker.confirm_facts(case_id, gen["facts"], who())
         except (ValueError, storage.StorageError) as err:
             st.error(str(err))
             return
         st.session_state["gen_sent"] = case_id
-        finish_agent_session(case_id, draft)
+        finish_agent_session(case_id, packet)
         st.rerun()
+
+
+def case_cards(g, eligibility, approved, kind, code_):
+    """At a glance, Facts, Timeline, Documents, Free legal aid, For the lawyer, Next steps (with dates)."""
+    e = html.escape
+    today = date.fromisoformat(g.today)
+    u = casework.urgency(g, today, code_)
+    glance = [f'<span class="k">{e(t("cw.g_problem"))}</span>{e("; ".join(n for _, n in g.issues) or t("cw.not_stated"))}',
+              f'<span class="k">{e(t("cw.g_wants"))}</span>{e(g.outcome or t("cw.not_stated"))}',
+              f'<span class="k">{e(t("cw.g_how_long"))}</span>{e(casework.duration(g, today, code_) or t("cw.not_known_yet"))}',
+              f'<span class="k">{e(t("cw.g_urgency"))}</span>{e(" ".join(u.reasons))}']
+    st.markdown(ui.info_card(t("cw.glance"), glance, "glance" + (" urgent" if u.level != "normal" else ""), "bolt"),
+                unsafe_allow_html=True)
+    rows = [f'<span class="k">{e(t("cw.person"))}</span>{e(g.person or t("cw.person_not_stated"))}']
+    rows += [e(x) for x in g.what_happened]
+    if g.facts.get("state"):
+        rows.append(f'<span class="k">{e(t("rs.state"))}</span>{e(g.facts["state"])}')
+    st.markdown(ui.info_card(t("cw.facts"), rows, icon_name="description"), unsafe_allow_html=True)
+    if g.timeline or g.coming_dates:
+        tl = [f'<span class="when">{e(w)}</span> · {e(x)}' for w, x in g.timeline + g.coming_dates]
+        tl += [f'<span class="k">{e(t("cw.year_missing"))}</span>{e(w)}' for w, _ in casework.missing_years(g)]
+        st.markdown(ui.info_card(t("cw.timeline"), tl, icon_name="calendar_month"), unsafe_allow_html=True)
+    needed, origin = casework.documents_needed(g, approved, code_)
+    docs = [f'<span class="k">{e(t("cw.docs_has"))}</span>{e("; ".join(g.documents_held) or t("sum.none_mentioned_short"))}',
+            f'<span class="k">{e(t("cw.docs_needed"))}</span>{e("; ".join(needed) or t("cw.nothing_more"))}']
+    if origin == "plain":
+        docs.append(f'<span class="src">{e(t("cw.docs_plain_note"))}</span>')
+    st.markdown(ui.info_card(t("cw.documents"), docs, icon_name="folder"), unsafe_allow_html=True)
+    aid = [e(eligibility_text(eligibility)), *[f'<span class="src">{e(s)}</span>' for s in eligibility.sources[:1]]]
+    st.markdown(ui.info_card(t("sum.legal_aid_short"), aid, icon_name="balance"), unsafe_allow_html=True)
+    flags = casework.lawyer_flags(g, code_)
+    if flags:
+        st.markdown(ui.info_card(t("cw.for_lawyer"), [e(f) for f in flags], "lawyer", "gavel"), unsafe_allow_html=True)
+    steps = casework.next_steps(g, eligibility, general._approved_points(g), g.research_state, today, code_)
+    srows = []
+    for i, s in enumerate(steps, 1):
+        when = ""
+        if s.due:
+            when = f' <span class="when">{e(t("cw.by_date_suggested" if s.suggested else "cw.by_date", date=show_date(s.due)))}</span>'
+        srows.append(f"{i}. {e(s.text)}{when}" + (f'<span class="src">{e(s.source)}</span>' if s.source else ""))
+    st.markdown(ui.info_card(t("cw.next_steps"), srows, icon_name="checklist"), unsafe_allow_html=True)
+
+
+def eligibility_text(eligibility) -> str:
+    return general.eligibility_text(eligibility, code()) if code() != "en" else eligibility.reason
+
+
+def save_fix(gen_key: str, field: str, value):
+    gen = st.session_state["gen"]
+    fixes = gen.setdefault("fixes", {})
+    if field == "dates":
+        fixes.setdefault("dates", {}).update(value)
+    elif field == "documents":
+        fixes["documents"] = list(value)
+    elif field in ("person", "outcome"):
+        fixes[field] = tracker.clean_text(value, 200)
+    else:  # a fact (state, yes/no facts, the reference number yes/no)
+        gen["facts"][field] = value
+        case_id = st.session_state.get("case_id")
+        if case_id:
+            merge_into_case(case_id, {field: value}, "fixed in the checklist")
+
+
+def fix_checklist(items, g, eligibility, kind, missing_years, approved, gen):
+    """The checklist in plain words; each missing item can be fixed right here."""
+    st.markdown(f"**{t('ready.title')}**")
+    st.caption(t("ready.cannot_help"))
+    for item in items:
+        done = item.status == readiness.PRESENT
+        icon = ":material/check_circle:" if done else ":material/radio_button_unchecked:" \
+            if item.status != readiness.CANNOT else ":material/block:"
+        st.markdown(f"{icon} {item.label(code())}: **{t('ready.status.' + item.status)}**"
+                    + (f" ({item.note})" if item.note and item.status == readiness.CANNOT else ""))
+        if done or item.status == readiness.CANNOT:
+            continue
+        how = readiness.FIXES.get(item.key)
+        k = f"fix-{item.key}"
+        with st.container(key=f"fixbox-{item.key}"):
+            if how == "text":
+                field = "person" if item.key == "case_person" else "outcome"
+                st.text_input(item.label(code()), key=k, max_chars=200, label_visibility="collapsed",
+                              placeholder=t(f"q.{field}") if field == "outcome" else t("q.person"))
+                st.button(t("ready.fix_save"), key=f"{k}-go", on_click=lambda f=field, kk=k: save_fix(
+                    "g", f, st.session_state.get(kk) or ""))
+            elif how == "state":
+                st.selectbox(item.label(code()), general.state_names(), index=None, key=k,
+                             label_visibility="collapsed")
+                st.button(t("ready.fix_save"), key=f"{k}-go", on_click=lambda kk=k: save_fix(
+                    "g", "state", st.session_state.get(kk)) if st.session_state.get(kk) else None)
+            elif how == "dates":
+                for n, (when, what) in enumerate(missing_years):
+                    st.text_input(t("ready.fix_full_date", when=when, what=what), key=f"{k}-{n}", max_chars=40,
+                                  placeholder="15 March 2026")
+                st.button(t("ready.fix_save"), key=f"{k}-go", on_click=lambda kk=k, mm=list(missing_years): save_fix(
+                    "g", "dates", {w: (st.session_state.get(f"{kk}-{i}") or "").strip()
+                                   for i, (w, _) in enumerate(mm) if (st.session_state.get(f"{kk}-{i}") or "").strip()}))
+            elif how == "yesno":
+                fact = {"case_reference": "has_reference_number", "case_danger": "danger_now",
+                        "case_custody": "in_custody", "case_1930": "called_1930"}[item.key]
+                st.radio(item.label(code()), [True, False], index=None, key=k, horizontal=True,
+                         label_visibility="collapsed", format_func=lambda v: t("ed.yes") if v else t("ed.no"),
+                         on_change=lambda f=fact, kk=k: save_fix("g", f, st.session_state.get(kk)))
+            elif how == "documents":
+                needed, _ = casework.documents_needed(g, approved, code())
+                st.multiselect(t("ready.fix_docs"), needed, key=k, label_visibility="collapsed",
+                               placeholder=t("ready.fix_docs"))
+                st.button(t("ready.fix_save"), key=f"{k}-go", on_click=lambda kk=k: save_fix(
+                    "g", "documents", st.session_state.get(kk) or []))
+            elif how == "eligibility":
+                for m in eligibility.missing:
+                    if m in ("state", "annual_income"):
+                        continue
+                    st.radio(t(f"elig.q.{m}"), [True, False], index=None, key=f"{k}-{m}", horizontal=True,
+                             format_func=lambda v: t("ed.yes") if v else t("ed.no"),
+                             on_change=lambda f=m, kk=f"{k}-{m}": save_fix("g", f, st.session_state.get(kk)))
+            elif how == "back":
+                st.button(t("ready.fix_back"), key=f"{k}-go", type="tertiary", on_click=back_to_questions)
+            if st.checkbox(t("ready.cannot_box"), key=f"cant-g-{item.key}"):
+                st.text_input(t("ready.reason"), max_chars=120, key=f"cantr-g-{item.key}")
+
+
+def research_panel(g, uncovered, status, case_id, state):
+    if not uncovered and status in ("none", "not started"):
+        return
+    with st.container(border=True, key="research-panel"):
+        st.markdown(f"**{t('rs.title')}**")
+        msg = {"waiting": "rs.status_waiting", "approved": "rs.status_approved", "failed": "rs.failed",
+               "not started": "rs.need_state" if not state else "rs.status_not_started"}.get(status)
+        if msg:
+            (st.error if status == "failed" else st.info)(t(msg), icon=":material/travel_explore:")
+        if uncovered and state and case_id:
+            st.button(t("rs.again"), key="rs-again-go", icon=":material/refresh:", disabled=not llm.gemini_available(),
+                      on_click=research_again, args=(case_id, uncovered[0], state))
+
+
+def drafts_panel(documents, status, uncovered):
+    """Each draft as a readable letter, with Edit and Download; the plain text to copy below it."""
+    st.markdown(f'<div class="step-title" style="text-align:left;font-size:1.3rem">{html.escape(t("cw.drafts"))}</div>',
+                unsafe_allow_html=True)
+    st.caption(t("cw.drafts_caption"))
+    if uncovered and status != "approved":
+        st.info(t("cw.letter_waiting"), icon=":material/hourglass_top:")
+    for i, (title, text) in enumerate(documents):
+        with st.container(border=True, key=f"draft-{i}"):
+            st.markdown(f'<div class="draft-head"><h4>{html.escape(title)}</h4></div>', unsafe_allow_html=True)
+            if st.session_state.get(f"doc-editing-{i}"):
+                st.text_area(t("cw.edit_label"), value=text, key=f"doc-area-{i}", height=420)
+                with st.container(horizontal=True, gap="small"):
+                    st.button(t("ed.save"), key=f"doc-save-{i}", type="primary", on_click=save_doc_edit, args=(i,))
+                    st.button(t("ui.cancel"), key=f"doc-cancel-{i}",
+                              on_click=lambda n=i: st.session_state.update({f"doc-editing-{n}": False}))
+            else:
+                st.markdown(ui.letter_html(text), unsafe_allow_html=True)
+                with st.container(horizontal=True, gap="small"):
+                    st.button(t("cw.edit"), key=f"doc-edit-btn-{i}",
+                              icon=":material/edit:", on_click=lambda n=i: st.session_state.update({f"doc-editing-{n}": True}))
+                    st.download_button(t("cw.download"), text, file_name=f"draft-{i + 1}.txt", mime="text/plain",
+                                       key=f"doc-dl-{i}", icon=":material/download:")
+            with st.expander(t("cw.plain_text")):
+                st.code(text, language=None, wrap_lines=True)
+
+
+def save_doc_edit(i: int):
+    text = (st.session_state.get(f"doc-area-{i}") or "").replace("\r\n", "\n")
+    if not text.startswith(drafts.DRAFT_HEADER):
+        text = drafts.DRAFT_HEADER + "\n\n" + text
+    st.session_state[f"doc-edit-{i}"] = text
+    st.session_state[f"doc-editing-{i}"] = False
 
 
 # ----- "Research this issue": for problems our files don't cover -----
@@ -1802,10 +2055,28 @@ def decide_research_point(research_id: str, point_id: str):
     decision = {"Approve": research.APPROVE, "Edit then approve": research.EDIT, "Reject": research.REJECT}.get(choice)
     try:
         point = research.decide(research_id, point_id, decision, st.session_state.get(f"rse-{research_id}-{point_id}"))
-    except (research.ResearchFailed, storage.StorageError) as err:
+        record = research.load(research_id)
+        if record["status"] == research.REVIEWED:
+            add_letter_to_pending(record["case_id"], record["issue"])
+    except (research.ResearchFailed, storage.StorageError, ValueError) as err:
         st.session_state["supervisor_flash"] = str(err)
         return
     st.session_state["supervisor_flash"] = t("rs.decided", point=point_id, status=point["status"])
+
+
+def add_letter_to_pending(case_id: str, issue: str):
+    """Once all research points are decided: the complaint letter, built only from the approved points
+    and the facts of the case, is added to the draft waiting for this same review."""
+    try:
+        pending = store.get_pending(case_id)
+    except ValueError:
+        return
+    approved = research.approved_points(case_id)
+    if not approved or pending.get("case_type") != general.CASE_TYPE:
+        return
+    g = general.GeneralFacts.from_dict(pending["facts"])
+    letter = casework.complaint_letter(g, approved, issue, pending.get("ai_model"), pending.get("draft_lang", "en"))
+    store.replace_letter(case_id, letter)
 
 
 def save_research_knowledge(research_id: str, point_id: str):
@@ -1834,8 +2105,10 @@ def status_chip_text(status: str) -> str:
 
 
 def research_review_box():
-    """AI research, not yet checked: the supervisor approves, edits or rejects each point."""
-    records = research.waiting()
+    """AI research for cases with no draft sent yet (research for a case whose draft is waiting is
+    reviewed together with that draft, in one review)."""
+    with_draft = {r["id"] for r in store.list_pending()}
+    records = [r for r in research.waiting() if r["case_id"] not in with_draft]
     savable = [(r, p) for r in research.all_records() for p in r["points"]
                if p["status"].startswith("approved") and not p.get("knowledge_id")]
     if not records and not savable:
@@ -1942,13 +2215,41 @@ def delete_case_box():
             (st.success if msg[0] == "ok" else st.error)(msg[1])
 
 
+def review_research_inside(case_id: str) -> bool:
+    """Research points for this case, decided in the same review. True while any is still undecided."""
+    waiting = [r for r in research.for_case(case_id) if r["status"] == research.WAITING]
+    for r in waiting:
+        st.warning(research.LABEL, icon=":material/pending:")
+        st.caption(t("rs.sup_caption", by=r["asked_by"], on=r["asked_at"][:10], found=r["sources_found"],
+                     official=r["sources_official"], dropped=len(r["dropped"])))
+        for p in r["points"]:
+            with st.container(border=True):
+                research_point_view(r, p)
+                if p["status"] == research.WAITING:
+                    choice = st.radio(t("rs.decision"), ["Approve", "Edit then approve", "Reject"], index=None,
+                                      horizontal=True, key=f"rsd-{r['id']}-{p['id']}", format_func=lambda c: t(
+                                          {"Approve": "rs.approve", "Edit then approve": "rs.edit",
+                                           "Reject": "rs.reject"}[c]))
+                    if choice == "Edit then approve":
+                        st.text_area(t("rs.edit_label"), value=p["text"], key=f"rse-{r['id']}-{p['id']}", height=120)
+                    st.button(t("rs.save"), key=f"rss-{r['id']}-{p['id']}", type="primary", disabled=choice is None,
+                              on_click=decide_research_point, args=(r["id"], p["id"]))
+    if waiting:
+        st.info(t("rs.decide_first"), icon=":material/lock:")
+    return bool(waiting)
+
+
 def review_one(record: dict):
     case_id = record["id"]
     with st.expander(t("ui.sup.case_row", case_id=case_id, kind=case_type_label(record["case_type"]),
                        sent=record["submitted"].replace("T", " ")), expanded=True):
         for h in record.get("history", []):
             st.caption(t("ui.sup.resent", when=h["resent"].replace("T", " "), reason=h["sent_back_reason"]))
-        st.code(record["draft"], language=None, wrap_lines=True)
+        for part in casework.split_bundle(record["draft"]):  # each document as a readable page
+            st.markdown(ui.letter_html(part.strip()), unsafe_allow_html=True)
+        with st.expander(t("cw.plain_text")):
+            st.code(record["draft"], language=None, wrap_lines=True)
+        blocked = review_research_inside(case_id)
         if record.get("readiness"):
             with st.expander(t("ready.sup_title")):
                 for r in record["readiness"]:
@@ -1959,6 +2260,8 @@ def review_one(record: dict):
         audit_record = audit.read_record(case_id)
         with st.expander(t("ui.sup.audit_one")):
             st.markdown(audit.describe(audit_record) if audit_record else t("ui.sup.no_audit_one"))
+        if blocked:
+            return
         action = st.radio(t("ui.sup.decision"), ["Approve", "Edit then Approve", "Reject with a reason"],
                           index=None, horizontal=True, key=f"action-{case_id}", format_func=option_text("sup."))
         try:
