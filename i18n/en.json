@@ -635,7 +635,7 @@
  "home.safe2_t": "Every legal point has a source.",
  "home.safe2_p": "Information comes only from checked sources or research the supervisor has approved, each shown with its reference.",
  "home.safe3_t": "Private by design.",
- "home.safe3_p": "Phone and Aadhaar numbers are removed before the AI sees anything. Names and notes are never stored.",
+ "home.safe3_p": "Phone and Aadhaar numbers are removed before the AI sees anything. The person's story is never stored, and volunteer notes must not include names.",
  "home.safe4_t": "It stops when facts don't add up.",
  "home.safe4_p": "If details contradict each other or are missing, it says \"Cannot conclude yet\" and asks, instead of guessing.",
  "home.safe5_t": "No predictions.",
@@ -839,5 +839,11 @@
  "rs.k_export_caption": "These entries live in the shared database. To add them to knowledge/ for good, download this file and add it to the repository by hand after a check.",
  "rs.k_saved_already": "Saved as knowledge ({id}).",
  "cf.research": "Approved research (with sources)",
- "cf.research_tag": "approved by the supervisor {on}"
+ "cf.research_tag": "approved by the supervisor {on}",
+ "home.learn1_p": "Who can get free legal services, and how to apply to the legal services authority.",
+ "home.learn2_p": "Rights on arrest, bail, and the Section 479 dates the reviewing lawyer checks.",
+ "home.learn3_p": "What to do first after money is lost online: 1930, the bank, and evidence to keep.",
+ "home.learn4": "Evaluation (practice)",
+ "home.learn4_p": "Time practice cases done by hand and with the agent, and score them, to measure the difference honestly.",
+ "home.eval_go": "Start practice"
 }

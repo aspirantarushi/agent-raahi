@@ -90,16 +90,20 @@ def brand(name: str, size: int = 48) -> str:
     return f'<div class="brand">{logo_mark(size)}<div class="word">{wordmark(name)}</div></div>'
 
 
-def hero(badge: str, kicker: str, lead: str, sub: str) -> str:
-    """Badge, then "Listen. Ask. Refer." (small), then the tagline as the main heading."""
-    return (f'<section class="hero" id="top"><span class="badge">{html.escape(badge)}</span>'
+def hero(badge: str, kicker: str, lead: str, sub: str, name: str = "") -> str:
+    """The logo with the name (large), the badge, "Listen. Ask. Refer." (small), then the tagline as
+    the main heading."""
+    logo = (f'<div class="hero-brand">{logo_mark(72)}<div class="word">{wordmark(name)}</div></div>' if name else "")
+    return (f'<section class="hero" id="top">{logo}<span class="badge">{html.escape(badge)}</span>'
             f'<div class="kicker">{html.escape(kicker)}</div><h1>{html.escape(lead)}</h1>'
             f'<p class="sub">{html.escape(sub)}</p></section>')
 
 
 def helpline(free: str, danger: str, aid: str) -> str:
-    return (f'<p class="helpline">{html.escape(free)} <a class="danger" href="tel:112">{html.escape(danger)}</a>. '
-            f'<a href="tel:15100">{html.escape(aid)}</a>.</p>')
+    """"Free and open source.", then the two tap-to-call helplines below it, each with its own icon."""
+    return (f'<div class="helpline"><p>{html.escape(free)}</p><p class="lines">'
+            f'<a class="danger" href="tel:112">{icon("call")}<span>{html.escape(danger)}</span></a>'
+            f'<a href="tel:15100">{icon("support_agent")}<span>{html.escape(aid)}</span></a></p></div>')
 
 
 def eyebrow(text: str) -> str:
@@ -140,10 +144,19 @@ def compare(today: dict, raahi: dict) -> str:
             f'<span class="line">{e(raahi["next"])}</span></div></div></div></section>')
 
 
+def source_link(source: str, link: str) -> str:
+    """"Source: <name>", the name itself the link (opens in a new tab); no web address in brackets."""
+    name = html.escape(source)
+    if link and link.lower() != "none" and link.startswith(("http://", "https://")):
+        name = f'<a href="{html.escape(link)}" target="_blank" rel="noopener noreferrer">{name}</a>'
+    return f"Source: {name}"
+
+
 def facts_band(title: str, facts) -> str:
-    """facts: [(sentence from knowledge/, its Source line)]. Full width navy band; sources in italics."""
-    rows = "".join(f'<div class="fact"><p>{html.escape(text)}</p><em>{html.escape(source)}</em></div>'
-                   for text, source in facts)
+    """facts: [(sentence from knowledge/, its Source, its Link)]. Full width navy band; each source
+    in italics, its name the link."""
+    rows = "".join(f'<div class="fact"><p>{html.escape(text)}</p><em>{source_link(source, link)}</em></div>'
+                   for text, source, link in facts)
     return (f'<section class="facts-band" id="facts">'
             + eyebrow(title).replace('">', f'"><span class="facts-mark">{logo_on_dark(28)}</span>', 1)
             + f'<div class="grid">{rows}</div></section>')
@@ -153,6 +166,11 @@ def footer(name: str, tagline: str, text: str, tagline_hi: str = "") -> str:
     second = f' · <span lang="hi">{html.escape(tagline_hi)}</span>' if tagline_hi and tagline_hi != tagline else ""
     return (f'<footer class="footer"><span><b>{wordmark(name)}</b> · {html.escape(tagline)}{second}</span>'
             f'<span>{html.escape(text)}</span></footer>')
+
+
+def guide_card(name: str, title: str, text: str) -> str:
+    """A Learn card: topic icon above the title and a line about it (like the safety cards)."""
+    return f'<div class="card guide">{icon(name)}<h3>{html.escape(title)}</h3><p>{html.escape(text)}</p></div>'
 
 
 def tag(text: str) -> str:

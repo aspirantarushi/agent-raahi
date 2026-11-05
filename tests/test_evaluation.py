@@ -102,7 +102,8 @@ def eval_folder(monkeypatch, tmp_path):
 
 def test_screen_by_hand(eval_folder):
     at = AppTest.from_file("../app.py", default_timeout=20).run()
-    at.button(key="nav-evaluation").click().run()
+    at.button(key="nav-home").click().run()
+    at.button(key="nav-evaluation").click().run()  # the 4th card in "Learn the basics" on Home
     at.selectbox(key="ev-case").set_value("E2")
     at.radio(key="ev-method").set_value("by hand")
     at.text_input(key="ev-volunteer").set_value("Volunteer 1").run()
@@ -121,7 +122,8 @@ def test_screen_with_agent_stops_when_sent(eval_folder, monkeypatch, tmp_path):
     original = store.submit
     monkeypatch.setattr(store, "submit", lambda *a, **k: original(*a, base=tmp_path, **k))
     at = AppTest.from_file("../app.py", default_timeout=20).run()
-    at.button(key="nav-evaluation").click().run()
+    at.button(key="nav-home").click().run()
+    at.button(key="nav-evaluation").click().run()  # the 4th card in "Learn the basics" on Home
     at.selectbox(key="ev-case").set_value("O2")
     at.radio(key="ev-method").set_value("with the agent")
     at.text_input(key="ev-volunteer").set_value("Volunteer 2").run()

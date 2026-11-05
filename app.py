@@ -2567,8 +2567,8 @@ def scan_box(where: str):
 
 
 def home_screen():
-    st.markdown(ui.hero(t("home.badge"), t("home.kicker"), t("home.lead"), t("app.description") + ". " + t("home.sub")),
-                unsafe_allow_html=True)
+    st.markdown(ui.hero(t("home.badge"), t("home.kicker"), t("home.lead"), t("app.description") + ". " + t("home.sub"),
+                        name=t("app.name")), unsafe_allow_html=True)
     with st.container(key="storybox", horizontal=True, vertical_alignment="center", gap="small"):
         st.text_area(t("home.story_label"), key="home_story", height=68, placeholder=t("home.story_placeholder"),
                      label_visibility="collapsed")
@@ -2577,7 +2577,7 @@ def home_screen():
         st.button(t("home.go"), key="home-go", icon=":material/arrow_forward:", on_click=home_to_case, args=(False,),
                   help=t("home.go"))
     with st.container(key="heroactions", horizontal=True, gap="small"):
-        st.button(t("home.start"), key="home-start", type="primary", on_click=start_case)
+        st.button(t("home.start"), key="home-start", type="primary", icon=":material/note_add:", on_click=start_case)
         st.button(t("home.continue"), key="home-continue", icon=":material/folder_open:",
                   on_click=toggle, args=("cont-open-home", "scan-open-home"))
         st.button(t("home.scan"), key="home-scan", icon=":material/qr_code_scanner:",
@@ -2604,15 +2604,23 @@ def home_screen():
         [(SAFE_ICONS[i - 1], t(f"home.safe{i}_t"), t(f"home.safe{i}_p")) for i in range(1, 7)])),
         unsafe_allow_html=True)
     st.markdown(ui.facts_band(t("home.facts_title"), home.facts(code())), unsafe_allow_html=True)
-    st.markdown(ui.section("learn-basics", t("home.learn_title"), t("home.learn_h2"), "", center=False,
-                           extra="learn"), unsafe_allow_html=True)
+    st.markdown(ui.section("learn-basics", t("home.learn_title"), t("home.learn_h2"), "", extra="learn"),
+                unsafe_allow_html=True)
     with st.container(key="learnlinks"):
-        cols = st.columns(3, gap="small")
+        cols = st.columns(4, gap="medium")
         for i, col in enumerate(cols, 1):
-            col.button(t(f"home.learn{i}"), key=f"home-learn-{i}", icon=":material/arrow_forward:", on_click=go,
-                       args=("Learn",), use_container_width=True)
+            with col.container(key=f"learn-card-{i}"):
+                st.markdown(ui.guide_card(LEARN_ICONS[i - 1], t(f"home.learn{i}"), t(f"home.learn{i}_p")),
+                            unsafe_allow_html=True)
+                if i < 4:
+                    st.button(t("home.learn_go"), key=f"home-learn-{i}", icon=":material/arrow_forward:",
+                              on_click=go, args=("Learn",))
+                else:  # the 4th item: practice evaluation, a proper button with its own icon
+                    st.button(t("home.eval_go"), key="nav-evaluation", type="primary", icon=":material/timer:",
+                              on_click=go, args=("Evaluation",))
 
 
+LEARN_ICONS = ["volunteer_activism", "gavel", "phishing", "science"]
 SAFE_ICONS = ["verified_user", "menu_book", "lock", "help", "balance", "rule"]
 # The top navigation: (screen, key). Evaluation (practice only) is reached from the footer.
 NAV = [("Home", "home"), ("New case", "new"), ("My cases", "tracker"), ("Learn", "learn"), ("Supervisor", "supervisor")]
@@ -2658,7 +2666,5 @@ if choice in ("Home", "Learn") or clinic_ok():
     SCREENS[choice]()
 else:
     clinic_gate()  # every other screen needs the clinic passcode (when one is set)
-with st.container(key="footlinks", horizontal=True, gap="small"):
-    st.button(t("screen.Evaluation"), key="nav-evaluation", type="tertiary", on_click=go, args=("Evaluation",))
 st.markdown(ui.footer(t("app.name"), f"{t('app.tagline')}. {t('app.description')}.", t("home.footer"),
                       lang.t("app.tagline", "hi") if code() == "en" else ""), unsafe_allow_html=True)

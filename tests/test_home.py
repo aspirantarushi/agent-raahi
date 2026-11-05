@@ -33,6 +33,7 @@ def test_home_is_the_landing_screen_with_every_section(at):
     assert 'href="tel:112"' in html and 'href="tel:15100"' in html
     assert len(re.findall(r'class="card"', html)) == 4 + 6
     assert len([b for b in at.button if str(b.key).startswith("home-learn-")]) == 3
+    assert "Evaluation (practice)" in html  # the 4th card
 
 
 def test_tagline_is_the_main_heading_and_the_kicker_is_smaller(at):
@@ -47,8 +48,8 @@ def test_built_to_be_safe_cards_have_icons_and_the_exact_text(at):
          "lawyer approves it. No one can approve their own work."),
         ("menu_book", "Every legal point has a source.", "Information comes only from checked sources or research "
          "the supervisor has approved, each shown with its reference."),
-        ("lock", "Private by design.", "Phone and Aadhaar numbers are removed before the AI sees anything. Names "
-         "and notes are never stored."),
+        ("lock", "Private by design.", "Phone and Aadhaar numbers are removed before the AI sees anything. The "
+         "person&#x27;s story is never stored, and volunteer notes must not include names."),
         ("help", "It stops when facts don&#x27;t add up.", "If details contradict each other or are missing, it says "
          "&quot;Cannot conclude yet&quot; and asks, instead of guessing."),
         ("balance", "No predictions.", "It never predicts outcomes, bail chances or risk, and never promises release "
@@ -59,10 +60,32 @@ def test_built_to_be_safe_cards_have_icons_and_the_exact_text(at):
         assert f'<span class="mi" aria-hidden="true">{icon}</span><h3>{title}</h3><p>{text}</p>' in html, title
 
 
-def test_facts_band_sources_in_italics(at):
+def test_facts_band_source_names_are_links_in_italics(at):
     html = page_html(at)
-    for _, source in home.facts("en"):
-        assert f"<em>{source.replace('&', '&amp;').replace(chr(34), '&quot;')}</em>" in html
+    for _, source, link in home.facts("en"):
+        name = source.replace("&", "&amp;").replace(chr(34), "&quot;")
+        assert (f'<em>Source: <a href="{link}" target="_blank" rel="noopener noreferrer">{name}</a></em>') in html
+        assert f"({link})" not in html  # no web address in brackets
+
+
+def test_hero_logo_helplines_and_start_icon(at):
+    html = page_html(at)
+    assert html.index('<div class="hero-brand"><svg width="72"') < html.index('<span class="badge">')
+    lines = html[html.index('<div class="helpline">'):]
+    assert lines.index("Free and open source.") < lines.index('href="tel:112"')
+    assert '<a class="danger" href="tel:112"><span class="mi" aria-hidden="true">call</span>' in lines
+    assert '<a href="tel:15100"><span class="mi" aria-hidden="true">support_agent</span>' in lines
+    assert at.button(key="home-start").icon == ":material/note_add:"
+
+
+def test_learn_section_four_cards_with_icons(at):
+    html = page_html(at)
+    assert '<section id="learn-basics" class="sec center learn">' in html
+    for icon in ["volunteer_activism", "gavel", "phishing", "science"]:
+        assert f'<div class="card guide"><span class="mi" aria-hidden="true">{icon}</span><h3>' in html
+    assert at.button(key="nav-evaluation").icon == ":material/timer:"
+    at.button(key="nav-evaluation").click().run()
+    assert at.session_state["screen"] == "Evaluation"
 
 
 def test_no_emoji_on_screen_or_in_the_screen_text():
@@ -81,7 +104,7 @@ def test_no_emoji_on_screen_or_in_the_screen_text():
 
 def test_facts_come_word_for_word_from_knowledge_with_sources(at):
     html = page_html(at)
-    for sentence, source in home.facts("en"):
+    for sentence, source, link in home.facts("en"):
         assert sentence in html and source.replace('"', "&quot;") in html
     for file, heading, english, _ in home.FACTS:
         assert english in " ".join(knowledge.get(file, heading).body.split())
@@ -95,7 +118,7 @@ def test_a_changed_knowledge_entry_stops_the_fact(monkeypatch):
 
 
 def test_hindi_fact_used_where_a_hindi_entry_exists():
-    hi = dict(home.facts("hi"))
+    hi = {sentence: source for sentence, source, _ in home.facts("hi")}
     assert any(s.startswith("जितनी जल्दी हो सके") for s in hi)
     assert "Women, children and people in custody qualify whatever their income." in hi  # no Hindi entry: English
 

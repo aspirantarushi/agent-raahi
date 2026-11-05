@@ -40,7 +40,7 @@ def test_brand_files_are_present_and_drawn_inline_unchanged():
 def test_logo_on_light_and_on_navy():
     assert "#13213B" in ui.logo_mark() and "#E8A33D" in ui.logo_mark()           # navy R, amber light
     assert "#F8F6F1" in ui.logo_on_dark() and "#13213B" not in ui.logo_on_dark()  # light R on navy
-    band = ui.facts_band("Facts", [("A fact.", "Source: x")])
+    band = ui.facts_band("Facts", [("A fact.", "x", "https://x.gov.in")])
     assert "#F8F6F1" in band and "#E8A33D" not in band
 
 

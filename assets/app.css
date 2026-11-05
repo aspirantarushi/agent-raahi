@@ -90,7 +90,7 @@ div[class*="st-key-case-card-"] { background: var(--card); border: 1px solid var
 .eyebrow { margin: 0 0 8px 0; font-size: 13px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--muted2); }
 .sec h2 { margin: 0 0 40px 0 !important; padding: 0 !important; font-size: 40px !important; line-height: 1.15 !important; letter-spacing: -.02em; }
 .sec.center .eyebrow, .sec.center h2 { text-align: center; }
-.sec.learn { padding-bottom: 0; } .sec.learn h2 { font-size: 32px !important; margin-bottom: 12px !important; }
+.sec.learn { padding-bottom: 0; } .sec.learn h2 { font-size: 32px !important; margin-bottom: 28px !important; }
 
 /* ---------- home hero: soft glows, no box ---------- */
 .hero { position: relative; text-align: center; padding: 64px 0 0 0; display: flex; flex-direction: column; align-items: center; gap: 20px; }
@@ -99,6 +99,12 @@ div[class*="st-key-case-card-"] { background: var(--card); border: 1px solid var
 .hero::after { content: ""; position: absolute; left: 4%; top: 120px; width: 560px; height: 420px; border-radius: 50%;
   background: radial-gradient(closest-side, rgba(14,122,107,.14), rgba(14,122,107,0) 70%); z-index: 0; pointer-events: none; }
 .hero > * { position: relative; z-index: 1; margin: 0 !important; }
+.hero-brand { display: flex; align-items: center; gap: 14px; }
+.hero-brand svg { flex: 0 0 auto; }
+.hero-brand .word { font-size: 40px; font-weight: 600; letter-spacing: -.02em; color: var(--ink); line-height: 1; }
+.hero-brand .word small.agent { font-size: .9em; font-weight: 500; color: var(--muted2); letter-spacing: 0;
+  text-transform: none; vertical-align: 0; }
+.hero-brand .word span { color: var(--ink); }
 .hero .badge { display: inline-block; border: 1px solid var(--line2); background: rgba(255,255,255,.7); border-radius: 999px;
   padding: 6px 14px; font-size: 13px; font-weight: 500; color: var(--muted2); }
 .hero .kicker { font-size: 22px; font-weight: 600; letter-spacing: .01em; color: var(--muted2); }
@@ -121,7 +127,12 @@ div[class*="st-key-case-card-"] { background: var(--card); border: 1px solid var
 .st-key-heroactions > div { width: auto !important; flex: 0 0 auto; }
 .st-key-continuebox, .st-key-scanbox { max-width: 520px; margin: 14px auto 0 auto; }
 .helpline { text-align: center; color: var(--muted2); margin: 22px 0 88px 0; font-size: 14px; }
-.helpline a { color: var(--teal); font-weight: 600; }
+.helpline p { margin: 0 0 10px 0 !important; }
+.helpline .lines { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px 24px; }
+.helpline a { display: inline-flex; align-items: center; gap: 6px; color: var(--teal-dark); font-weight: 600;
+  font-size: 15px; min-height: 44px; text-decoration: none; }
+.helpline a span:not(.mi) { text-decoration: underline; text-underline-offset: 3px; }
+.helpline a .mi { font-size: 22px; text-decoration: none; }
 .helpline a.danger { color: var(--red); }
 
 /* ---------- Today vs With Agent Raahi ---------- */
@@ -150,23 +161,27 @@ div[class*="st-key-case-card-"] { background: var(--card); border: 1px solid var
 .facts-band .fact { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid rgba(255,255,255,.18); padding-top: 16px; }
 .facts-band .fact p { margin: 0; font-size: 18px; line-height: 1.45; color: #FFFFFF; font-weight: 500; }
 .facts-band .fact em { font-size: 14px; line-height: 1.5; color: #C9CFDA; overflow-wrap: anywhere; }
+.facts-band .fact em a { color: #FFFFFF; text-decoration: underline; text-underline-offset: 3px; }
 
-/* ---------- learn links (buttons that look like link cards) ---------- */
+/* ---------- Learn: cards like the safety cards, icon on top, a button at the bottom ---------- */
 .st-key-learnlinks { padding-bottom: 8px; }
-.st-key-learnlinks .stButton > button { width: 100%; justify-content: space-between; flex-direction: row-reverse;
-  border-radius: 16px !important; border: 1px solid var(--line) !important; background: var(--card) !important;
-  padding: 18px 20px !important; min-height: 64px; font-weight: 500; text-align: left; }
-.st-key-learnlinks .stButton > button p { font-size: 16px; }
-.st-key-learnlinks .stButton > button span { color: var(--muted2); }
+.st-key-learnlinks [data-testid="stHorizontalBlock"] { align-items: stretch !important; }
+.st-key-learnlinks [data-testid="stColumn"] { display: flex; flex-direction: column; }
+.st-key-learnlinks [data-testid="stColumn"] > div { flex: 1 1 auto; display: flex; flex-direction: column; }
+div[class*="st-key-learn-card-"] { background: var(--card); border: 1px solid var(--line); border-radius: 20px;
+  padding: 24px; height: 100%; gap: 14px !important; justify-content: space-between; }
+div[class*="st-key-learn-card-"] .card { border: 0; padding: 0; background: transparent; }
+div[class*="st-key-learn-card-"] { flex: 1 1 auto; }
+div[class*="st-key-learn-card-"] > div:last-child { margin-top: auto; padding-top: 10px; }
+div[class*="st-key-home-learn-"] .stButton > button { flex-direction: row-reverse; gap: 6px; }
+div[class*="st-key-learn-card-"] .stButton > button p { white-space: nowrap; }
 
 /* ---------- footer ---------- */
 .footer { border-top: 1px solid var(--line); margin: 64px calc(50% - 50vw) 0 calc(50% - 50vw);
   padding: 32px max(24px, calc(50vw - var(--page) / 2)); display: flex; justify-content: space-between; gap: 16px;
   flex-wrap: wrap; font-size: 14px; color: var(--muted2); }
 .footer b { color: var(--ink); font-weight: 600; }
-.st-key-footlinks { justify-content: flex-end; margin-top: 40px; }
-.st-key-footlinks button { min-height: 36px; } .st-key-footlinks button p { font-size: 14px; }
-.footer { margin-top: 8px; }
+.footer { margin-top: 72px; }
 
 /* ---------- inside the app: the same header, cards and buttons ---------- */
 .safety-bar { display: flex; flex-wrap: wrap; gap: .4rem 1.25rem; background: var(--teal-tint); color: var(--teal-dark);
@@ -231,6 +246,9 @@ div[class*="st-key-case-card-"] { background: var(--card); border: 1px solid var
   .hero::before { width: 520px; margin-left: -260px; }
   .hero::after { display: none; }
   .hero .kicker { font-size: 18px; }
+  .hero-brand svg { width: 56px; height: 56px; } .hero-brand .word { font-size: 32px; }
+  .helpline .lines { flex-direction: column; align-items: center; gap: 0; }
+  div[class*="st-key-learn-card-"] { height: auto; }
   .hero h1 { font-size: 36px !important; }
   .hero .sub { font-size: 17px; }
   .st-key-storybox { padding: 8px 8px 8px 14px; }

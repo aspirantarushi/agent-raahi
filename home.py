@@ -25,8 +25,8 @@ FACTS = [
 ]
 
 
-def facts(code: str = "en") -> List[Tuple[str, str]]:
-    """[(sentence, Source line)] in the language when a Hindi entry has it, else in English."""
+def facts(code: str = "en") -> List[Tuple[str, str, str]]:
+    """[(sentence, Source, Link)] in the language when a Hindi entry has it, else in English."""
     out = []
     for file, heading, english, hindi in FACTS:
         entry = knowledge.get(file, heading)
@@ -37,5 +37,5 @@ def facts(code: str = "en") -> List[Tuple[str, str]]:
             hi_entry = knowledge.get(file, heading, "hi")
             if hi_entry.lang == "hi" and hindi in " ".join(hi_entry.body.split()):
                 sentence = hindi
-        out.append((sentence, entry.source_line))
+        out.append((sentence, entry.source, entry.link))
     return out
