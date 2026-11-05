@@ -35,8 +35,15 @@ size of the problem, severity, quality of the solution, proven impact (real use 
   numbers (CNR, FIR number) are fine. Only fake practice data in this repo.
 - Every draft starts with "DRAFT — to be checked by a lawyer". Name, phone, Aadhaar and address
   blanks stay empty for the person to fill by hand.
-- Legal points come only from the files in knowledge/, each with its Source line. If the files
-  don't cover something, say so and point to NALSA's free helpline 15100.
+- Legal points come only from the files in knowledge/, each with its Source line, or from AI
+  research the supervisor has approved ("Research this issue", research.py). If neither covers
+  something, say so and point to NALSA's free helpline 15100.
+- Research: only the state and the issue in plain words are sent (never names or personal numbers).
+  Every point needs an official source (gov.in, nic.in, India Code, state regulators, courts, NALSA,
+  legal services authorities) that came from the actual search results; plain code checks this and
+  drops points without one, and points that predict outcomes. The brief is labelled "AI research,
+  not yet checked: for supervisor approval"; only points the supervisor approves (or edits) go into
+  the case and drafts, with their sources. Every step is in the audit record.
 - Safety first: if anyone is in danger, show "Call 112 now." For cyber fraud with money lost in
   the last few days and 1930 not yet called, show "Call 1930 now."
 - Drafts and case files are saved only after the supervisor clicks Approve.
@@ -71,17 +78,20 @@ size of the problem, severity, quality of the solution, proven impact (real use 
 - Templates are filled by code: copy the template exactly and replace only [square-bracket]
   blanks. Unknown blanks stay visible.
 - AI is used for understanding free-text case notes, asking for missing facts one at a time
-  (knowledge/intake_*.md), plain-language explanations, and learner mode. Keep all AI calls in one
+  (knowledge/intake_*.md), plain-language explanations, learner mode, and "Research this issue"
+  (Gemini with Google Search grounding, for issues knowledge/ doesn't cover). Keep all AI calls in one
   file (llm.py) so the model can be swapped; the AI provider for the cloud version is not decided
   yet. Never put API keys in code: read them from environment variables, and keep .env out of git.
-- A source check: every legal statement shown to users must match an entry in knowledge/, and
-  its Source line is shown.
+- A source check: every legal statement shown to users must match an entry in knowledge/ or a
+  supervisor-approved research point, and its Source line is shown.
 - Keep it simple: Python, with a Streamlit web app, unless Arushi agrees to something else.
   Mobile-friendly, large text.
 
 ## Folder map
 - knowledge/  verified legal content (Markdown entries with Source / Link / Checked lines) and
-  sentence_table.csv, income_limits.csv. Do not edit without asking.
+  sentence_table.csv, income_limits.csv. Do not edit without asking. Approved research saved as
+  knowledge lives in the shared database (record kind "knowledge_added"), not in these files; the
+  supervisor can export it as Markdown to add to knowledge/ by hand after a check.
 - templates/  draft templates with [square-bracket] blanks.
 - learner/    learner-mode explainers, quizzes and practice cases.
 - lite/       small files for the AgentFoundry Build-tab demo. Leave as they are.

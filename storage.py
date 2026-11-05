@@ -36,6 +36,8 @@ FILES: Dict[str, Tuple[str, str]] = {
     "timelines": ("timelines", ".json"),
     "tracker": ("tracker", ".json"),
     "eval_sessions": ("evaluation/sessions", ".json"),
+    "research": ("research", ".json"),                # AI research briefs (waiting / reviewed by the supervisor)
+    "knowledge_added": ("knowledge_added", ".json"),  # approved research saved as knowledge entries
 }
 # kind -> file for logs (one entry per line)
 LOGS: Dict[str, str] = {

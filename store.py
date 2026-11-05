@@ -225,5 +225,8 @@ def delete_case(case_id: str, base: Path = HERE) -> List[str]:
         raise ValueError("No such case.")
     if store.log_remove("problems", lambda e: e.get("case_id") == case_id):
         removed.append("problems")
+    for research_id in [i for i in store.ids("research") if i.startswith(case_id + ".")]:
+        if store.delete("research", research_id):
+            removed.append("research")
     audit.replace_with_deletion(case_id, base=base)
     return removed

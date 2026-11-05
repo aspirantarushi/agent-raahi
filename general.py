@@ -484,6 +484,9 @@ class GeneralFacts:
     facts: Dict[str, object]                  # yes/no facts, state, annual_income
     today: str
     precautions: List[str] = field(default_factory=list)  # unconfirmed "yes" answers used only for safety
+    # For issues our files don't cover: approved research and saved research knowledge, with sources
+    # (research.items_for_summary). Never AI text the supervisor has not approved.
+    research: List[dict] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         d = {k: v for k, v in self.__dict__.items()}
@@ -494,7 +497,7 @@ class GeneralFacts:
     def from_dict(cls, d: dict) -> "GeneralFacts":
         keys = ["person", "what_happened", "timeline", "coming_dates", "issues", "sections", "documents_held",
                 "answers", "still_to_ask", "facts", "today"]
-        return cls(**{k: d[k] for k in keys}, precautions=d.get("precautions", []))
+        return cls(**{k: d[k] for k in keys}, precautions=d.get("precautions", []), research=d.get("research", []))
 
 
 def build_facts(reading: GeneralReading, answers: List[Tuple[str, str]], still_to_ask: List[str],
@@ -522,6 +525,33 @@ def case_next_steps(g: "GeneralFacts") -> List[str]:
     docs = [i for _, items, _ in document_lists(categories or ["other"], g.documents_held, story) for i in items]
     steps, _ = next_steps({**g.facts, "_precautions": g.precautions}, categories, eligibility, docs)
     return steps
+
+
+def research_for(g: "GeneralFacts", name: str) -> List[dict]:
+    return [i for i in g.research if i.get("issue") == name]
+
+
+def uncovered_issues(g: "GeneralFacts") -> List[str]:
+    """Issues the summary marks "not covered by our verified files" (no entry, no approved research)."""
+    issues = g.issues or [("other", "the problem described")]
+    return [name for category, name in issues if not ISSUE_KNOWLEDGE.get(category) and not research_for(g, name)]
+
+
+def _research_lines(items: List[dict], hi: bool = False) -> List[str]:
+    out = []
+    for i in items:
+        if i["origin"] == "knowledge":
+            head = (_hi("sum.research_knowledge", heading=i["heading"], date=i["approved_on"]) if hi else
+                    f"From approved research saved in our files, “{i['heading']}” (lawyer checked {i['approved_on']}):")
+        else:
+            head = (_hi("sum.research_case", heading=i["heading"], date=i["approved_on"]) if hi else
+                    f"{i['heading']} (AI research, approved by the supervisor on {i['approved_on']}):")
+        out.append(f"   {head}")
+        out += [f"   {line}" for line in i["text"].splitlines() if line.strip()]
+        out.append(f"   {i['source_line']}")
+    if items and hi:
+        out.append("   " + _hi("sum.research_english"))
+    return out
 
 
 def summary_body(g: GeneralFacts) -> str:
@@ -562,8 +592,10 @@ def summary_body(g: GeneralFacts) -> str:
     for n, (category, name) in enumerate(g.issues or [("other", "the problem described")], 1):
         out.append(f"{n}. {name[0].upper() + name[1:]} — {TO_DISCUSS}.")
         entries = issue_guidance(category)
-        if not entries:
+        researched = research_for(g, name)
+        if not entries and not researched:
             out.append(f"   {NOT_COVERED[0].upper() + NOT_COVERED[1:]}.")
+        out += _research_lines(researched)
         for e in entries:
             out.append(f"   From our verified files, “{e.heading}”:")
             out += [f"   {line}" for line in e.excerpt(4).splitlines()]
@@ -674,8 +706,10 @@ def summary_body_hi(g: "GeneralFacts") -> str:
     for n, (category, name) in enumerate(g.issues or [("other", _hi("sum.problem_described"))], 1):
         out.append(f"{n}. {name} \u2014 {_hi('sum.to_discuss')}.")
         entries = [knowledge.get(f, h, "hi") for f, h in ISSUE_KNOWLEDGE.get(category, [])]
-        if not entries:
+        researched = research_for(g, name)
+        if not entries and not researched:
             out.append(f"   {_hi('sum.not_covered')}")
+        out += _research_lines(researched, hi=True)
         for e in entries:
             out.append("   " + _hi("sum.from_files", heading=e.heading))
             out += [f"   {line}" for line in e.excerpt(4).splitlines()]

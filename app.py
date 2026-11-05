@@ -31,6 +31,7 @@ import llm
 import multilingual
 import ledger
 import readiness
+import research
 import section479
 import storage
 import store
@@ -569,6 +570,11 @@ def general_summary(gen):
     eligibility = general.check_eligibility(gen["facts"])
     still_to_ask = gen["unanswered"] + [general.ELIGIBILITY_QUESTIONS[m] for m in eligibility.missing]
     facts = general.build_facts(reading, gen["answers"], still_to_ask, gen["facts"], date.today())
+    try:  # approved research and saved research knowledge for issues our files don't cover
+        facts.research = research.items_for_summary(st.session_state.get("case_id"), gen["facts"].get("state"),
+                                                    [name for _, name in facts.issues] or ["the problem described"])
+    except storage.StorageError:
+        facts.research = []
     problems = consistency.general_problems(facts, gen.get("translation", ""))
     if problems:
         cannot_conclude(problems)
@@ -596,6 +602,9 @@ def general_summary(gen):
         checklist_box(items, "g")
     entries = ledger.general(facts, reading.facts, eligibility, ai_checked=bool(gen["model"]))
     ledger_box(entries)
+    uncovered = general.uncovered_issues(facts)
+    if uncovered:
+        research_box(uncovered, gen["facts"].get("state"))
     reading_copy_box("summary", draft)
     names = general.possible_names(draft, st.session_state.get("g_notes", ""))
     if names:
@@ -625,6 +634,54 @@ def general_summary(gen):
         finish_agent_session(case_id, draft)
         st.rerun()
     report_problem_box("gen-draft", "Any-case summary", None)
+
+
+# ----- "Research this issue": for problems our files don't cover -----
+
+def run_research(issues: list):
+    get = st.session_state.get
+    issue = (get("rs-issue") or "").strip()
+    state = get("rs-state")
+    if not state:
+        st.session_state["rs-msg"] = ("error", t("rs.need_state"))
+        return
+    notes = get("g_notes", "") or ""
+    names = list(dict.fromkeys(general.possible_names(issue, notes) + research.names_in(issue, notes)))
+    if names:
+        st.session_state["rs-msg"] = ("error", t("rs.name_found", names=", ".join(names)))
+        return
+    try:
+        case_id = ensure_case(general.CASE_TYPE)
+        with st.spinner(t("rs.working")):
+            record = research.run(case_id, state, issue, who())
+    except research.ResearchFailed:
+        st.session_state["rs-msg"] = ("error", t("rs.failed"))
+        return
+    except (tracker.TrackerError, storage.StorageError, ValueError) as err:
+        st.session_state["rs-msg"] = ("error", f"{err} {t('rs.failed')}")
+        return
+    st.session_state["rs-msg"] = ("ok", t("rs.sent", kept=len(record["points"]), dropped=len(record["dropped"])))
+
+
+def research_box(uncovered: list, state):
+    """Shown when the summary says "not covered by our verified files"."""
+    with st.container(border=True, key="research-box"):
+        st.markdown(f"**{t('rs.title')}**")
+        st.caption(t("rs.caption"))
+        case_id = st.session_state.get("case_id")
+        for r in (research.for_case(case_id) if case_id else []):
+            if r["status"] == research.WAITING:
+                st.info(t("rs.pending", issue=r["issue"], on=r["asked_at"][:10]), icon=":material/hourglass_top:")
+        st.session_state.setdefault("rs-issue", uncovered[0])
+        st.session_state.setdefault("rs-state", state if state in general.state_names() else None)
+        c1, c2 = st.columns([2, 1])
+        c1.text_input(t("rs.issue"), key="rs-issue", max_chars=300)
+        c2.selectbox(t("rs.state"), general.state_names(), index=None, key="rs-state")
+        st.button(t("rs.button"), key="rs-go", type="primary", icon=":material/travel_explore:",
+                  on_click=run_research, args=(uncovered,), disabled=not llm.available())
+        msg = st.session_state.pop("rs-msg", None)
+        if msg:
+            (st.success if msg[0] == "ok" else st.error)(msg[1])
 
 
 # ----- the undertrial notes -----
@@ -1689,6 +1746,8 @@ def supervisor_screen():
             review_one(record)
 
     changed_after_approval_box()
+    research_review_box()
+    knowledge_added_box()
     delete_case_box()
     evaluation_scoring_box()
     impact_box()
@@ -1708,6 +1767,100 @@ def supervisor_screen():
     for r in records:
         with st.expander(t("ui.sup.audit_row", case_id=r["case_id"], model=r["model"], last=r["events"][-1]["event"])):
             st.markdown(audit.describe(r))
+
+
+def decide_research_point(research_id: str, point_id: str):
+    key = f"rsd-{research_id}-{point_id}"
+    choice = st.session_state.get(key)
+    decision = {"Approve": research.APPROVE, "Edit then approve": research.EDIT, "Reject": research.REJECT}.get(choice)
+    try:
+        point = research.decide(research_id, point_id, decision, st.session_state.get(f"rse-{research_id}-{point_id}"))
+    except (research.ResearchFailed, storage.StorageError) as err:
+        st.session_state["supervisor_flash"] = str(err)
+        return
+    st.session_state["supervisor_flash"] = t("rs.decided", point=point_id, status=point["status"])
+
+
+def save_research_knowledge(research_id: str, point_id: str):
+    get = st.session_state.get
+    words = [w.strip() for w in (get(f"rsk-w-{research_id}-{point_id}") or "").split(",") if w.strip()]
+    try:
+        entry = research.save_knowledge(research_id, point_id, get(f"rsk-h-{research_id}-{point_id}") or "", words)
+    except (research.ResearchFailed, storage.StorageError) as err:
+        st.session_state["supervisor_flash"] = str(err)
+        return
+    st.session_state["supervisor_flash"] = t("rs.k_saved", id=entry["id"], state=entry["state"])
+
+
+def research_point_view(record: dict, p: dict):
+    st.markdown(f"**{p['id']} · {research.KINDS[p['kind']]}** {status_chip_text(p['status'])}", unsafe_allow_html=True)
+    if p["kind"] == "letter":
+        st.code(p["text"], language=None, wrap_lines=True)
+    else:
+        st.markdown(html.escape(p["text"]))
+    st.markdown("  \n".join(f":material/link: [{html.escape(s['title'])}]({s['url']})" for s in p["sources"]))
+
+
+def status_chip_text(status: str) -> str:
+    kind = "approved" if status.startswith("approved") else "sent-back" if status == "rejected" else "waiting"
+    return ui.chip(kind, status)
+
+
+def research_review_box():
+    """AI research, not yet checked: the supervisor approves, edits or rejects each point."""
+    records = research.waiting()
+    savable = [(r, p) for r in research.all_records() for p in r["points"]
+               if p["status"].startswith("approved") and not p.get("knowledge_id")]
+    if not records and not savable:
+        return
+    if records:
+        st.subheader(t("rs.sup_title", n=len(records)))
+    for r in records:
+        with st.expander(t("rs.sup_row", case_id=r["case_id"], state=r["state"], issue=r["issue"]), expanded=True,
+                         icon=":material/travel_explore:"):
+            st.warning(research.LABEL, icon=":material/pending:")
+            st.caption(t("rs.sup_caption", by=r["asked_by"], on=r["asked_at"][:10], found=r["sources_found"],
+                         official=r["sources_official"], dropped=len(r["dropped"])))
+            for p in r["points"]:
+                with st.container(border=True):
+                    research_point_view(r, p)
+                    if p["status"] == research.WAITING:
+                        key = f"rsd-{r['id']}-{p['id']}"
+                        choice = st.radio(t("rs.decision"), ["Approve", "Edit then approve", "Reject"], index=None,
+                                          horizontal=True, key=key, format_func=lambda c: t(
+                                              {"Approve": "rs.approve", "Edit then approve": "rs.edit",
+                                               "Reject": "rs.reject"}[c]))
+                        if choice == "Edit then approve":
+                            st.text_area(t("rs.edit_label"), value=p["text"], key=f"rse-{r['id']}-{p['id']}", height=120)
+                        st.button(t("rs.save"), key=f"rss-{r['id']}-{p['id']}", type="primary", disabled=choice is None,
+                                  on_click=decide_research_point, args=(r["id"], p["id"]))
+            if r["dropped"]:
+                with st.expander(f"{t('rs.dropped')} ({len(r['dropped'])})"):
+                    for d in r["dropped"]:
+                        st.markdown(f"- {html.escape(d['text'][:200])} _({d['reason']})_")
+    for r, p in savable:
+        with st.expander(t("rs.as_knowledge", state=r["state"]) + f" · {r['case_id']} {p['id']}",
+                         icon=":material/bookmark_add:"):
+            research_point_view(r, p)
+            st.text_input(t("rs.k_heading"), key=f"rsk-h-{r['id']}-{p['id']}",
+                          value=f"{r['state']}: {research.KINDS[p['kind']].lower()} for {r['issue'][:60]}")
+            st.text_input(t("rs.k_words"), key=f"rsk-w-{r['id']}-{p['id']}", value=", ".join(research.keywords(r["issue"])))
+            st.button(t("rs.as_knowledge", state=r["state"]), key=f"rsk-{r['id']}-{p['id']}", type="primary",
+                      on_click=save_research_knowledge, args=(r["id"], p["id"]))
+
+
+def knowledge_added_box():
+    entries = research.learned()
+    if not entries:
+        return
+    with st.expander(t("rs.k_title", n=len(entries)), icon=":material/library_books:"):
+        st.caption(t("rs.k_export_caption"))
+        for e in entries:
+            st.markdown(f"- **{html.escape(e['heading'])}** ({e['state']}) · {ui.tag(e['lawyer_checked'])}  \n"
+                        f"  {html.escape(e['body'][:300])}  \n  _Source: {html.escape(e['source'])} ({e['link']})_",
+                        unsafe_allow_html=True)
+        st.download_button(t("rs.k_export"), research.export_markdown(), file_name="research_approved.md",
+                           mime="text/markdown", key="rsk-export", icon=":material/download:")
 
 
 def mark_reviewed(case_id: str):
@@ -2116,6 +2269,11 @@ def case_file_view(case_id: str, record: dict, editable: bool = True):
         out.append(f'<p class="case-sub">{e(n["step"])}'
                    + (f" · {e(t('cf.due', due=show_date(date.fromisoformat(n['due']))))}" if n.get("due") else "")
                    + f' {ui.tag(t("cf.added", on=n["on"][:10], by=n["by"]))}</p>')
+    if record.get("research_points"):
+        out.append(f'<h4>{e(t("cf.research"))}</h4><ul>' + "".join(
+            f"<li>{e(research.KINDS[p['kind']])}: {e(p['text'][:400])} "
+            f"{ui.tag(t('cf.research_tag', on=p['approved_on']))}<br><em>{e(research.source_line(p['sources']))}</em></li>"
+            for p in record["research_points"]) + "</ul>")
     if record.get("notes"):
         out.append(f'<h4>{e(t("cf.notes"))}</h4><ul>' + "".join(
             f"<li>{e(n['text'])} {ui.tag(t('cf.added', on=n['on'][:10], by=n['by']))}</li>"

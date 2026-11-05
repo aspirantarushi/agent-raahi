@@ -197,9 +197,6 @@ def _plan():
 
 def _generate_json(prompt: str, schema: dict, extra_parts: Optional[list] = None) -> Tuple[dict, str]:
     """Returns (the JSON answer, the model that gave it). extra_parts: e.g. an audio recording."""
-    key = api_key()
-    if not key:
-        raise AIUnavailable("AI reading is not set up yet (no GEMINI_API_KEY).")
     body = {
         "contents": [{"role": "user", "parts": (extra_parts or []) + [{"text": prompt}]}],
         "generationConfig": {
@@ -208,6 +205,21 @@ def _generate_json(prompt: str, schema: dict, extra_parts: Optional[list] = None
             "responseSchema": schema,
         },
     }
+    data, used = _generate(body)
+    try:
+        parts = data["candidates"][0]["content"]["parts"]
+        text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
+        return json.loads(text), used
+    except (KeyError, IndexError, TypeError, ValueError):
+        record_failures([{"model": used, "error": UNREADABLE, "code": None}], "gave up: the form opened instead")
+        raise AIUnavailable("AI reading failed: the answer could not be read.") from None
+
+
+def _generate(body: dict) -> Tuple[dict, str]:
+    """Send a request with the retries (2, 4, 8 s, then the backup model). Returns (raw answer, model)."""
+    key = api_key()
+    if not key:
+        raise AIUnavailable("AI reading is not set up yet (no GEMINI_API_KEY).")
     attempts, used, data = [], None, None
     skip_model = None  # a model whose daily limit is used up: no more tries of it
     for model, wait in _plan():
@@ -231,14 +243,7 @@ def _generate_json(prompt: str, schema: dict, extra_parts: Optional[list] = None
         record_failures(attempts, "gave up after every try: the form opened instead")
         raise AIUnavailable(BUSY_MESSAGE, busy=True)
     record_failures(attempts, f"answered by {used} after {len(attempts)} failed tries")
-
-    try:
-        parts = data["candidates"][0]["content"]["parts"]
-        text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
-        return json.loads(text), used
-    except (KeyError, IndexError, TypeError, ValueError):
-        record_failures([{"model": used, "error": UNREADABLE, "code": None}], "gave up: the form opened instead")
-        raise AIUnavailable("AI reading failed: the answer could not be read.") from None
+    return data, used
 
 
 # ---------- reading undertrial case notes ----------
@@ -521,3 +526,111 @@ def transcribe(audio: bytes, mime_type: str = "audio/wav", script: str = "en") -
         raise AIUnavailable("AI reading failed: the answer could not be read.")
     clean, removed = privacy.redact(text.strip())
     return Transcript(text=clean, removed=removed, model=model)
+
+
+# ---------- "Research this issue": web search with Google Search grounding ----------
+# Only the state and the issue in plain words are sent (never names or personal numbers). The AI
+# writes a brief; research.py (plain code) keeps only points backed by an official link that Google
+# Search actually returned. Nothing reaches a case until the supervisor approves it.
+
+RESEARCH_PROMPT = """You help a free legal aid clinic in India. A volunteer has a problem that the clinic's
+own files do not cover. Use Google Search to find OFFICIAL information for this state.
+
+State: {state}
+Problem, in plain words: {issue}
+
+Write a short research brief in plain English, with these headings:
+1. Routes: who the person can complain to or apply to, in order (first the office or officer concerned,
+   then any grievance cell, ombudsman, regulator, commission or court), with the name of the office.
+2. Documents usually needed.
+3. Time limits, if any (only if an official source states them).
+4. Where and how to file (office, online portal or address of the office, fee if any).
+5. Draft letter: a short application or complaint letter to the first office in the routes. Use blanks
+   in square brackets for every personal detail: [Name], [Address], [Phone], [Consumer or account
+   number], [Date], [Signature]. Never invent a name, number or address.
+
+Rules:
+- Use only official sources: Indian central or state government websites (gov.in, nic.in), India Code,
+  state regulators and commissions, courts, NALSA and state or district legal services authorities.
+- Write every point as a short factual sentence that the source states. If official information is
+  not found for a heading, write "Not found in official sources."
+- Never predict the outcome, the chances of success, how long it will take or what the authority will
+  decide. Never promise anything. Never give an opinion about anyone.
+"""
+
+SPLIT_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "points": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "kind": {"type": "STRING", "enum": ["route", "documents", "time_limit", "how_to_file", "letter"]},
+                    "text": {"type": "STRING"},
+                    "quote": {"type": "STRING"},
+                },
+                "required": ["kind", "text", "quote"],
+            },
+        },
+    },
+    "required": ["points"],
+}
+
+SPLIT_PROMPT = """Split this research brief into separate points. For each point give:
+- kind: "route" (who to complain or apply to; keep the order of the brief), "documents", "time_limit",
+  "how_to_file" or "letter" (the whole draft letter as ONE point);
+- text: the point in one or two short plain sentences (for the letter: the letter itself, unchanged);
+- quote: the exact sentence or sentences copied word for word from the brief that the point comes from.
+Leave out headings, anything that says "Not found in official sources", and anything that predicts an
+outcome or gives an opinion. Do not add anything that is not in the brief.
+
+Brief:
+<<<
+{brief}
+>>>"""
+
+
+@dataclass
+class ResearchRaw:
+    brief: str           # the grounded brief, as written by the AI
+    sources: list        # [{"uri", "title"}] from Google Search (groundingChunks), in order
+    supports: list       # [{"text", "sources": [index, ...]}] which search results back which words
+    queries: list        # the searches Google ran
+    model: str
+    sent: str            # exactly what was sent (state and issue), for the audit record
+
+
+def research_issue(state: str, issue: str) -> ResearchRaw:
+    """Research with Google Search grounding. Phone, Aadhaar and email numbers are removed first."""
+    state, _ = privacy.redact((state or "").strip()[:60])
+    issue, _ = privacy.redact((issue or "").strip()[:300])
+    if not issue.strip() or not state.strip():
+        raise AIUnavailable("Research needs the state and the problem in plain words.")
+    prompt = RESEARCH_PROMPT.format(state=state, issue=issue)
+    body = {"contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "tools": [{"google_search": {}}], "generationConfig": {"temperature": 0}}
+    data, model = _generate(body)
+    try:
+        candidate = data["candidates"][0]
+        brief = "".join(p.get("text", "") for p in candidate["content"]["parts"] if not p.get("thought"))
+        meta = candidate.get("groundingMetadata") or {}
+    except (KeyError, IndexError, TypeError):
+        raise AIUnavailable("Research failed: the answer could not be read.") from None
+    sources = [{"uri": (c.get("web") or {}).get("uri", ""), "title": (c.get("web") or {}).get("title", "")}
+               for c in meta.get("groundingChunks", []) or []]
+    supports = [{"text": (s.get("segment") or {}).get("text", ""), "sources": list(s.get("groundingChunkIndices", []))}
+                for s in meta.get("groundingSupports", []) or []]
+    if not brief.strip() or not sources:
+        raise AIUnavailable("Research failed: no search results came back.")
+    return ResearchRaw(brief, sources, supports, list(meta.get("webSearchQueries", []) or []), model,
+                       f"State: {state}. Problem: {issue}")
+
+
+def split_brief(brief: str) -> Tuple[list, str]:
+    """The brief as separate points [{"kind", "text", "quote"}] (no new facts, no links)."""
+    answer, model = _generate_json(SPLIT_PROMPT.format(brief=brief), SPLIT_SCHEMA)
+    points = answer.get("points") if isinstance(answer, dict) else None
+    if not isinstance(points, list):
+        raise AIUnavailable("Research failed: the answer could not be read.")
+    return points, model

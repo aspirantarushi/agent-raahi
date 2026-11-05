@@ -35,3 +35,7 @@ tracker/
 # Evaluation sessions (practice) and the impact log (real use, with permission)
 evaluation/sessions/
 impact/
+
+# AI research briefs and approved research saved as knowledge (live data; export to knowledge/ by hand)
+research/
+knowledge_added/
