@@ -220,6 +220,13 @@ def test_tests_never_use_supabase(monkeypatch, tmp_path):
     assert isinstance(storage.backend(tmp_path), storage.LocalFiles)   # another folder: always local
 
 
+def test_address_pasted_with_rest_v1_is_accepted(monkeypatch):
+    monkeypatch.setenv("SUPABASE_SECRET_KEY", "sb_secret_fake")
+    for pasted in ("https://abc.supabase.co/rest/v1/", "https://abc.supabase.co/rest/v1", "https://abc.supabase.co/"):
+        monkeypatch.setenv("SUPABASE_URL", pasted)
+        assert storage.supabase_settings()[0] == "https://abc.supabase.co"
+
+
 def test_publishable_key_is_refused_as_the_secret_key(monkeypatch):
     monkeypatch.setenv("SUPABASE_SECRET_KEY", "sb_publishable_abc")
     with pytest.raises(storage.StorageError, match="secret key"):

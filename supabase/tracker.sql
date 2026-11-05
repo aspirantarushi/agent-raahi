@@ -30,6 +30,9 @@ alter table public.raahi_records add constraint no_personal_numbers check (
 alter table public.raahi_records enable row level security;
 alter table public.raahi_records force row level security;
 revoke all on public.raahi_records from anon, authenticated, public;
+-- The app's server (secret key = service_role) is the only one allowed in. Needed because this
+-- project has "Automatically expose new tables" switched off.
+grant select, insert, update, delete on public.raahi_records to service_role;
 -- (no policies on purpose: with row level security on, nobody but the server's secret key gets in)
 
 create index if not exists raahi_records_kind on public.raahi_records (kind, id);

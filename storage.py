@@ -15,6 +15,7 @@ Supabase is used when SUPABASE_URL and SUPABASE_SECRET_KEY are set and RAAHI_STO
 
 import json
 import os
+import re
 import secrets as _secrets
 import urllib.error
 import urllib.parse
@@ -220,6 +221,8 @@ class Supabase:
 
 def supabase_settings() -> Tuple[str, str]:
     url, key = setting("SUPABASE_URL"), setting("SUPABASE_SECRET_KEY")
+    # Supabase's Data API page shows the address with /rest/v1/ on the end: accept it as pasted.
+    url = re.sub(r"/rest/v1/?$", "", url.rstrip("/")).rstrip("/")
     if key and not (key.startswith("sb_secret_") or key.startswith("eyJ")):
         raise StorageError("SUPABASE_SECRET_KEY doesn't look like a Supabase secret key (it starts with sb_secret_).")
     return url, key
