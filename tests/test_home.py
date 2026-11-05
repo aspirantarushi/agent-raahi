@@ -197,3 +197,17 @@ def test_start_a_new_case_and_continue_a_case(at):
     assert not any(t.key == "cont-code-home" for t in at.text_input)
     at.button(key="home-start").click().run()
     assert at.session_state["screen"] == "New case" and at.radio(key="case_type").value == "Any case (start here)"
+
+
+def test_with_agent_raahi_box_lists_five_features_and_no_example_case():
+    import ui
+    import lang
+    for code in ("en", "hi"):
+        t = (lambda k: lang.t(k, code))
+        page = ui.compare({"eyebrow": t("home.today_t"), "title": t("home.today_h"), "chips": [], "text": ""},
+                          {"eyebrow": t("home.raahi_t"), "title": t("home.raahi_h"),
+                           "rows": [("qr_code_2", t(f"home.raahi_f{i}_b"), t(f"home.raahi_f{i}")) for i in range(1, 6)]})
+        assert page.count("<li>") == 5 and 'class="mini"' not in page and "progress" not in page
+        assert f"<b>{t('home.raahi_f1_b')}</b>" in page
+    assert lang.t("home.raahi_h", "en") == "One case file, from first story to follow-up."
+    assert lang.t("home.raahi_f5_b", "en") == "Follow-up dates,"

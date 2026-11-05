@@ -997,11 +997,6 @@ i18n/hi.json · home.today_c4,Phone call to the DLSA,DLSA को फ़ोन �
 i18n/hi.json · home.today_c5,Lawyer's memory,वकील की याददाश्त,screen text,,
 i18n/hi.json · home.today_p,"Missing dates, missing documents, and no record of what was sent or when.","छूटी तारीख़ें, छूटे दस्तावेज़, और कोई रिकॉर्ड नहीं कि क्या, कब भेजा गया।",screen text,,
 i18n/hi.json · home.raahi_h,"One case file, from first story to follow-up.","एक केस फ़ाइल, पहली कहानी से फ़ॉलो-अप तक।",screen text,,
-i18n/hi.json · home.ex_label,Example (practice data),उदाहरण (अभ्यास डेटा),screen text,,
-i18n/hi.json · home.ex_case,Practice case · Unpaid wages,अभ्यास केस · बकाया मज़दूरी,screen text,,
-i18n/hi.json · home.ex_status,Waiting for review,जाँच की राह में,screen text,,
-i18n/hi.json · home.ex_check,"Checklist: 4 of 5 ready · 1 marked ""cannot obtain""","जाँच-सूची: 5 में से 4 तैयार · 1 पर ""नहीं मिल सकता""",screen text,,
-i18n/hi.json · home.ex_next,Next step: DLSA application · follow-up date set by the volunteer,अगला क़दम: DLSA आवेदन · फ़ॉलो-अप की तारीख़ स्वयंसेवक ने तय की,screen text,,
 i18n/hi.json · home.safe_h2,It helps the volunteer. It never replaces the lawyer.,यह स्वयंसेवक की मदद करता है। वकील की जगह कभी नहीं लेता।,screen text,,
 i18n/hi.json · home.learn_h2,Short guides for volunteers,स्वयंसेवकों के लिए छोटी गाइड,screen text,,
 i18n/hi.json · scan.caption,Point the camera at the QR code on the case slip and take the photo. The case opens by itself.,कैमरा केस पर्ची के QR कोड पर रखें और फ़ोटो लें। केस अपने आप खुल जाएगा।,screen text,,
@@ -1135,6 +1130,16 @@ i18n/hi.json · rs.warn_replaced,Replaced by the {new} on {date}: check before a
 i18n/hi.json · rs.warn_mismatch,"The point names the {law}, but its source is “{title}”: check that the source matches the law.","यह बिंदु {law} का नाम लेता है, पर इसका स्रोत “{title}” है: जाँचें कि स्रोत उसी क़ानून का है।",screen text,,
 i18n/hi.json · rs.warn_other_state,"This source is a website of {other}, but the case is in {state}: check that the rule applies in {state}.","यह स्रोत {other} की वेबसाइट है, पर केस {state} का है: जाँचें कि नियम {state} में लागू होता है।",screen text,,
 i18n/hi.json · online.no_supabase,"Not ready for real cases: the online database (Supabase) is not set up, so anything saved here is lost when the app restarts. The supervisor adds SUPABASE_URL and SUPABASE_SECRET_KEY in the app's Secrets (see docs/GO_ONLINE.md).","असली केस के लिए तैयार नहीं: ऑनलाइन डेटाबेस (Supabase) सेट नहीं है, इसलिए यहाँ सहेजा गया सब कुछ ऐप दोबारा शुरू होने पर मिट जाएगा। Supervisor ऐप के Secrets में SUPABASE_URL और SUPABASE_SECRET_KEY जोड़ें (docs/GO_ONLINE.md देखें)।",screen text,,
+i18n/hi.json · home.raahi_f1_b,A case code and QR slip:,केस कोड और QR पर्ची:,screen text,,
+i18n/hi.json · home.raahi_f1,the next volunteer picks up where the last one stopped.,अगला स्वयंसेवक वहीं से आगे बढ़ता है जहाँ पिछला रुका था।,screen text,,
+i18n/hi.json · home.raahi_f2_b,Facts and documents in one place:,तथ्य और काग़ज़ एक ही जगह:,screen text,,
+i18n/hi.json · home.raahi_f2,"what the person has, and what is still missing.","व्यक्ति के पास क्या है, और क्या अभी बाक़ी है।",screen text,,
+i18n/hi.json · home.raahi_f3_b,Drafts ready for the lawyer:,वकील के लिए तैयार ड्राफ़्ट:,screen text,,
+i18n/hi.json · home.raahi_f3,the legal aid application and the complaint letter.,मुफ़्त क़ानूनी मदद की अर्ज़ी और शिकायत पत्र।,screen text,,
+i18n/hi.json · home.raahi_f4_b,Every step recorded:,हर क़दम दर्ज:,screen text,,
+i18n/hi.json · home.raahi_f4,"who did what, when, and what was sent.","किसने क्या किया, कब, और क्या भेजा गया।",screen text,,
+i18n/hi.json · home.raahi_f5_b,"Follow-up dates,","फ़ॉलो-अप की तारीख़ें,",screen text,,
+i18n/hi.json · home.raahi_f5,so the next step is never lost.,ताकि अगला क़दम कभी न छूटे।,screen text,,
 case_notes_hi.txt,(fake practice story; check that it reads naturally),"अभ्यास केस (कोई असली व्यक्ति नहीं)।
 बोलने वाली: एक विचाराधीन क़ैदी की बड़ी बहन।
 उसके भाई को 15 मार्च 2024 को गिरफ़्तार किया गया था। अपराध फ़रवरी 2024 में हुआ था।

@@ -131,17 +131,16 @@ def safe_cards(items) -> str:
 
 
 def compare(today: dict, raahi: dict) -> str:
-    """Today (a case in many places) beside With Agent Raahi (one case file, shown as a practice example)."""
+    """Today (a case in many places) beside With Agent Raahi: five short rows, each an outlined icon,
+    a bold first phrase and the rest of the line. raahi["rows"]: [(icon name, bold phrase, rest)]."""
     e = html.escape
     chips = "".join(f"<span>{e(c)}</span>" for c in today["chips"])
+    rows = "".join(f'<li>{icon(name)}<span><b>{e(bold)}</b> {e(rest)}</span></li>' for name, bold, rest in raahi["rows"])
     return (f'<section class="sec" id="what-changes"><div class="compare">'
             f'<div class="today">{eyebrow(today["eyebrow"])}<h3>{e(today["title"])}</h3>'
             f'<div class="chips">{chips}</div><p>{e(today["text"])}</p></div>'
             f'<div class="raahi">{eyebrow(raahi["eyebrow"])}<h3>{e(raahi["title"])}</h3>'
-            f'<div class="mini"><span class="ex">{e(raahi["example"])}</span>'
-            f'<div class="top"><span>{e(raahi["case"])}</span>{chip("sent-back", raahi["status"])}</div>'
-            f'<div class="bar"><i></i></div><span class="line">{e(raahi["check"])}</span>'
-            f'<span class="line">{e(raahi["next"])}</span></div></div></div></section>')
+            f'<ul class="features">{rows}</ul></div></div></section>')
 
 
 def source_link(source: str, link: str) -> str:

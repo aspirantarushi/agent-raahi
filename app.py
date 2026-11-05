@@ -3193,9 +3193,9 @@ def home_screen():
     st.markdown(ui.compare(
         {"eyebrow": t("home.today_t"), "title": t("home.today_h"), "chips": [t(f"home.today_c{i}") for i in range(1, 6)],
          "text": t("home.today_p")},
-        {"eyebrow": t("home.raahi_t"), "title": t("home.raahi_h"), "example": t("home.ex_label"),
-         "case": t("home.ex_case"), "status": t("home.ex_status"), "check": t("home.ex_check"),
-         "next": t("home.ex_next")}), unsafe_allow_html=True)
+        {"eyebrow": t("home.raahi_t"), "title": t("home.raahi_h"),
+         "rows": [(icon, t(f"home.raahi_f{i}_b"), t(f"home.raahi_f{i}")) for i, icon in enumerate(RAAHI_ICONS, 1)]}),
+        unsafe_allow_html=True)
     st.markdown(ui.section("safety", t("home.safe_title"), t("home.safe_h2"), ui.safe_cards(
         [(SAFE_ICONS[i - 1], t(f"home.safe{i}_t"), t(f"home.safe{i}_p")) for i in range(1, 7)])),
         unsafe_allow_html=True)
@@ -3219,6 +3219,7 @@ def home_screen():
 
 
 LEARN_ICONS = ["volunteer_activism", "gavel", "phishing", "science"]
+RAAHI_ICONS = ["qr_code_2", "checklist", "description", "history", "event"]  # "With Agent Raahi" rows
 SAFE_ICONS = ["verified_user", "menu_book", "lock", "help", "balance", "rule"]
 # The top navigation: (screen, key). Evaluation (practice only) is reached from the footer.
 NAV = [("Home", "home"), ("New case", "new"), ("My cases", "tracker"), ("Learn", "learn"), ("Supervisor", "supervisor")]

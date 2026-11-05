@@ -159,12 +159,12 @@ div[class*="st-key-case-card-"] { background: var(--card); border: 1px solid var
 .compare .eyebrow { margin: 0 !important; }
 .chips { display: flex; flex-wrap: wrap; gap: 10px; }
 .chips span { padding: 10px 14px; border-radius: 12px; background: var(--card); border: 1px solid var(--line2); font-size: 15px; }
-.mini { border: 1px solid var(--line); border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 12px; background: var(--bg); }
-.mini .top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 15px; font-weight: 600; }
-.mini .bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
-.mini .bar i { display: block; width: 80%; height: 8px; background: var(--teal); }
-.mini .line { font-size: 14px; color: var(--muted); }
-.mini .ex { font-size: 12px; color: var(--muted2); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.compare .features { list-style: none; margin: 0 !important; padding: 0 !important; display: flex; flex-direction: column; gap: 12px; }
+.compare .features li { display: flex; align-items: flex-start; gap: 12px; margin: 0 !important; padding: 0 !important;
+  font-size: 15px; line-height: 1.5; color: var(--muted); }
+.compare .features li b { color: var(--ink); font-weight: 650; }
+.compare .features .mi { flex: 0 0 auto; font-size: 22px; line-height: 1.1; color: var(--teal-dark);
+  font-variation-settings: "FILL" 0, "wght" 400; }
 
 /* ---------- facts band: full width navy, sources in italics ---------- */
 .facts-band { background: var(--ink); color: #F8F6F1; margin: 0 calc(50% - 50vw) 0 calc(50% - 50vw);

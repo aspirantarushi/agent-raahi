@@ -765,11 +765,6 @@
  "home.today_c5": "Lawyer's memory",
  "home.today_p": "Missing dates, missing documents, and no record of what was sent or when.",
  "home.raahi_h": "One case file, from first story to follow-up.",
- "home.ex_label": "Example (practice data)",
- "home.ex_case": "Practice case · Unpaid wages",
- "home.ex_status": "Waiting for review",
- "home.ex_check": "Checklist: 4 of 5 ready · 1 marked \"cannot obtain\"",
- "home.ex_next": "Next step: DLSA application · follow-up date set by the volunteer",
  "home.safe_h2": "It helps the volunteer. It never replaces the lawyer.",
  "home.learn_h2": "Short guides for volunteers",
  "scan.caption": "Point the camera at the QR code on the case slip and take the photo. The case opens by itself.",
@@ -1021,5 +1016,15 @@
  "cw.copy": "Copy text",
  "cw.copied": "Copied",
  "cw.word": "Word (.docx)",
- "cw.pdf": "PDF"
+ "cw.pdf": "PDF",
+ "home.raahi_f1_b": "A case code and QR slip:",
+ "home.raahi_f1": "the next volunteer picks up where the last one stopped.",
+ "home.raahi_f2_b": "Facts and documents in one place:",
+ "home.raahi_f2": "what the person has, and what is still missing.",
+ "home.raahi_f3_b": "Drafts ready for the lawyer:",
+ "home.raahi_f3": "the legal aid application and the complaint letter.",
+ "home.raahi_f4_b": "Every step recorded:",
+ "home.raahi_f4": "who did what, when, and what was sent.",
+ "home.raahi_f5_b": "Follow-up dates,",
+ "home.raahi_f5": "so the next step is never lost."
 }
