@@ -127,6 +127,7 @@ class GeneralReading:
     issues: List[Tuple[str, str]] = field(default_factory=list)  # (category, plain-words name)
     documents_held: List[str] = field(default_factory=list)
     questions: List[str] = field(default_factory=list)
+    outcome: str = ""                                            # what the person wants, from the notes
     dropped: List[str] = field(default_factory=list)
     unconfirmed_yes: List[str] = field(default_factory=list)  # "yes" answers whose words weren't found
 
@@ -179,7 +180,7 @@ def state_names() -> List[str]:
         return [r["state_or_ut"] for r in csv.DictReader(f) if not r["state_or_ut"].startswith("Supreme Court")]
 
 
-def check_general_answer(raw: dict, notes: str) -> GeneralReading:
+def check_general_answer(raw: dict, notes: str, code: str = "en") -> GeneralReading:
     r = GeneralReading()
     if not isinstance(raw, dict):
         return r
@@ -247,7 +248,49 @@ def check_general_answer(raw: dict, notes: str) -> GeneralReading:
     r.documents_held = [c for c in (clean(d, 100) for d in (raw.get("documents_held") or [])[:10]) if c]
     r.questions = [c for c in (clean(q, 200) for q in (raw.get("questions_to_ask") or [])[:5])
                    if c and not privacy.personal_details_found(c)]
+    value, quote = _quoted(raw.get("outcome_wanted"), notes)
+    if value and quote:
+        r.outcome = clean(value, 200)
+    r.questions = follow_up_questions(r, code)
     return r
+
+
+# Words that show a question is about a fact; if the fact is already known, the question is dropped.
+FACT_WORDS = {
+    "state": ["which state", "what state", "राज्य"],
+    "annual_income": ["income", "earn", "salary", "आमदनी", "आय", "कमाई"],
+    "woman": ["woman", "female", "gender", "महिला"],
+    "under_18": ["how old", "age", "under 18", "उम्र"],
+    "in_custody": ["in custody", "in jail", "हिरासत", "जेल में"],
+    "sc_st": ["caste", "tribe", "sc/st", "जाति"],
+    "disability": ["disab", "दिव्यांग"],
+}
+OUTCOME_WORDS = ["want", "hope", "outcome", "expect", "wish", "चाह", "परिणाम", "नतीजा", "नतीजे", "उम्मीद", "अपेक्षा",
+                 "chahte", "chahti", "chahta", "chahiye"]
+RELATIVE_WHEN = re.compile(r"today|yesterday|ago|last (week|month|night)|this (week|month|morning)|आज|कल|पहले|पिछले",
+                           re.I)
+
+
+def follow_up_questions(r: GeneralReading, code: str = "en") -> List[str]:
+    """The AI's questions, checked by plain code: nothing the story already answers; then what the
+    person wants (if the story doesn't say) and the year of any date written without one."""
+    def t(key, **params):
+        return lang.t(key, code, **params)
+
+    def has(question: str, words) -> bool:  # whole words only ("age" is not in "wages")
+        return any(re.search(rf"(?<!\w){re.escape(w)}", question.casefold()) for w in words)
+
+    questions = [q for q in r.questions
+                 if not any(fact in r.facts and has(q, words) for fact, words in FACT_WORDS.items())]
+    if not r.outcome and not any(has(q, OUTCOME_WORDS) for q in questions):
+        questions.append(t("q.outcome"))
+    for when, what in (r.timeline + r.coming_dates):
+        if len([q for q in questions if q.startswith(t("q.year_start"))]) >= 2:
+            break
+        if when and not re.search(r"\b(19|20)\d{2}\b", privacy.normalise_digits(when)) and not RELATIVE_WHEN.search(when) \
+                and when != "date not given":
+            questions.append(t("q.year", when=when, what=what))
+    return questions[:7]
 
 
 # ---------- urgency (rules in CLAUDE.md) ----------
@@ -487,6 +530,7 @@ class GeneralFacts:
     # For issues our files don't cover: approved research and saved research knowledge, with sources
     # (research.items_for_summary). Never AI text the supervisor has not approved.
     research: List[dict] = field(default_factory=list)
+    outcome: str = ""  # what the person wants, from the notes (or answered as a question)
 
     def to_dict(self) -> dict:
         d = {k: v for k, v in self.__dict__.items()}
@@ -497,7 +541,8 @@ class GeneralFacts:
     def from_dict(cls, d: dict) -> "GeneralFacts":
         keys = ["person", "what_happened", "timeline", "coming_dates", "issues", "sections", "documents_held",
                 "answers", "still_to_ask", "facts", "today"]
-        return cls(**{k: d[k] for k in keys}, precautions=d.get("precautions", []), research=d.get("research", []))
+        return cls(**{k: d[k] for k in keys}, precautions=d.get("precautions", []), research=d.get("research", []),
+                   outcome=d.get("outcome", ""))
 
 
 def build_facts(reading: GeneralReading, answers: List[Tuple[str, str]], still_to_ask: List[str],
@@ -510,6 +555,7 @@ def build_facts(reading: GeneralReading, answers: List[Tuple[str, str]], still_t
         answers=[(clean(q, 200), clean(a, 300)) for q, a in answers],
         still_to_ask=still_to_ask, facts=dict(facts), today=today.isoformat(),
         precautions=[k for k in reading.unconfirmed_yes if k in PRECAUTION_FACTS],
+        outcome=reading.outcome,
     )
 
 
@@ -581,6 +627,8 @@ def summary_body(g: GeneralFacts) -> str:
 
     out.append("What happened")
     out += [f"- {s}" for s in g.what_happened] or ["- (not clear from the notes)"]
+    if g.outcome:
+        out += ["", "What the person wants", f"- {g.outcome}"]
     if g.timeline:
         out += ["", "Timeline"] + [f"- {w}: {what}" for w, what in g.timeline]
     if g.sections:
@@ -696,6 +744,8 @@ def summary_body_hi(g: "GeneralFacts") -> str:
 
     out.append(_hi("sum.what_happened"))
     out += [f"- {x}" for x in g.what_happened] or [f"- {_hi('sum.not_clear')}"]
+    if g.outcome:
+        out += ["", _hi("sum.outcome"), f"- {g.outcome}"]
     if g.timeline:
         out += ["", _hi("sum.timeline")] + [f"- {w}: {what}" for w, what in g.timeline]
     if g.sections:

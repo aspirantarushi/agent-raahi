@@ -200,7 +200,8 @@ def test_only_state_and_issue_are_sent_never_numbers(monkeypatch):
 
 # ---------- on screen: the volunteer asks, the supervisor approves, the summary shows it ----------
 
-STORY = "Practice case. The person seeking help lives in Bihar. Ramesh from the electricity office cut the line."
+STORY = ("Practice case. The person seeking help lives in Bihar. Ramesh from the electricity office cut the line. "
+         "She wants the connection restored.")
 
 
 def test_research_on_screen(monkeypatch, fake_ai):
@@ -208,7 +209,8 @@ def test_research_on_screen(monkeypatch, fake_ai):
     from test_general import MODEL, answer, yn
     raw = answer(what_happened=["The electricity line was cut."],
                  issues=[{"category": "other", "name": "electricity connection cut"}],
-                 state={"value": "Bihar", "quote": "lives in Bihar"}, woman=yn("yes", "The person seeking help"))
+                 state={"value": "Bihar", "quote": "lives in Bihar"}, woman=yn("yes", "The person seeking help"),
+                 outcome_wanted={"value": "the connection restored", "quote": "She wants the connection restored."})
     monkeypatch.setattr(llm, "available", lambda: True)
     monkeypatch.setattr(llm, "gemini_available", lambda: True)
     monkeypatch.setattr(llm, "read_general_notes",

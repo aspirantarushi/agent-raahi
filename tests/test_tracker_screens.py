@@ -65,9 +65,14 @@ def volunteer_a_starts():
     case_id = at.session_state["case_id"]
     record = tracker.load(case_id)
     assert record["created_by"] == "Volunteer A"
-    assert any("Give the person the slip with the code " + record["code"] in s.value for s in at.success)
-    # The AI's question, then the first eligibility question (state is already known from the story)
+    assert any("Case slip ready (code " + record["code"] in s.value for s in at.success)
+    # The AI's question, then what the person wants (the story doesn't say), then the first eligibility
+    # question (state is already known from the story)
+    assert "Question 1 of" in texts(at)
     at.text_input(key="gq-0").set_value("No written contract")
+    button(at, "Next").click().run()
+    assert "What does the person want to happen?" in texts(at)
+    at.text_input(key="gq-1").set_value("To get the unpaid wages")
     button(at, "Next").click().run()
     assert "Is the person needing help in jail or police custody now?" in texts(at)
     at.radio(key="ge-in_custody").set_value("No")
@@ -81,7 +86,9 @@ def test_second_volunteer_continues_without_re_asking(pretend_ai):
     case_id, code = volunteer_a_starts()
     saved = tracker.load(case_id)
     assert tracker.known(saved) == {"state": "Bihar", "in_custody": False}
-    assert saved["answers"] == [["Does the worker have a written contract?", "No written contract"]]
+    assert saved["answers"] == [["Does the worker have a written contract?", "No written contract"],
+                                ["What does the person want to happen? (the outcome they hope for)",
+                                 "To get the unpaid wages"]]
 
     at = as_volunteer("Volunteer B")
     at.text_input(key="cont-code-new").set_value(code.lower())
@@ -192,6 +199,7 @@ def test_visit_log_and_camp_from_the_screen(pretend_ai):
     at = as_volunteer("Volunteer A")
     at.session_state["case_id"] = case_id
     at.run()
+    at.button(key="case-tab-visit").click().run()  # the panels are closed until chosen
     at.selectbox(key=f"vis-how-{case_id}").set_value("phone call")
     at.text_area(key=f"vis-learned-{case_id}").set_value("Wages unpaid since June")
     at.text_input(key=f"vis-next-{case_id}").set_value("Bring the attendance photos")
@@ -199,10 +207,36 @@ def test_visit_log_and_camp_from_the_screen(pretend_ai):
     ok(at)
     visit = tracker.load(case_id)["visits"][-1]
     assert (visit["how"], visit["by"], visit["next_step"]) == ("phone call", "Volunteer A", "Bring the attendance photos")
-    at.text_input(key=f"camp-village-{case_id}").set_value("Rampur")
-    at.text_input(key=f"camp-district-{case_id}").set_value("Patna")
-    button(at, "Save the camp").click().run()
-    assert tracker.load(case_id)["camp"]["village"] == "Rampur"
+
+
+def test_todays_camp_button_chip_and_end(pretend_ai):
+    at = as_volunteer("Volunteer A")
+    assert not any(t.key == "camp-today-village" for t in at.text_input)  # no silent fields
+    at.button(key="camp-start").click().run()
+    at.button(key="camp-save-today").click().run()
+    assert any("village" in e.value for e in at.error)                   # both are needed
+    at.text_input(key="camp-today-village").set_value("Rampur")
+    at.text_input(key="camp-today-district").set_value("Patna")
+    at.button(key="camp-save-today").click().run()
+    ok(at)
+    assert "Camp: Rampur, Patna · " in texts(at)
+    at.text_area(key="g_notes").set_value(STORY_A)
+    button(at, "Read the story").click().run()
+    assert tracker.load(at.session_state["case_id"])["camp"]["village"] == "Rampur"  # the new case is tagged
+    at.button(key="camp-end").click().run()
+    assert "Camp: Rampur" not in texts(at) and at.button(key="camp-start")
+
+
+def test_finish_intake_on_screen(pretend_ai):
+    case_id, _ = volunteer_a_starts()
+    at = as_volunteer("Volunteer A")
+    at.session_state["case_id"] = case_id
+    at.run()
+    at.button(key="intake-finish").click().run()
+    ok(at)
+    assert tracker.status_of(case_id) == tracker.INTAKE_DONE
+    assert any(s.value.startswith("Intake finished. Next step:") for s in at.success)
+    assert not any(b.key == "intake-finish" for b in at.button)
 
 
 def test_tracker_list_filters_and_overdue(pretend_ai):

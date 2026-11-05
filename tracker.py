@@ -35,13 +35,14 @@ CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
 CODE_LENGTH = 6
 
 INTAKE = "intake not finished"
+INTAKE_DONE = "intake finished"  # "Finish intake" pressed; the draft is not with the supervisor yet
 SUBMITTED, ACKNOWLEDGED = "submitted", "acknowledged"
 # A case edited after the supervisor approved it: the approved version is kept, and the new one waits
 # for the supervisor to look at the changes.
 CHANGED = "changed after approval"
 REVIEW_AGAIN = "Changed after approval: needs supervisor review again"
 APPROVED_STATUSES = (store.APPROVED, SUBMITTED, ACKNOWLEDGED)
-STATUSES = [INTAKE, store.WAITING, store.SENT_BACK, store.APPROVED, CHANGED, SUBMITTED, ACKNOWLEDGED]
+STATUSES = [INTAKE, INTAKE_DONE, store.WAITING, store.SENT_BACK, store.APPROVED, CHANGED, SUBMITTED, ACKNOWLEDGED]
 VISIT_WAYS = ["camp visit", "phone call", "clinic meeting", "jail visit", "other"]
 
 # Facts that are dates (saved as YYYY-MM-DD), and facts never merged: today's date changes at every visit.
@@ -355,6 +356,8 @@ def _status(case_id: str, listed: Optional[dict], base: Path) -> str:
 
 
 def _with_review(status: str, record: Optional[dict]) -> str:
+    if status == INTAKE and (record or {}).get("intake_finished"):
+        return INTAKE_DONE
     return CHANGED if status in APPROVED_STATUSES and (record or {}).get("review_needed") else status
 
 
@@ -434,7 +437,34 @@ def filter_rows(all_rows: List[dict], status: Optional[str] = None, camp: Option
             if (not status or r["status"] == status)
             and (not camp or r["camp"] == camp)
             and (not volunteer or volunteer in r["volunteers"])
-            and not (hide_intake and r["status"] == INTAKE)]
+            and not (hide_intake and r["status"] in (INTAKE, INTAKE_DONE))]
+
+
+# ---------- finishing the intake ----------
+
+DEFAULT_FOLLOW_UP_DAYS = 7
+NEXT_AFTER_INTAKE = "Send the draft to the supervisor for review"
+
+
+def finish_intake(case_id: str, by: str, next_step: str = "", next_due: Optional[date] = None, base: Path = HERE,
+                  today: Optional[date] = None) -> dict:
+    """Mark the intake as done (saved with who and when), with the next step and its date (a follow-up
+    in 7 days unless given). Returns {"step", "due"}."""
+    by = clean_name(by)
+    today = today or date.today()
+    record = _must_load(case_id, base)
+    logged = next((v for v in reversed(record.get("visits", [])) if v.get("next_step")), None)
+    step = clean_text(next_step, 200) or (logged or {}).get("next_step") or NEXT_AFTER_INTAKE
+    if next_due is None and logged and logged.get("next_due") and not next_step:
+        next_due = date.fromisoformat(logged["next_due"])
+    due = next_due or (today + timedelta(days=DEFAULT_FOLLOW_UP_DAYS))
+    record["intake_finished"] = {"on": now(), "by": by}
+    record["next"] = {"step": step, "due": due.isoformat(), "on": now(), "by": by}
+    _note(record, by, f"intake finished; next step: {step} (due {due.isoformat()})")
+    _save(record, base)
+    audit.add_event(case_id, "intake finished", audit.VOLUNTEER, f"by {by}; next step: {step}, due {due.isoformat()}",
+                    base=base)
+    return {"step": step, "due": due.isoformat()}
 
 
 # ---------- editing a case: every change audited, approved versions kept ----------

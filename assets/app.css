@@ -60,10 +60,15 @@ h1 { font-size: 2.4rem !important; line-height: 1.15 !important; padding-top: .5
 .stButton > button, .stDownloadButton > button, [data-testid="stBaseButton-primary"],
 [data-testid="stBaseButton-secondary"], [data-testid="stBaseButton-tertiary"] { min-height: 44px; border-radius: 999px !important;
   font-weight: 600; padding-left: 1.25rem; padding-right: 1.25rem; }
-[data-testid="stBaseButton-primary"] { background: var(--ink) !important; border-color: var(--ink) !important; color: #fff !important; }
-[data-testid="stBaseButton-primary"]:hover { background: #1E3157 !important; }
-[data-testid="stBaseButton-secondary"] { background: var(--card) !important; border: 1px solid var(--line2) !important; color: var(--ink) !important; }
-[data-testid="stBaseButton-secondary"]:hover { border-color: var(--ink) !important; }
+[data-testid="stBaseButton-primary"], [data-testid="stBaseButton-primaryFormSubmit"] { background: var(--ink) !important;
+  border-color: var(--ink) !important; color: #fff !important; }
+[data-testid="stBaseButton-primary"]:hover, [data-testid="stBaseButton-primaryFormSubmit"]:hover { background: #1E3157 !important; }
+[data-testid="stBaseButton-secondary"], [data-testid="stBaseButton-secondaryFormSubmit"] { background: var(--card) !important;
+  border: 1px solid var(--line2) !important; color: var(--ink) !important; }
+[data-testid="stBaseButton-secondary"]:hover, [data-testid="stBaseButton-secondaryFormSubmit"]:hover { border-color: var(--ink) !important; }
+[data-testid="stBaseButton-primaryFormSubmit"], [data-testid="stBaseButton-secondaryFormSubmit"],
+[data-testid="stBaseButton-tertiaryFormSubmit"] { min-height: 44px; border-radius: 999px !important; font-weight: 600;
+  padding-left: 1.25rem; padding-right: 1.25rem; }
 [data-testid="stBaseButton-tertiary"] { color: var(--teal-dark) !important; }
 :focus-visible { outline: 3px solid var(--teal) !important; outline-offset: 2px !important; }
 .st-key-home-mic button [data-testid="stMarkdownContainer"], .st-key-home-go button [data-testid="stMarkdownContainer"] {
@@ -213,6 +218,8 @@ div[class*="st-key-learn-card-"] .stButton > button p { white-space: nowrap; }
 .chip.waiting { background: #E0F2FE; color: #0C4A6E; } .chip.sent-back { background: var(--amber-bg); color: var(--amber-ink); }
 .chip.approved { background: #DCFCE7; color: #14532D; } .chip.submitted { background: #E0E7FF; color: #312E81; }
 .chip.acknowledged { background: #CCFBF1; color: #134E4A; } .chip.intake { background: var(--sand); color: var(--muted); }
+.chip.intake-done { background: var(--teal-tint); color: var(--teal-dark); }
+.chip.camp { background: var(--amber-bg); color: var(--amber-ink); font-size: 14px; padding: 6px 12px; }
 .chip.changed { background: var(--amber-bg); color: var(--amber-ink); }
 .tag { display: inline-block; padding: 1px 8px; border-radius: 6px; background: var(--teal-tint); color: var(--teal-dark);
   font-size: 12.5px; font-weight: 500; line-height: 1.6; white-space: nowrap; vertical-align: .1em; margin-left: .25rem; }
@@ -225,6 +232,29 @@ div[class*="st-key-learn-card-"] .stButton > button p { white-space: nowrap; }
   margin: 18px 0 6px 0 !important; padding: 0 !important; font-weight: 600 !important; }
 .cf ul { margin: 0 0 0 1.1rem; padding: 0; } .cf li { margin: 2px 0; }
 .cf p { margin: 0; }
+
+/* ---------- New case: case type cards, question counter, case panel ---------- */
+.st-key-case_type [role="radiogroup"] { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px !important; width: 100%; }
+.st-key-case_type label[data-baseweb="radio"] { position: relative; background: var(--card); border: 2px solid var(--line);
+  border-radius: 20px; padding: 20px 20px 20px 70px !important; margin: 0 !important; min-height: 96px; align-items: flex-start;
+  cursor: pointer; }
+.st-key-case_type label[data-baseweb="radio"]:has(input:checked) { border-color: var(--teal); background: #F4FAF8; }
+.st-key-case_type label[data-baseweb="radio"] > div:first-child { display: none !important; }
+.st-key-case_type label[data-baseweb="radio"]::before { position: absolute; left: 20px; top: 20px; width: 36px; height: 36px;
+  border-radius: 12px; background: var(--teal-tint); color: var(--teal); display: flex; align-items: center;
+  justify-content: center; font-family: "Material Symbols Rounded"; font-size: 22px; font-feature-settings: "liga";
+  content: "chat"; }
+.st-key-case_type label[data-baseweb="radio"]:nth-of-type(2)::before { content: "gavel"; }
+.st-key-case_type label[data-baseweb="radio"] p { font-size: 18px !important; font-weight: 650; color: var(--ink); }
+.st-key-case_type [data-testid="stCaptionContainer"], .st-key-case_type label [data-testid="stCaptionContainer"] p {
+  font-size: 14.5px !important; font-weight: 400 !important; color: var(--muted) !important; }
+.st-key-case_type [data-testid="stWidgetLabel"] p { font-weight: 600; }
+.q-count { text-align: center; color: var(--muted2); font-size: 14px; font-weight: 600; letter-spacing: .04em; margin: -4px 0 8px; }
+.st-key-q-actions { flex-wrap: wrap; }
+.st-key-camp-row { flex-wrap: wrap; justify-content: flex-start; }
+.st-key-camp-row > div { width: auto !important; flex: 0 0 auto; }
+.st-key-case-actions { flex-wrap: wrap; }
 
 /* ---------- case tracker table: overdue in red, and the word "Overdue" (never colour alone) ---------- */
 .tracker-wrap { overflow-x: auto; margin: .5rem 0 1.25rem 0; }
@@ -281,6 +311,11 @@ div[class*="st-key-learn-card-"] .stButton > button p { white-space: nowrap; }
   .tracker td { display: flex; gap: .5rem; border: 0; padding: .2rem .8rem; }
   .tracker td::before { content: attr(data-label); min-width: 6.5rem; color: var(--muted); font-size: .85rem; }
   .stepper { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 10px; }
+  .st-key-case_type [role="radiogroup"] { grid-template-columns: 1fr; }
+  .st-key-case-actions { gap: 6px !important; }
+  .st-key-case-actions .stButton > button { width: auto !important; min-height: 38px; padding: 0 10px !important; }
+  .st-key-case-actions .stButton > button p { font-size: 14px; }
+  .st-key-case-actions [data-testid="stIconMaterial"] { font-size: 18px; }
   .stepper li { font-size: 14px; }
   .safety-bar { border-radius: 16px; }
   h1 { font-size: 1.9rem !important; }

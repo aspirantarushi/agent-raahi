@@ -52,6 +52,7 @@ UNDERTRIAL_ANSWER = answer(
     sections_charged=[{"law": "IPC", "section": "380", "quote": "He is charged under IPC 380"}],
     issues=[{"category": "arrest_or_custody", "name": "arrest and bail"}],
     questions_to_ask=["Has the jail legal aid clinic been contacted?"],
+    outcome_wanted={"value": "to get him out of jail", "quote": "what can we do to get him out?"},
 )
 UPI_ANSWER = answer(
     person_needing_help="the mother, aged 68",
@@ -349,8 +350,14 @@ def test_screen_wages_questions_one_at_a_time_then_send(pretend_ai):
     assert any("Were other workers also not paid?" in m.value for m in at.markdown)
     button(at, "Don't know").click().run()
     ok(at)
+    # The story doesn't say what he wants: asked last (by plain code), counted in "Question n of 3"
+    assert "Question 3 of 3" in " ".join(m.value for m in at.markdown)
+    assert any("What does the person want to happen?" in m.value for m in at.markdown)
+    at.text_input(key="gq-2").set_value("His three months' wages")
+    button(at, "Next").click().run()
     # Eligible on income, so no eligibility questions: straight to the summary.
     draft = at.code[0].value
+    assert "— His three months' wages" in draft
     assert "Answers from the volunteer\n- Does the worker have any messages from the contractor about wages? " \
            "— Yes, on his phone" in draft
     assert "Questions still to ask\n- Were other workers also not paid?" in draft
@@ -376,6 +383,7 @@ def test_screen_eligibility_questions_when_needed(pretend_ai, monkeypatch):
     raw = answer(issues=[{"category": "other", "name": "land dispute"}])
     monkeypatch.setattr(llm, "read_general_notes", lambda notes, output_lang="en": llm.NotesReading(raw, notes, {}, MODEL))
     at = read_story(WAGES)
+    button(at, "Don't know").click().run()  # what the person wants: not known yet
     assert any("Is the person needing help in jail or police custody now?" in m.value for m in at.markdown)
     at.radio(key="ge-in_custody").set_value("No")
     button(at, "Next").click().run()
@@ -526,3 +534,41 @@ def test_unconfirmed_money_loss_adds_the_1930_next_step():
     raw["money_lost_online"] = yn("yes", "words that are not in the notes")
     _, facts, text = summarise(raw, UPI)
     assert "Money was lost online: call 1930 now" in text.split("Next steps")[1]
+
+
+
+def test_questions_already_answered_are_dropped_and_missing_ones_added():
+    raw = answer(state={"value": "Maharashtra", "quote": "lives in Pune, Maharashtra"},
+                 timeline=[{"when": "15 June", "what": "last paid"}, {"when": "yesterday", "what": "called"}],
+                 questions_to_ask=["Which state does he live in?", "Were other workers also not paid?"])
+    r = general.check_general_answer(raw, WAGES)
+    assert r.questions == ["Were other workers also not paid?",
+                           "What does the person want to happen? (the outcome they hope for)",
+                           "What is the full date (with the year) for “15 June” (last paid)?"]
+    hi = general.check_general_answer(raw, WAGES, "hi")
+    assert hi.questions[1].startswith("व्यक्ति क्या चाहता")
+    told = answer(outcome_wanted={"value": "to get her money back", "quote": "Rs 40,000 left her account"})
+    r = general.check_general_answer(told, UPI)
+    assert r.outcome == "to get her money back" and not any("want" in q for q in r.questions)
+    facts = general.build_facts(r, [], r.questions, r.facts, TODAY)
+    assert "What the person wants\n- to get her money back" in general.summary_body(facts)
+
+
+def test_prompt_asks_for_outcome_years_and_age():
+    p = llm.GENERAL_PROMPT
+    assert "Never ask about anything the notes already answer" in p and "what the person wants" in p
+    assert "date without a year" in p and "age" in p and "outcome_wanted" in llm.GENERAL_SCHEMA["properties"]
+
+
+def test_word_check_uses_whole_words():
+    raw = answer(woman=yn("no", "a man aged 35"), under_18=yn("no", "a man aged 35"),
+                 questions_to_ask=["Does the worker have any messages about wages?", "How old is he?"])
+    r = general.check_general_answer(raw, WAGES)
+    assert r.questions[0] == "Does the worker have any messages about wages?"  # "age" is not in "wages"
+    assert "How old is he?" not in r.questions                                # age is already known
+
+
+def test_outcome_question_not_added_twice_in_hindi_or_hinglish():
+    for asked in ["आपको किस परिणाम की उम्मीद है?", "आप इस मामले में क्या नतीजा चाहती हैं?", "Aap kya chahte hain?"]:
+        r = general.check_general_answer(answer(questions_to_ask=[asked]), WAGES, "hi")
+        assert r.questions[0] == asked and not any(q.startswith("व्यक्ति क्या चाहता") for q in r.questions), asked

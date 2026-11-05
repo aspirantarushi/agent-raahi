@@ -261,3 +261,18 @@ def test_supabase_requests_are_built_safely(monkeypatch):
     assert "Authorization" not in headers                  # new-style secret key: apikey header only
     assert json.loads(data)[0]["kind"] == "tracker"
     assert sent[1][1].endswith("kind=eq.tracker&id=eq.U-20261105-k7f1&select=body")
+
+
+def test_finish_intake_saves_next_step_and_date(tmp_path):
+    import audit
+    record = opened(tmp_path)
+    today = date(2026, 11, 5)
+    done = tracker.finish_intake(record["id"], "AS", base=tmp_path, today=today)
+    assert done == {"step": tracker.NEXT_AFTER_INTAKE, "due": "2026-11-12"}  # a follow-up in 7 days
+    assert tracker.status_of(record["id"], base=tmp_path) == tracker.INTAKE_DONE
+    row = next(r for r in tracker.rows(base=tmp_path, today=today) if r["id"] == record["id"])
+    assert row["status"] == tracker.INTAKE_DONE and row["next_step"] == tracker.NEXT_AFTER_INTAKE
+    assert row["due"] == "2026-11-12" and not row["overdue"]
+    assert audit.read_record(record["id"], base=tmp_path)["events"][-1]["event"] == "intake finished"
+    tracker.finish_intake(record["id"], "AS", "Collect the FIR copy", date(2026, 11, 9), base=tmp_path, today=today)
+    assert tracker.load(record["id"], base=tmp_path)["next"]["step"] == "Collect the FIR copy"

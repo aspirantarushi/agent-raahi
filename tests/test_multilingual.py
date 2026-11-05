@@ -64,7 +64,8 @@ def test_without_bhashini_other_languages_say_so(monkeypatch):
 
 def test_note_languages_list_all_scheduled_languages():
     options = multilingual.note_languages()
-    assert list(options)[:2] == ["en", "hi"] and len(options) == 23  # English + 22 scheduled languages
+    assert list(options)[:3] == ["en", "hi", "hi-Latn"] and len(options) == 24  # + Hinglish + 22 scheduled
+    assert options["hi-Latn"] == "Hinglish (Hindi in English letters)"
     assert options["ta"] == "தமிழ்" and options["sat"] == "ᱥᱟᱱᱛᱟᱲᱤ"
 
 
@@ -160,5 +161,16 @@ def test_gemini_when_bhashini_not_set_up(voices, monkeypatch):
 
 def test_pilot_freeze_offers_only_english_and_hindi(monkeypatch):
     monkeypatch.setattr(lang, "PILOT_FREEZE", True)
-    assert multilingual.note_languages() == {"en": "English", "hi": "हिंदी"}
+    assert multilingual.note_languages() == {"en": "English", "hi": "हिंदी",
+                                             "hi-Latn": "Hinglish (Hindi in English letters)"}
     assert set(lang._offered()) == {"en", "hi"}
+
+
+def test_hinglish_notes_go_straight_to_the_ai_and_drafts_stay_english_or_hindi(monkeypatch):
+    prepared = multilingual.prepare("Bhai ko 15 March 2024 ko police ne pakda, phone 9876543210", "hi-Latn")
+    assert prepared.translated_from is None and "9876543210" not in prepared.text  # filtered, not translated
+    seen = []
+    monkeypatch.setattr(llm, "transcribe", lambda audio, mime, script="en": seen.append(script) or
+                        llm.Transcript("bhai ko pakda", {}, "m"))
+    multilingual.speech_to_text(b"x", "audio/wav", "hi-Latn")
+    assert seen == ["en"]  # Hinglish speech is written down in Roman letters

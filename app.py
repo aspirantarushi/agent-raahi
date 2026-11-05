@@ -169,7 +169,8 @@ def new_case_screen():
     current_case_panel()
 
     case_type = st.radio(t("ui.new_case.kind"), CASE_TYPES, horizontal=True, key="case_type",
-                         format_func=option_text("case_type."))
+                         format_func=option_text("case_type."),
+                         captions=[t("case_type.cap.any"), t("case_type.cap.479")])
     if case_type == ANY_CASE:
         general_screen()
     else:
@@ -295,7 +296,8 @@ def read_general():
         st.session_state["gen_busy"] = err.busy
         return
     st.session_state.pop("gen_busy", None)
-    reading = general.check_general_answer(notes_reading.answer, notes_reading.notes_sent)
+    reading = general.check_general_answer(notes_reading.answer, notes_reading.notes_sent,
+                                           code() if code() in ("en", "hi") else "en")
     removed = dict(prepared.removed)
     for kind, n in notes_reading.removed.items():
         removed[kind] = removed.get(kind, 0) + n
@@ -368,6 +370,16 @@ def general_question(gen):
     return None
 
 
+def question_position(gen, kind: str, ref) -> tuple:
+    """(n, total) for "Question n of total": the AI's questions, then the free legal aid questions."""
+    ai_total = len(gen["reading"].questions)
+    remaining = [m for m in general.check_eligibility(gen["facts"]).missing if m not in gen["skipped"]]
+    done = gen.get("elig_done", 0)
+    total = ai_total + done + len(remaining)
+    n = ref + 1 if kind == "ai" else ai_total + done + 1
+    return n, max(total, n)
+
+
 def answer_general(kind: str, ref, skip: bool = False):
     gen = st.session_state["gen"]
     get = st.session_state.get
@@ -400,6 +412,8 @@ def answer_general(kind: str, ref, skip: bool = False):
         value = {"Yes": True, "No": False}.get(choice)
         if choice == "Not sure":
             skip = True
+    if skip or value is not None:
+        gen["elig_done"] = gen.get("elig_done", 0) + 1
     if skip:
         gen["skipped"].add(fact)
     elif value is not None:
@@ -433,11 +447,8 @@ def general_step(gen) -> int:
 
 
 def flow_title(n: int):
-    """Step 1 (above the story box): the heading alone, centred. Later steps: "2. Questions"."""
-    if n == 1:
-        st.markdown(f'<div class="step-title center">{t(GENERAL_FLOW[0])}</div>', unsafe_allow_html=True)
-    else:
-        st.markdown(f'<div class="step-title">{n}. {t(GENERAL_FLOW[n - 1])}</div>', unsafe_allow_html=True)
+    """The step's heading, centred and without its number (the progress steps above show it)."""
+    st.markdown(f'<div class="step-title center">{t(GENERAL_FLOW[n - 1])}</div>', unsafe_allow_html=True)
 
 
 def back_to_story():
@@ -479,13 +490,20 @@ def general_screen():
             st.text_area(t("ui.general.story_label"), key="g_notes", height=220,
                          placeholder=t("ui.general.story_placeholder"))
             col1, col2 = st.columns(2)
-            col1.button(t("ui.general.read"), type="primary", on_click=read_general)
+            busy = bool(st.session_state.get("g_reading"))
+            col1.button(t("ui.general.read"), type="primary", key="g-read", disabled=busy,
+                        on_click=lambda: st.session_state.update(g_reading=True))
             if gen:
                 col2.button(t("ui.general.clear"), on_click=clear_general)
                 if st.session_state.get("g_story_open"):
                     st.button(t("ui.next"), key="g-story-continue", on_click=close_story, icon=":material/arrow_forward:")
         else:
             st.info(t("ui.general.no_ai"))
+        if st.session_state.get("g_reading"):  # step two: read, with the message on screen, then redraw
+            with st.spinner(t("ui.reading_wait"), show_time=True):
+                read_general()
+            st.session_state["g_reading"] = False
+            st.rerun()
         if not llm.available() or st.session_state.get("gen_error"):
             st.text_area(t("ui.general.manual_label"), key="g_manual", height=120)
             st.button(t("ui.general.start_without_ai"), on_click=start_general_without_ai)
@@ -506,8 +524,9 @@ def general_screen():
     if question:
         kind, ref, text = question
         flow_title(2)
-        st.button(t("ui.back_story"), key="g-back-story", on_click=back_to_story)
-        with st.container(border=True):
+        n, total = question_position(gen, kind, ref)
+        st.markdown(f'<p class="q-count">{html.escape(t("ui.q_of", n=n, total=total))}</p>', unsafe_allow_html=True)
+        with st.form(key=f"gform-{kind}-{ref}", enter_to_submit=True, border=True):
             st.markdown(f"**{text}**")
             if kind == "ai":
                 st.text_input(t("ui.general.answer_no_names"), key=f"gq-{ref}", max_chars=300)
@@ -521,11 +540,16 @@ def general_screen():
             else:
                 st.radio(t("ui.answer"), ["Yes", "No", "Not sure"], index=None, key=f"ge-{ref}", horizontal=True,
                          format_func=option_text("opt."))
-            col1, col2, col3 = st.columns([1, 1, 2])
-            col1.button(t("ui.next"), type="primary", key=f"gnext-{kind}-{ref}", on_click=answer_general,
-                        args=(kind, ref))
-            col2.button(t("ui.dont_know"), key=f"gskip-{kind}-{ref}", on_click=answer_general, args=(kind, ref, True))
-            col3.button(t("ui.general.skip_rest"), key="gskip-all", on_click=skip_general_questions)
+            with st.container(horizontal=True, gap="small", key="q-actions"):
+                # the first button is the one Enter presses
+                st.form_submit_button(t("ui.next"), type="primary", key=f"gnext-{kind}-{ref}",
+                                      icon=":material/arrow_forward:", on_click=answer_general, args=(kind, ref))
+                st.form_submit_button(t("ui.dont_know"), key=f"gskip-{kind}-{ref}", on_click=answer_general,
+                                      args=(kind, ref, True))
+                st.form_submit_button(t("ui.general.skip_rest"), key="gskip-all", type="tertiary",
+                                      on_click=skip_general_questions)
+        st.button(t("ui.back_story"), key="g-back-story", type="tertiary", icon=":material/arrow_back:",
+                  on_click=back_to_story)
         return
 
     general_summary(gen)
@@ -614,7 +638,6 @@ def general_summary(gen):
     sent = st.session_state.get("gen_sent")
     if sent:
         st.success(t("ui.sent", case_id=sent))
-        report_problem_box("gen-draft", "Any-case summary", sent)
         return
     checked = st.checkbox(t("ui.general.checked_no_names"), key="g_checked")
     if st.button(send_label(items), disabled=not checked, key="send-g"):
@@ -633,7 +656,6 @@ def general_summary(gen):
         st.session_state["gen_sent"] = case_id
         finish_agent_session(case_id, draft)
         st.rerun()
-    report_problem_box("gen-draft", "Any-case summary", None)
 
 
 # ----- "Research this issue": for problems our files don't cover -----
@@ -755,9 +777,16 @@ def notes_box():
         voice_box("f_audio", "f_notes")
         st.text_area(t("ui.notes.label"), key="f_notes", height=220, placeholder=t("ui.notes.placeholder"))
         col1, col2 = st.columns(2)
-        col1.button(t("ui.notes.read"), type="primary", on_click=read_notes)
+        busy = bool(st.session_state.get("f_reading"))
+        col1.button(t("ui.notes.read"), type="primary", key="f-read", disabled=busy,
+                    on_click=lambda: st.session_state.update(f_reading=True))
         if ai:
             col2.button(t("ui.notes.clear"), on_click=clear_notes)
+        if busy:
+            with st.spinner(t("ui.reading_wait"), show_time=True):
+                read_notes()
+            st.session_state["f_reading"] = False
+            st.rerun()
     if st.session_state.get("ai_error"):
         st.error(st.session_state["ai_error"] + " " + t("ui.notes.by_hand"))
 
@@ -1155,8 +1184,6 @@ def draft_section(known: dict, result: section479.Result):
     st.caption(t("ui.draft.blanks"))
 
     sent = st.session_state.get("sent")
-    report_problem_box("draft", "Draft on New case",
-                       sent["id"] if sent and sent["sig"] == signature else None)
     if sent and sent["sig"] == signature:
         st.success(t("ui.sent", case_id=sent["id"]))
     elif st.button(send_label(items), key="send-f"):
@@ -2019,19 +2046,65 @@ def volunteer_line():
             st.rerun()
     else:
         st.text_input(t("gate.name"), key="volunteer", max_chars=40, help=t("gate.name_help"))
-    with st.expander(t("camp.today")):
-        st.caption(t("camp.today_caption"))
-        c1, c2, c3 = st.columns(3)
-        c1.text_input(t("camp.village"), key="camp-today-village", max_chars=60)
-        c2.text_input(t("camp.district"), key="camp-today-district", max_chars=60)
-        c3.date_input(t("camp.date"), key="camp-today-date", format="DD/MM/YYYY", max_value=date.today())
+    camp_bar()
+
+
+def open_camp_form():
+    st.session_state["camp-open"] = True
+
+
+def close_camp_form():
+    st.session_state["camp-open"] = False
+
+
+def save_todays_camp():
+    get = st.session_state.get
+    village = tracker.clean_text(get("camp-today-village") or "", 60)
+    district = tracker.clean_text(get("camp-today-district") or "", 60)
+    if not village or not district:
+        st.session_state["camp-msg"] = t("camp.need")
+        return
+    on = get("camp-today-date") or date.today()
+    st.session_state["camp_today"] = {"village": village, "district": district, "on": on.isoformat()}
+    st.session_state["camp-open"] = False
+
+
+def end_todays_camp():
+    st.session_state.pop("camp_today", None)
+
+
+def camp_bar():
+    """Today's camp: "Start today's camp" opens village, district and date; once saved, a small chip
+    "Camp: <village>, <district> · <date>" with "End camp". New cases are tagged with it."""
+    camp = st.session_state.get("camp_today")
+    if camp:
+        with st.container(key="camp-row", horizontal=True, vertical_alignment="center", gap="small"):
+            st.markdown(ui.chip("camp", t("camp.chip", village=camp["village"], district=camp["district"],
+                                          date=show_date(date.fromisoformat(camp["on"])))), unsafe_allow_html=True)
+            st.button(t("camp.end"), key="camp-end", type="tertiary", icon=":material/close:", on_click=end_todays_camp)
+    elif st.session_state.get("camp-open"):
+        with st.container(border=True, key="camp-form"):
+            st.caption(t("camp.today_caption"))
+            c1, c2, c3 = st.columns(3)
+            c1.text_input(t("camp.village"), key="camp-today-village", max_chars=60)
+            c2.text_input(t("camp.district"), key="camp-today-district", max_chars=60)
+            c3.date_input(t("camp.date"), key="camp-today-date", format="DD/MM/YYYY", max_value=date.today(),
+                          value=date.today())
+            with st.container(horizontal=True, gap="small"):
+                st.button(t("camp.save_today"), key="camp-save-today", type="primary", icon=":material/check:",
+                          on_click=save_todays_camp)
+                st.button(t("ui.cancel"), key="camp-cancel", on_click=close_camp_form)
+            msg = st.session_state.pop("camp-msg", None)
+            if msg:
+                st.error(msg)
+    else:
+        st.button(t("camp.start"), key="camp-start", icon=":material/holiday_village:", on_click=open_camp_form)
 
 
 def todays_camp():
-    village = (st.session_state.get("camp-today-village") or "").strip()
-    district = (st.session_state.get("camp-today-district") or "").strip()
-    on = st.session_state.get("camp-today-date")
-    return {"village": village, "district": district, "on": on or date.today()} if village and district else None
+    camp = st.session_state.get("camp_today")
+    return {"village": camp["village"], "district": camp["district"], "on": date.fromisoformat(camp["on"])} \
+        if camp else None
 
 
 def ensure_case(case_type: str) -> str:
@@ -2106,8 +2179,7 @@ def open_by_code():
 def continue_box(where: str):
     """Type the code from the case slip, or scan its QR code with the camera."""
     with st.expander(t("cont.title"), icon=":material/folder_open:",
-                     expanded=(where == "new" and not st.session_state.get("case_id"))
-                     or bool(st.session_state.get(f"scan-open-{where}"))):
+                     expanded=bool(st.session_state.get(f"scan-open-{where}"))):
         st.text_input(t("cont.code"), key=f"cont-code-{where}", max_chars=12, placeholder="K7M2QX")
         with st.container(horizontal=True, gap="small"):
             st.button(t("cont.open"), key=f"cont-go-{where}", type="primary", on_click=continue_case, args=(where,))
@@ -2183,6 +2255,11 @@ def conflicts_block(case_id) -> bool:
 
 def slip_box(record: dict, expanded: bool = False):
     with st.expander(t("slip.title"), expanded=expanded):
+        slip_content(record)
+
+
+def slip_content(record: dict):
+    if True:
         st.caption(t("slip.caption"))
         lines = tracker.slip_lines(record, clinic_name())
         qr = tracker.qr_png_data_uri(app_url(), record["code"])
@@ -2424,6 +2501,11 @@ def save_visit(case_id: str):
 
 def visit_form(case_id: str):
     with st.expander(t("visit.title")):
+        visit_content(case_id)
+
+
+def visit_content(case_id: str):
+    if True:
         st.caption(t("visit.caption"))
         c1, c2 = st.columns(2)
         c1.date_input(t("visit.on"), key=f"vis-on-{case_id}", value=date.today(), format="DD/MM/YYYY",
@@ -2472,7 +2554,6 @@ def case_tools(case_id: str, record: dict, file_open: bool = False, slip_open: b
                      icon=":material/folder_open:"):
         case_file_or_edit(case_id, record)
     visit_form(case_id)
-    camp_form(case_id, record)
 
 
 def current_case_panel():
@@ -2484,19 +2565,56 @@ def current_case_panel():
     if record is None:
         st.session_state.pop("case_id", None)
         return
-    with st.container(border=True):
-        c1, c2 = st.columns([3, 1])
-        c1.markdown(f"**{t('ui.case_title', case_id=case_id)}** · {t('slip.code')} **{record['code']}** "
-                    f"&nbsp; {status_chip(tracker.status_of(case_id))}", unsafe_allow_html=True)
-        c2.button(t("cont.another"), key="case-another", on_click=clear_case)
+    status = tracker.status_of(case_id)
+    tab_key = f"case-tab-{case_id}"
+    if st.session_state.pop("case_opened", False):
+        st.session_state[tab_key] = "file"  # a continued case opens on its case file
+    with st.container(border=True, key="case-panel"):
+        st.markdown(f'<div class="case-head"><b>{html.escape(t("ui.case_title", case_id=case_id))}</b> · '
+                    f'{html.escape(t("slip.code"))} <b>{html.escape(record["code"])}</b> {status_chip(status)}</div>',
+                    unsafe_allow_html=True)
         if st.session_state.pop("slip_new", False):
-            st.success(t("slip.new", slip_code=record["code"]))
-            case_tools(case_id, record, slip_open=True)
-        else:
-            case_tools(case_id, record, file_open=bool(st.session_state.pop("case_opened", False)))
+            st.success(t("slip.new_short", slip_code=record["code"]), icon=":material/qr_code_2:")
+        if record.get("intake_finished") and record.get("next"):
+            n = record["next"]
+            st.success(t("intake.done", step=next_step_words(n["step"], None),
+                         due=show_date(date.fromisoformat(n["due"])) if n.get("due") else "-"),
+                       icon=":material/task_alt:")
+        with st.container(horizontal=True, vertical_alignment="center", gap="small", key="case-actions"):
+            current = st.session_state.get(tab_key)
+            for option, icon in CASE_TABS:  # open one panel; press again to close it
+                st.button(t(f"case.tab.{option}"), key=f"case-tab-{option}", icon=icon,
+                          type="primary" if current == option else "secondary",
+                          on_click=toggle_case_tab, args=(tab_key, option))
+            if status == tracker.INTAKE:
+                st.button(t("intake.finish"), key="intake-finish", type="primary", icon=":material/task_alt:",
+                          on_click=finish_intake, args=(case_id,))
+            st.button(t("cont.another"), key="case-another", icon=":material/add:", on_click=clear_case)
+        tab = st.session_state.get(tab_key)
+        if tab == "slip":
+            slip_content(record)
+        elif tab == "file":
+            case_file_or_edit(case_id, record)
+        elif tab == "visit":
+            visit_content(case_id)
+
+
+CASE_TABS = [("slip", ":material/qr_code_2:"), ("file", ":material/folder_open:"), ("visit", ":material/event_note:")]
+
+
+def toggle_case_tab(tab_key: str, option: str):
+    st.session_state[tab_key] = None if st.session_state.get(tab_key) == option else option
+
+
+def finish_intake(case_id: str):
+    try:
+        tracker.finish_intake(case_id, who())
+    except (tracker.TrackerError, storage.StorageError) as err:
+        st.session_state["case-msg"] = ("error", str(err))
 
 
 STATUS_CHIPS = {tracker.INTAKE: ("intake", "ui.status.intake"), store.WAITING: ("waiting", "ui.status.waiting"),
+                tracker.INTAKE_DONE: ("intake-done", "ui.status.intake_done"),
                 store.SENT_BACK: ("sent-back", "ui.status.sent_back"), store.APPROVED: ("approved", "ui.status.approved"),
                 tracker.SUBMITTED: ("submitted", "ui.status.submitted"), tracker.CHANGED: ("changed", "ui.status.changed"),
                 tracker.ACKNOWLEDGED: ("acknowledged", "ui.status.acknowledged")}

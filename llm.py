@@ -488,6 +488,10 @@ GENERAL_SCHEMA = {
         },
         "documents_held": {"type": "ARRAY", "items": {"type": "STRING"}},
         "questions_to_ask": {"type": "ARRAY", "items": {"type": "STRING"}},
+        "outcome_wanted": {"type": "OBJECT",
+                           "properties": {"value": {"type": "STRING", "nullable": True},
+                                          "quote": {"type": "STRING", "nullable": True}},
+                           "required": ["value", "quote"]},
         "woman": _YES_NO,
         "under_18": _YES_NO,
         "sc_st": _YES_NO,
@@ -504,7 +508,7 @@ GENERAL_SCHEMA = {
     },
     "required": ["person_needing_help", "what_happened", "timeline", "danger_now", "in_custody",
                  "money_lost_online", "money_lost_in_last_few_days", "called_1930", "coming_dates",
-                 "sections_charged", "issues", "documents_held", "questions_to_ask", "woman", "under_18",
+                 "sections_charged", "issues", "documents_held", "questions_to_ask", "outcome_wanted", "woman", "under_18",
                  "sc_st", "disability", "state", "income"],
 }
 
@@ -539,7 +543,12 @@ Rules:
   "online_or_financial_fraud" for money taken by online or payment fraud; otherwise "other".
 - documents_held: papers or evidence the notes say the person already has.
 - questions_to_ask: up to 5 short questions the volunteer should still ask, most important first.
-  Never ask for names, phone numbers, Aadhaar numbers, addresses or ID numbers.
+  Never ask about anything the notes already answer. Ask what the person wants to happen (the outcome
+  they hope for) if the notes don't say it; for any date without a year, ask for the full date; ask the
+  person's age if it is not stated and they might be under 18 (children get free legal aid whatever the
+  income). Never ask for names, phone numbers, Aadhaar numbers, addresses or ID numbers.
+- outcome_wanted: what the person wants to happen, in plain words, only if the notes say it (with the
+  exact words as quote); otherwise null.
 - woman, under_18, sc_st, disability, state, income: about the person needing legal help (not the
   person telling the story). income: the amount and whether it is per month or per year, as written;
   do not convert it.

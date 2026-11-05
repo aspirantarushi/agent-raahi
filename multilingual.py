@@ -18,14 +18,16 @@ import lang
 import llm
 import privacy
 
-DIRECT = ("en", "hi")  # the AI reads these (and Hinglish) itself
+HINGLISH = "hi-Latn"  # Hindi written in English letters
+DIRECT = ("en", "hi", HINGLISH)  # the AI reads these itself (drafts stay in English or Hindi)
 
 
 def note_languages() -> Dict[str, str]:
-    """English, Hindi, then the other scheduled languages, each in its own script."""
+    """English, Hindi, Hinglish, then the other scheduled languages, each in its own script."""
+    hinglish = {HINGLISH: "Hinglish (Hindi in English letters)"}
     if lang.PILOT_FREEZE:
-        return {"en": "English", "hi": lang.NATIVE_NAMES["hi"]}
-    return {"en": "English", "hi": lang.NATIVE_NAMES["hi"],
+        return {"en": "English", "hi": lang.NATIVE_NAMES["hi"], **hinglish}
+    return {"en": "English", "hi": lang.NATIVE_NAMES["hi"], **hinglish,
             **{c: native for c, (_, native) in bhashini.LANGUAGES.items() if c != "hi"}}
 
 
@@ -72,7 +74,8 @@ def speech_to_text(audio: bytes, mime_type: str, language: str) -> SpokenText:
         if rate and bhashini.supports("asr", language):
             result = bhashini.speech_to_text(audio, language, "wav", rate)
             return SpokenText(result.text, result.removed, "Bhashini")
-    script = language if language in DIRECT else "other"  # other languages: "write it in its own script"
+    # Hinglish: written down in Roman letters as spoken; other languages: "write it in its own script"
+    script = "en" if language == HINGLISH else language if language in DIRECT else "other"
     result = llm.transcribe(audio, mime_type, script=script)
     return SpokenText(result.text, result.removed, result.model)
 
