@@ -9,7 +9,7 @@ html, body, [class*="css"], .stMarkdown p, .stMarkdown li, label, input, textare
 
 /* ---------- one page width for everything: header, hero, sections, app screens ---------- */
 .block-container, [data-testid="stMainBlockContainer"] { max-width: calc(var(--page) + 48px) !important;
-  padding: 12px 24px 0 24px !important; }
+  padding: 6px 24px 0 24px !important; }
 [data-testid="stHeader"] { display: none; }               /* Streamlit's own top strip: not needed */
 [data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"], [data-testid="stExpandSidebarButton"],
 [data-testid="stSidebarNav"] { display: none !important; }  /* no sidebar and no » arrow */
@@ -21,7 +21,9 @@ h1 { font-size: 2.4rem !important; line-height: 1.15 !important; padding-top: .5
   font-feature-settings: "liga"; -webkit-font-smoothing: antialiased; font-variation-settings: "FILL" 0, "wght" 400; }
 
 /* ---------- header: logo, top navigation, EN · हिंदी, Start a case ---------- */
-.st-key-topbar { padding: 8px 0 8px 0; border-bottom: 1px solid var(--line); margin-bottom: 8px; flex-wrap: nowrap !important;
+/* rows that only hold a <style> block take no space (they pushed the top bar down) */
+[data-testid="stElementContainer"]:has([data-testid="stMarkdownContainer"] > style:only-child) { display: none; }
+.st-key-topbar { padding: 4px 0 6px 0; margin-bottom: 4px; flex-wrap: nowrap !important;
   justify-content: space-between; }
 .st-key-topbar > div { width: auto !important; flex: 0 0 auto; }
 .st-key-topbar > div:has(> .st-key-topnav) { flex: 1 1 auto; }
@@ -64,6 +66,11 @@ h1 { font-size: 2.4rem !important; line-height: 1.15 !important; padding-top: .5
 [data-testid="stBaseButton-secondary"]:hover { border-color: var(--ink) !important; }
 [data-testid="stBaseButton-tertiary"] { color: var(--teal-dark) !important; }
 :focus-visible { outline: 3px solid var(--teal) !important; outline-offset: 2px !important; }
+.st-key-home-mic button [data-testid="stMarkdownContainer"], .st-key-home-go button [data-testid="stMarkdownContainer"] {
+  position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); margin: 0 !important; }
+.st-key-home-mic button > *, .st-key-home-go button > * { gap: 0 !important; margin: 0 !important; }
+.st-key-home-mic button [data-testid="stIconMaterial"], .st-key-home-go button [data-testid="stIconMaterial"] {
+  display: block; line-height: 1; margin: 0 !important; }
 .visually-hidden, .st-key-home-mic button p, .st-key-home-go button p { position: absolute !important; width: 1px; height: 1px;
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
@@ -115,10 +122,11 @@ div[class*="st-key-case-card-"] { background: var(--card); border: 1px solid var
   border-radius: 20px; box-shadow: 0 12px 32px rgba(19,33,59,.08); padding: 10px 12px 10px 18px; flex-wrap: nowrap !important;
   position: relative; z-index: 1; }
 .st-key-storybox > div:first-child { flex: 1 1 auto; min-width: 0; width: auto !important; }
+.st-key-storybox > div:not(:first-child) { flex: 0 0 44px !important; width: 44px !important; min-width: 44px; }
 .st-key-storybox [data-baseweb="textarea"], .st-key-storybox [data-baseweb="base-input"] { border: 0 !important; background: transparent !important; }
 .st-key-storybox textarea { resize: none; background: transparent !important; font-size: 16px !important; padding: 8px 4px !important; min-height: 64px !important; }
 .st-key-storybox [data-testid="InputInstructions"] { display: none; }
-.st-key-home-mic button, .st-key-home-go button { width: 44px; height: 44px; min-height: 44px; padding: 0 !important;
+.st-key-home-mic button, .st-key-home-go button { width: 44px !important; height: 44px; min-height: 44px; min-width: 44px; padding: 0 !important;
   border-radius: 999px !important; display: flex; align-items: center; justify-content: center; }
 .st-key-home-mic button { background: var(--bg) !important; border: 1px solid var(--line2) !important; }
 .st-key-home-go button { background: var(--teal) !important; border-color: var(--teal) !important; color: #fff !important; }
@@ -227,7 +235,7 @@ div[class*="st-key-learn-card-"] .stButton > button p { white-space: nowrap; }
 
 /* ---------- phones: one column, full-width buttons, no sideways scrolling ---------- */
 @media (max-width: 640px) {
-  .block-container, [data-testid="stMainBlockContainer"] { padding: 8px 16px 0 16px !important; }
+  .block-container, [data-testid="stMainBlockContainer"] { padding: 4px 16px 0 16px !important; }
   [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]) { flex-direction: column !important; gap: .5rem !important; }
   [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] { width: 100% !important; flex: 1 1 100% !important; min-width: 0 !important; }
   .st-key-topbar { flex-wrap: wrap !important; row-gap: 6px !important; }

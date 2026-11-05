@@ -19,8 +19,8 @@ LABELS = {
     "en": {"menu": "Menu", "Home": "Home", "New case": "New case", "My cases": "My cases", "Learn": "Learn",
            "Evaluation": "Evaluation (practice)", "Supervisor": "Supervisor", "undertrial": "Section 479 aid (undertrial)",
            "sign_in": "Sign in"},
-    "hi": {"menu": "मेन्यू", "Home": "होम", "New case": "नया केस", "My cases": "मेरे केस", "Learn": "सीखें",
-           "Evaluation": "मूल्यांकन (अभ्यास)", "Supervisor": "सुपरवाइज़र", "undertrial": "धारा 479 सहायक (विचाराधीन क़ैदी)",
+    "hi": {"menu": "मेन्यू", "Home": "Home", "New case": "नया केस", "My cases": "Case tracker", "Learn": "Learn",
+           "Evaluation": "Evaluation (अभ्यास)", "Supervisor": "Supervisor", "undertrial": "धारा 479 सहायक (विचाराधीन क़ैदी)",
            "sign_in": "साइन इन करें"},
 }
 NAV_KEYS = {"New case": "nav-new", "My cases": "nav-tracker", "Learn": "nav-learn", "Evaluation": "nav-evaluation",
@@ -46,7 +46,7 @@ def open_screen(page, screen, code):
         page.get_by_text(labels["undertrial"]).first.click()
         wait_for_app(page)
     if screen == "Supervisor":
-        page.get_by_label("Supervisor password" if code == "en" else "सुपरवाइज़र पासवर्ड").first.fill(password())
+        page.get_by_label("Supervisor password" if code == "en" else "Supervisor पासवर्ड").first.fill(password())
         page.keyboard.press("Tab")
         page.get_by_role("button", name=labels["sign_in"]).click()
         wait_for_app(page)

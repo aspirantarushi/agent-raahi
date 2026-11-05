@@ -64,7 +64,9 @@ def test_safety_messages_in_both_languages():
 
 def test_screen_text_is_hindi():
     hi = strings("hi")
-    english_only = {"ui.result.months"}  # just a number
+    english_only = {"ui.result.months",  # just a number
+                    # screen labels kept in English on purpose (the familiar word; Hindi was awkward)
+                    "ui.cases.title", "ui.learn.title", "ui.sup.title"}
     for key, value in hi.items():
         if key.startswith(("ui.", "tl.", "sum.", "step.")) and key not in english_only:
             assert re.search(r"[ऀ-ॿ]", value), key
@@ -130,7 +132,7 @@ def test_hindi_practice_case_on_screen(monkeypatch, tmp_path):
     assert draft.startswith("DRAFT — to be checked by a lawyer\nड्राफ़्ट — वकील से जाँच करवाना ज़रूरी है\n"
                             "हिंदी अनुवाद की जाँच: नहीं (Hindi translation checked: no)")
     assert "तथ्य केस नोट्स से AI की मदद (gemini-3.5-flash-lite) से पढ़े गए" in draft
-    next(b for b in at.button if b.label.startswith("सुपरवाइज़र को भेजें")).click().run()
+    next(b for b in at.button if b.label.startswith("Supervisor को भेजें")).click().run()
     assert not at.exception
     [record] = store.list_pending(tmp_path)
     assert record["draft_lang"] == "hi"
@@ -320,3 +322,12 @@ def test_live_hindi_voice(tmp_path):
     assert "गिरफ" in privacy.comparable(hindi.text), hindi.text
     english = llm.transcribe(wav.read_bytes(), "audio/wav", script="en")  # on the English screen: as spoken
     assert re.search(r"gira?ftar|arrest", english.text, re.I), english.text
+
+
+def test_awkward_hindi_labels_use_the_familiar_english_word():
+    hi = strings("hi")
+    for key, word in [("screen.Learn", "Learn"), ("screen.Supervisor", "Supervisor"), ("screen.My cases", "Case tracker"),
+                      ("tr.edit", "Edit case"), ("ed.save", "Save changes"), ("home.scan", "QR")]:
+        assert word in hi[key], key
+    # the summary, drafts and helplines stay in proper Hindi
+    assert re.search(r"[ऀ-ॿ]", hi["sum.not_covered"]) and re.search(r"[ऀ-ॿ]", hi["safety.bar112"])

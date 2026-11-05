@@ -2572,10 +2572,8 @@ def home_screen():
     with st.container(key="storybox", horizontal=True, vertical_alignment="center", gap="small"):
         st.text_area(t("home.story_label"), key="home_story", height=68, placeholder=t("home.story_placeholder"),
                      label_visibility="collapsed")
-        st.button(t("home.mic"), key="home-mic", icon=":material/mic:", on_click=home_to_case, args=(True,),
-                  help=t("home.mic"))
-        st.button(t("home.go"), key="home-go", icon=":material/arrow_forward:", on_click=home_to_case, args=(False,),
-                  help=t("home.go"))
+        st.button(t("home.mic"), key="home-mic", icon=":material/mic:", on_click=home_to_case, args=(True,))
+        st.button(t("home.go"), key="home-go", icon=":material/arrow_forward:", on_click=home_to_case, args=(False,))
     with st.container(key="heroactions", horizontal=True, gap="small"):
         st.button(t("home.start"), key="home-start", type="primary", icon=":material/note_add:", on_click=start_case)
         st.button(t("home.continue"), key="home-continue", icon=":material/folder_open:",
