@@ -2601,7 +2601,9 @@ def home_screen():
     st.markdown(ui.section("safety", t("home.safe_title"), t("home.safe_h2"), ui.safe_cards(
         [(SAFE_ICONS[i - 1], t(f"home.safe{i}_t"), t(f"home.safe{i}_p")) for i in range(1, 7)])),
         unsafe_allow_html=True)
-    st.markdown(ui.facts_band(t("home.facts_title"), home.facts(code())), unsafe_allow_html=True)
+    labels = {k: t(f"facts.{k}") for k in ("prev", "next", "pause", "play", "of", "source", "region")}
+    with st.container(key="factsband"):  # full width navy band; the carousel runs in its own small page
+        components.html(ui.facts_carousel(t("home.facts_title"), home.facts(code()), labels), height=380)
     st.markdown(ui.section("learn-basics", t("home.learn_title"), t("home.learn_h2"), "", extra="learn"),
                 unsafe_allow_html=True)
     with st.container(key="learnlinks"):

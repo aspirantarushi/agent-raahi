@@ -18,7 +18,13 @@ def at(monkeypatch):
 
 
 def page_html(app) -> str:
-    return " ".join(m.value for m in app.markdown)
+    """The page's HTML: every markdown block, plus the facts carousel (its own small page)."""
+    return " ".join([m.value for m in app.markdown] + [f.proto.srcdoc for f in app.get("iframe")])
+
+
+def carousel(app) -> str:
+    [frame] = app.get("iframe")
+    return frame.proto.srcdoc
 
 
 def test_home_is_the_landing_screen_with_every_section(at):
@@ -27,9 +33,11 @@ def test_home_is_the_landing_screen_with_every_section(at):
                   "How a case moves", "Today", "With Agent Raahi", 'id="safety"', "Built to be safe", 'id="facts"',
                   "Facts from our verified files", 'id="learn-basics"', "Learn the basics", "footer"]:
         assert words in html, words
-    order = [html.index(x) for x in ['id="how-it-works"', 'id="what-changes"', 'id="safety"', 'id="facts"',
-                                     'id="learn-basics"', "<footer"]]
+    blocks = " ".join(m.value for m in at.markdown)
+    order = [blocks.index(x) for x in ['id="how-it-works"', 'id="what-changes"', 'id="safety"', 'id="learn-basics"',
+                                       "<footer"]]
     assert order == sorted(order)  # the sections in the reference design's order
+    assert 'id="facts"' in carousel(at)  # the facts carousel, between Safety and Learn (checked on screenshots)
     assert 'href="tel:112"' in html and 'href="tel:15100"' in html
     assert len(re.findall(r'class="card"', html)) == 4 + 6
     assert len([b for b in at.button if str(b.key).startswith("home-learn-")]) == 3
@@ -105,22 +113,40 @@ def test_no_emoji_on_screen_or_in_the_screen_text():
 def test_facts_come_word_for_word_from_knowledge_with_sources(at):
     html = page_html(at)
     for sentence, source, link in home.facts("en"):
-        assert sentence in html and source.replace('"', "&quot;") in html
-    for file, heading, english, _ in home.FACTS:
-        assert english in " ".join(knowledge.get(file, heading).body.split())
+        assert sentence.replace("'", "&#x27;") in html and source.replace('"', "&quot;") in html
+    for file, heading, basis, _, _ in home.FACTS:  # every card names the exact sentences it is based on
+        body = " ".join(knowledge.get(file, heading).body.split())
+        assert basis and all(" ".join(b.split()) in body for b in basis), heading
 
 
 def test_a_changed_knowledge_entry_stops_the_fact(monkeypatch):
     monkeypatch.setattr(home, "FACTS", [("cyber_fraud.md", "Call 1930 at once: the first hours matter most",
-                                         "Report within 2 hours, always.", None)])
+                                         ["Report within 2 hours, always."], "Report within 2 hours.", None)])
     with pytest.raises(ValueError, match="not found word for word"):
         home.facts()
 
 
-def test_hindi_fact_used_where_a_hindi_entry_exists():
-    hi = {sentence: source for sentence, source, _ in home.facts("hi")}
-    assert any(s.startswith("जितनी जल्दी हो सके") for s in hi)
-    assert "Women, children and people in custody qualify whatever their income." in hi  # no Hindi entry: English
+def test_every_fact_has_plain_english_and_hindi():
+    en, hi = home.facts("en"), home.facts("hi")
+    assert len(en) == len(hi) == 8
+    for (e, se, le), (h, sh, lh) in zip(en, hi):
+        assert re.search(r"[ऀ-ॿ]", h) and not re.search(r"[ऀ-ॿ]", e)
+        assert (se, le) == (sh, lh) and le.startswith("https://")  # the same source and link in both
+    assert "death or life imprisonment" in en[2][0]  # Section 479: the exception from knowledge/ is stated
+    assert "case to file or defend" in en[0][0]      # Section 12: free legal aid is for a case
+
+
+def test_facts_carousel_controls(at):
+    page = carousel(at)
+    assert page.count('class="slide"') == 8 and 'aria-roledescription="carousel"' in page
+    for label in ("Previous fact", "Next fact", "Pause the facts", "Fact 1 of 8"):
+        assert label in page
+    assert "prefers-reduced-motion: reduce" in page and "7000" in page   # no motion when asked; 7 seconds
+    assert "scroll-snap-type: x mandatory" in page                       # swipe on phones
+    assert "mouseenter" in page and "touchstart" in page                 # pause on hover or tap
+    assert page.count('target="_blank" rel="noopener noreferrer"') == 8 and "<em>Source: <a" in page
+    at.radio(key="ui_lang").set_value("hi").run()
+    assert "पिछला तथ्य" in carousel(at) and "<em>स्रोत: <a" in carousel(at)
 
 
 def test_no_testimonials_counts_or_unprovable_claims(at):

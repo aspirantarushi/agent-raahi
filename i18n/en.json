@@ -845,5 +845,12 @@
  "home.learn3_p": "What to do first after money is lost online: 1930, the bank, and evidence to keep.",
  "home.learn4": "Evaluation (practice)",
  "home.learn4_p": "Time practice cases done by hand and with the agent, and score them, to measure the difference honestly.",
- "home.eval_go": "Start practice"
+ "home.eval_go": "Start practice",
+ "facts.prev": "Previous fact",
+ "facts.next": "Next fact",
+ "facts.pause": "Pause the facts",
+ "facts.play": "Play the facts",
+ "facts.of": "Fact {n} of {total}",
+ "facts.source": "Source:",
+ "facts.region": "Facts from our verified files"
 }

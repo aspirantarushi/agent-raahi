@@ -162,6 +162,151 @@ def facts_band(title: str, facts) -> str:
             + f'<div class="grid">{rows}</div></section>')
 
 
+FACTS_CSS = """
+* { box-sizing: border-box; }
+html, body { margin: 0; background: #13213B; color: #F8F6F1; overflow: hidden;
+  font-family: "Noto Sans", "Noto Sans Devanagari", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.band { max-width: 1168px; margin: 0 auto; padding: 44px 24px 28px; height: 100vh; display: flex; flex-direction: column; }
+.eyebrow { display: flex; align-items: center; gap: 10px; margin: 0 0 18px; font-size: 13px; font-weight: 600;
+  letter-spacing: .16em; text-transform: uppercase; color: #C9CFDA; }
+.eyebrow.dev { letter-spacing: 0; font-size: 15px; }
+.eyebrow svg { flex: 0 0 auto; }
+.track { flex: 1 1 auto; display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
+  outline: none; }
+.track::-webkit-scrollbar { display: none; }
+.slide { flex: 0 0 100%; scroll-snap-align: start; display: flex; flex-direction: column; justify-content: center;
+  gap: 14px; padding: 0 8px 0 2px; overflow: hidden; }
+.slide p { margin: 0; }
+.fact { font-size: 28px; line-height: 1.35; font-weight: 500; color: #FFFFFF; max-width: 900px; letter-spacing: -.01em; }
+.src { font-size: 15px; line-height: 1.5; color: #C9CFDA; }
+.src a { color: #FFFFFF; text-decoration: underline; text-underline-offset: 3px; }
+.controls { display: flex; align-items: center; gap: 10px; margin-top: 18px; }
+.controls button { appearance: none; border: 1px solid rgba(255,255,255,.35); background: transparent; color: #FFFFFF;
+  width: 44px; height: 44px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer; padding: 0; }
+.controls button:hover { background: rgba(255,255,255,.12); }
+.controls button:focus-visible, .track:focus-visible, a:focus-visible { outline: 3px solid #5FD3BF; outline-offset: 2px; }
+.dots { display: flex; gap: 2px; flex-wrap: wrap; }
+.dots button { width: 28px; height: 44px; border: 0; background: transparent; }
+.dots button::after { content: ""; width: 10px; height: 10px; border-radius: 999px; background: rgba(255,255,255,.35); }
+.dots button[aria-current="true"]::after { background: #FFFFFF; width: 22px; }
+.count { margin-left: auto; font-size: 14px; color: #C9CFDA; }
+.pause[hidden] { display: none; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@media (max-width: 640px) {
+  .band { padding: 32px 16px 16px; }
+  .fact { font-size: 19px; line-height: 1.45; }
+  .src { font-size: 13.5px; }
+  .dots { flex-wrap: nowrap; gap: 0; }
+  .dots button { width: 18px; }
+  .dots button[aria-current="true"]::after { width: 16px; }
+  .controls { gap: 6px; }
+  .count { display: none; }
+  .pause { margin-left: auto; }
+}
+@media (prefers-reduced-motion: reduce) { .track { scroll-behavior: auto; } }
+"""
+
+FACTS_JS = """
+(function () {
+  const track = document.getElementById('track');
+  const slides = Array.from(track.children);
+  const dots = Array.from(document.querySelectorAll('.dots button'));
+  const count = document.getElementById('count');
+  const pauseBtn = document.getElementById('pause');
+  const L = JSON.parse(document.getElementById('labels').textContent);
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const N = slides.length;
+  let i = 0, userPaused = false, hover = false, focused = false, touchedAt = 0;
+
+  function show(n, smooth) {
+    i = (n + N) % N;
+    track.scrollTo({ left: i * track.clientWidth, behavior: smooth && !reduce ? 'smooth' : 'auto' });
+    update();
+  }
+  function update() {
+    dots.forEach(function (d, k) { d.setAttribute('aria-current', k === i ? 'true' : 'false'); });
+    slides.forEach(function (s, k) { s.setAttribute('aria-hidden', k === i ? 'false' : 'true');
+      s.querySelectorAll('a').forEach(function (a) { a.tabIndex = k === i ? 0 : -1; }); });
+    count.textContent = L.of.replace('{n}', i + 1).replace('{total}', N);
+  }
+  function userMove(n) { track.setAttribute('aria-live', 'polite'); show(n, true); }
+  document.getElementById('prev').addEventListener('click', function () { userMove(i - 1); });
+  document.getElementById('next').addEventListener('click', function () { userMove(i + 1); });
+  dots.forEach(function (d, k) { d.addEventListener('click', function () { userMove(k); }); });
+  let t;
+  track.addEventListener('scroll', function () {  // swipes on phones
+    clearTimeout(t);
+    t = setTimeout(function () { const n = Math.round(track.scrollLeft / track.clientWidth); if (n !== i) { i = n; update(); } }, 80);
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowRight') userMove(i + 1);
+    if (e.key === 'ArrowLeft') userMove(i - 1);
+  });
+  document.body.addEventListener('mouseenter', function () { hover = true; });
+  document.body.addEventListener('mouseleave', function () { hover = false; });
+  document.addEventListener('focusin', function (e) {  // keyboard focus pauses; a mouse click on an arrow does not
+    focused = !!(e.target.matches && e.target.matches(':focus-visible'));
+  });
+  document.addEventListener('focusout', function () { focused = false; });
+  window.addEventListener('blur', function () { focused = false; hover = false; });
+  document.addEventListener('touchstart', function () { touchedAt = Date.now(); }, { passive: true });
+  function setPaused(p) {
+    userPaused = p;
+    pauseBtn.setAttribute('aria-label', p ? L.play : L.pause);
+    pauseBtn.innerHTML = p ? PLAY : PAUSE;
+  }
+  pauseBtn.addEventListener('click', function () { setPaused(!userPaused); });
+  if (reduce) { pauseBtn.hidden = true; }  // no automatic movement at all
+  else {
+    setInterval(function () {
+      if (userPaused || hover || focused || Date.now() - touchedAt < 15000 || document.hidden) return;
+      track.setAttribute('aria-live', 'off');
+      show(i + 1, true);
+    }, 7000);
+  }
+  window.addEventListener('resize', function () { show(i, false); });
+  update();
+})();
+"""
+
+_SVG = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ' \
+       'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{}</svg>'
+ICON_PREV = _SVG.format('<path d="M15 6l-6 6 6 6"/>')
+ICON_NEXT = _SVG.format('<path d="M9 6l6 6-6 6"/>')
+ICON_PAUSE = _SVG.format('<path d="M9 6v12M15 6v12"/>')
+ICON_PLAY = _SVG.format('<path d="M8 5.5v13l11-6.5z"/>')
+
+
+def facts_carousel(title: str, facts, labels: dict) -> str:
+    """The facts band as a small page (for components.html): one fact at a time, arrows, dots, swipe,
+    auto-advance every 7 seconds, paused on hover, tap or focus, and never moving by itself when the
+    device asks for reduced motion. facts: [(text, Source, Link)]. labels: prev, next, pause, play,
+    of ("{n} of {total}"), source ("Source:"), region."""
+    import json
+    e = html.escape
+    slides = "".join(
+        f'<div class="slide" role="group" aria-roledescription="slide" '
+        f'aria-label="{e(labels["of"].replace("{n}", str(n)).replace("{total}", str(len(facts))))}">'
+        f'<p class="fact">{e(text)}</p><p class="src"><em>{source_link(source, link).replace("Source:", e(labels["source"]), 1)}'
+        f'</em></p></div>' for n, (text, source, link) in enumerate(facts, 1))
+    dots = "".join(f'<button type="button" aria-label="{e(labels["of"].replace("{n}", str(n)).replace("{total}", str(len(facts))))}">'
+                   f'</button>' for n in range(1, len(facts) + 1))
+    head = eyebrow(title).replace('">', f'">{logo_on_dark(28)}', 1)
+    data = json.dumps({k: labels[k] for k in ("of", "pause", "play")}, ensure_ascii=False).replace("</", "<\\/")
+    script = FACTS_JS.replace("PLAY : PAUSE", f"{json.dumps(ICON_PLAY)} : {json.dumps(ICON_PAUSE)}")
+    return (f'<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, '
+            f'initial-scale=1"><style>{FACTS_CSS}</style></head><body>'
+            f'<section class="band" id="facts" aria-roledescription="carousel" aria-label="{e(labels["region"])}">{head}'
+            f'<div class="track" id="track" tabindex="0" aria-live="off">{slides}</div>'
+            f'<div class="controls"><button type="button" id="prev" aria-label="{e(labels["prev"])}">{ICON_PREV}</button>'
+            f'<div class="dots">{dots}</div>'
+            f'<button type="button" id="next" aria-label="{e(labels["next"])}">{ICON_NEXT}</button>'
+            f'<span class="count" id="count" aria-hidden="true"></span>'
+            f'<button type="button" class="pause" id="pause" aria-label="{e(labels["pause"])}">{ICON_PAUSE}</button></div>'
+            f'</section><script type="application/json" id="labels">{data}</script><script>{script}</script></body></html>')
+
+
 def footer(name: str, tagline: str, text: str, tagline_hi: str = "") -> str:
     second = f' · <span lang="hi">{html.escape(tagline_hi)}</span>' if tagline_hi and tagline_hi != tagline else ""
     return (f'<footer class="footer"><span><b>{wordmark(name)}</b> · {html.escape(tagline)}{second}</span>'

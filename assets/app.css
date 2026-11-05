@@ -171,6 +171,12 @@ div[class*="st-key-case-card-"] { background: var(--card); border: 1px solid var
 .facts-band .fact em { font-size: 14px; line-height: 1.5; color: #C9CFDA; overflow-wrap: anywhere; }
 .facts-band .fact em a { color: #FFFFFF; text-decoration: underline; text-underline-offset: 3px; }
 
+/* ---------- facts carousel: a full width navy band (the carousel itself is in assets via ui.facts_carousel) */
+.st-key-factsband { width: 100vw !important; max-width: 100vw !important; margin: 0 calc(50% - 50vw) 88px calc(50% - 50vw);
+  background: var(--ink); }
+.st-key-factsband [data-testid="stElementContainer"], .st-key-factsband iframe { height: 380px !important; }
+.st-key-factsband iframe { display: block; width: 100% !important; border: 0; }
+
 /* ---------- Learn: cards like the safety cards, icon on top, a button at the bottom ---------- */
 .st-key-learnlinks { padding-bottom: 8px; }
 .st-key-learnlinks [data-testid="stHorizontalBlock"] { align-items: stretch !important; }
@@ -266,6 +272,8 @@ div[class*="st-key-learn-card-"] .stButton > button p { white-space: nowrap; }
   .compare h3 { font-size: 22px !important; }
   .grid.safe, .grid.how { grid-template-columns: 1fr; }
   .facts-band { padding: 48px 16px; margin-bottom: 64px; }
+  .st-key-factsband { margin-bottom: 64px; }
+  .st-key-factsband [data-testid="stElementContainer"], .st-key-factsband iframe { height: 500px !important; }
   .footer { padding: 28px 16px; }
   .helpline { margin-bottom: 64px; }
   .tracker thead { display: none; }
