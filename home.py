@@ -43,8 +43,8 @@ FACTS = [
       "it off."],
      "Lost money online? Call 1930 or report on cybercrime.gov.in immediately, so the money can be stopped before "
      "the fraudsters siphon it off.",
-     "ऑनलाइन पैसे गए? तुरंत 1930 पर कॉल करें या cybercrime.gov.in पर शिकायत करें, ताकि धोखेबाज़ों के पैसे निकाल ले जाने "
-     "से पहले उन्हें रोका जा सके।"),
+     "ऑनलाइन पैसे गए? तुरंत 1930 पर कॉल करें या cybercrime.gov.in पर शिकायत करें, ताकि पैसे धोखेबाज़ों के हाथ लगने से "
+     "पहले ही रोके जा सकें।"),
     ("legal_aid_eligibility.md", "The legal aid lawyer cannot charge any fee",
      ["A panel lawyer assigned through legal aid must not take any fee or anything of value from the person."],
      "A legal aid lawyer must not take any fee, or anything of value, from the person they are helping.",

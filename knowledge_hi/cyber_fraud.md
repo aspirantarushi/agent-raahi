@@ -2,7 +2,7 @@
 
 ### तुरंत 1930 पर कॉल करें: फ़ौरन शिकायत करें
 English heading: Call 1930 at once: report immediately
-अगर ऑनलाइन धोखाधड़ी से पैसे लिए गए हैं (UPI, कार्ड, नेट बैंकिंग, वॉलेट), तो तुरंत राष्ट्रीय साइबर-धोखाधड़ी हेल्पलाइन 1930 पर कॉल करें, या cybercrime.gov.in पर शिकायत करें। फ़ौरन शिकायत करें: यह व्यवस्था इसीलिए है कि धोखेबाज़ों के पैसे निकाल ले जाने से पहले उन्हें रोका जा सके।
+अगर ऑनलाइन धोखाधड़ी से पैसे लिए गए हैं (UPI, कार्ड, नेट बैंकिंग, वॉलेट), तो तुरंत राष्ट्रीय साइबर-धोखाधड़ी हेल्पलाइन 1930 पर कॉल करें, या cybercrime.gov.in पर शिकायत करें। फ़ौरन शिकायत करें: यह व्यवस्था इसीलिए है, ताकि पैसे धोखेबाज़ों के हाथ लगने से पहले ही रोके जा सकें।
 Source: Ministry of Home Affairs, Press Information Bureau release on the Citizen Financial Cyber Fraud Reporting and Management System
 Link: https://pib.gov.in/PressReleasePage.aspx?PRID=2110809
 Checked: 2026-11-02 · Lawyer checked: no
