@@ -213,7 +213,10 @@ div[class*="st-key-learn-card-"] .stButton > button p { white-space: nowrap; }
 .stepper li.done, .stepper li.now { color: var(--ink); border-top-color: var(--teal); }
 .stepper li.now { font-weight: 700; }
 .step-title { font-weight: 600; font-size: 1.6rem; letter-spacing: -.01em; margin: 1rem 0 .5rem 0; color: var(--ink); }
-.step-title.center { text-align: center; }
+.step-title.center { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  margin: 1.4rem 0 .75rem 0; }
+.step-title .step-icon { width: 48px; height: 48px; border-radius: 16px; background: var(--teal-tint); color: var(--teal-dark);
+  display: flex; align-items: center; justify-content: center; font-size: 26px; }
 .chip { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; white-space: nowrap; }
 .chip.waiting { background: #E0F2FE; color: #0C4A6E; } .chip.sent-back { background: var(--amber-bg); color: var(--amber-ink); }
 .chip.approved { background: #DCFCE7; color: #14532D; } .chip.submitted { background: #E0E7FF; color: #312E81; }
@@ -223,8 +226,17 @@ div[class*="st-key-learn-card-"] .stButton > button p { white-space: nowrap; }
 .chip.changed { background: var(--amber-bg); color: var(--amber-ink); }
 .tag { display: inline-block; padding: 1px 8px; border-radius: 6px; background: var(--teal-tint); color: var(--teal-dark);
   font-size: 12.5px; font-weight: 500; line-height: 1.6; white-space: nowrap; vertical-align: .1em; margin-left: .25rem; }
-.case-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-size: 17px; }
+.case-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
 .case-head b { font-weight: 650; }
+.case-head .lbl { color: var(--muted2); font-size: 13px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; }
+.case-head .code { font-size: 30px; font-weight: 800; letter-spacing: .12em; color: var(--ink); line-height: 1.1;
+  font-variant-numeric: tabular-nums; }
+.case-id { color: var(--muted2); font-size: 13px; margin-top: 2px; }
+.st-key-case-actions { gap: 4px !important; }
+.st-key-case-actions .stButton > button { min-height: 34px !important; padding: 0 10px !important; width: auto !important; }
+.st-key-case-actions .stButton > button p { font-size: 14px !important; }
+.st-key-case-actions > div:has(.st-key-case-another), .st-key-case-actions > .st-key-case-another { margin-left: auto !important; }
+.st-key-case-another button p { color: var(--teal-dark) !important; text-decoration: underline; }
 .case-sub { color: var(--muted); font-size: 15px; margin-top: 2px; }
 .case-sub .overdue { color: var(--red); font-weight: 600; }
 .review-flag { background: var(--amber-bg); color: var(--amber-ink); border-radius: 12px; padding: 10px 14px; font-weight: 600; font-size: 15px; }
@@ -236,9 +248,12 @@ div[class*="st-key-learn-card-"] .stButton > button p { white-space: nowrap; }
 /* ---------- New case: case type cards, question counter, case panel ---------- */
 .st-key-case_type [role="radiogroup"] { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px !important; width: 100%; }
+.st-key-case_type [role="radiogroup"] { align-items: stretch !important; }
+.st-key-case_type [role="radiogroup"] > * { width: 100% !important; height: 100% !important; margin: 0 !important; }
 .st-key-case_type label[data-baseweb="radio"] { position: relative; background: var(--card); border: 2px solid var(--line);
-  border-radius: 20px; padding: 20px 20px 20px 70px !important; margin: 0 !important; min-height: 96px; align-items: flex-start;
-  cursor: pointer; }
+  border-radius: 20px; padding: 20px 20px 20px 70px !important; margin: 0 !important; min-height: 110px; height: 100%;
+  width: 100% !important; max-width: none !important; box-sizing: border-box; align-items: flex-start; cursor: pointer; }
+.st-key-case_type label[data-baseweb="radio"] > div:last-child { text-align: left; align-self: flex-start; }
 .st-key-case_type label[data-baseweb="radio"]:has(input:checked) { border-color: var(--teal); background: #F4FAF8; }
 .st-key-case_type label[data-baseweb="radio"] > div:first-child { display: none !important; }
 .st-key-case_type label[data-baseweb="radio"]::before { position: absolute; left: 20px; top: 20px; width: 36px; height: 36px;
@@ -250,6 +265,7 @@ div[class*="st-key-learn-card-"] .stButton > button p { white-space: nowrap; }
 .st-key-case_type [data-testid="stCaptionContainer"], .st-key-case_type label [data-testid="stCaptionContainer"] p {
   font-size: 14.5px !important; font-weight: 400 !important; color: var(--muted) !important; }
 .st-key-case_type [data-testid="stWidgetLabel"] p { font-weight: 600; }
+.tick-why { margin: -10px 0 8px 32px !important; font-size: 13.5px; color: var(--muted2); }
 .q-count { text-align: center; color: var(--muted2); font-size: 14px; font-weight: 600; letter-spacing: .04em; margin: -4px 0 8px; }
 .st-key-q-actions { flex-wrap: wrap; }
 .st-key-camp-row { flex-wrap: wrap; justify-content: flex-start; }
@@ -321,11 +337,15 @@ div[class*="st-key-learn-card-"] .stButton > button p { white-space: nowrap; }
 
 /* ---------- the worker bar on New case: who, Sign out, camp, Continue a case ---------- */
 .st-key-topmenu, .st-key-phonemenu, .st-key-names-warning-short { display: none !important; }
-.st-key-worker-bar { flex-wrap: wrap !important; row-gap: 6px !important; margin-bottom: 6px; }
-.st-key-worker-bar > div { width: auto !important; flex: 0 0 auto; }
+.st-key-worker-bar { gap: 8px !important; margin-bottom: 10px; align-items: flex-start; }
 .st-key-worker-bar .who { color: var(--muted2); font-size: 15px; }
-.st-key-worker-bar [data-testid="stExpander"] { min-width: 210px; }
-.st-key-worker-bar > div:has(details[open]), .st-key-worker-bar > div:has(.st-key-camp-form) { flex: 1 1 100%; }
+.st-key-worker-bar .stButton, .st-key-worker-bar .stButton > button,
+.st-key-worker-bar [data-testid="stExpander"]:not(:has(details[open])) { width: 270px !important; max-width: 100%; }
+.st-key-worker-bar .stButton > button { justify-content: flex-start !important; min-height: 42px; }
+.st-key-worker-bar [data-testid="stExpander"] summary { min-height: 40px; padding-top: 0 !important; padding-bottom: 0 !important;
+  display: flex; align-items: center; }
+.st-key-worker-bar [data-testid="stExpander"] details { border-radius: 999px; }
+.st-key-worker-bar [data-testid="stExpander"] details[open] { border-radius: 16px; }
 
 /* ---------- narrower laptops and tablets ---------- */
 @media (max-width: 1100px) {
@@ -354,15 +374,15 @@ div[class*="st-key-learn-card-"] .stButton > button p { white-space: nowrap; }
   h1 { margin-bottom: 0 !important; padding-bottom: 4px !important; }
   .st-key-worker-bar { gap: 6px !important; }
   .st-key-worker-bar .who { font-size: 13px; }
-  .st-key-worker-bar > div:has(.who) { flex: 1 1 auto; max-width: 60%; }
-  .step-title.center { display: none; }  /* the progress steps above name the step */
+  .step-title.center { margin: .6rem 0 .4rem 0; font-size: 1.2rem; gap: 4px; }
+  .step-title .step-icon { width: 36px; height: 36px; font-size: 20px; border-radius: 12px; }
   .brand .word { font-size: 1.05rem !important; }
   .stepper li.now { font-size: 13px; }
-  .st-key-worker-bar .stButton > button { width: auto !important; min-height: 36px; padding: 0 10px !important; }
+  .st-key-worker-bar .stButton > button { min-height: 38px; padding: 0 12px !important; }
   .st-key-worker-bar .stButton > button p { font-size: 14px; }
-  .st-key-worker-bar [data-testid="stExpander"] { min-width: 0; }
-  .st-key-worker-bar [data-testid="stExpander"] summary { padding: 6px 10px !important; min-height: 36px; }
+  .st-key-worker-bar [data-testid="stExpander"] summary { padding: 6px 12px !important; min-height: 38px; }
   .st-key-worker-bar [data-testid="stExpander"] summary p { font-size: 14px; }
+  .case-head .code { font-size: 24px; }
   .st-key-case_type [role="radiogroup"] { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
   .st-key-case_type label[data-baseweb="radio"] { padding: 10px 10px 10px 12px !important; min-height: 0 !important; }
   .st-key-case_type label[data-baseweb="radio"]::before { display: none !important; }

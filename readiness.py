@@ -138,6 +138,27 @@ def case_items(g, eligibility, kind: str, missing_years, cannot=None) -> List[It
     return apply_cannot(items, cannot)
 
 
+# ---------- the volunteer's ticks (step 3): the volunteer decides, the app only suggests ----------
+
+NOT_TICKED = "not ticked by the volunteer"
+
+
+def with_ticks(items: List[Item], ticks: Dict[str, bool]) -> List[Item]:
+    """The checklist as the volunteer left it. A ticked item counts as done (even if the app thought
+    otherwise); an unticked item is a gap (even if the app thought it was done), unless the volunteer
+    marked it "Can't get this" with a reason."""
+    out = []
+    for i in items:
+        ticked = ticks.get(i.key, i.status == PRESENT)
+        if ticked:
+            out.append(Item(i.key, PRESENT, "" if i.status == PRESENT else "ticked by the volunteer"))
+        elif i.status == CANNOT:
+            out.append(Item(i.key, CANNOT, i.note))
+        else:
+            out.append(Item(i.key, MISSING if i.status == MISSING else UNCERTAIN, NOT_TICKED))
+    return out
+
+
 # ---------- the verdict and the gaps block ----------
 
 def gaps(items: List[Item]) -> List[Item]:
@@ -154,8 +175,9 @@ def button_label(items: List[Item], code: str = "en") -> str:
     return lang.t("ready.button_not_ready", code, n=len(gaps(items)))
 
 
-def gaps_block(items: List[Item], code: str = "en") -> str:
-    """Listed at the top of a draft sent while not ready (and fields marked "cannot obtain")."""
+def gaps_block(items: List[Item], code: str = "en", reason: str = "") -> str:
+    """Listed at the top of a draft sent while not ready (and fields marked "cannot obtain"), with the
+    volunteer's reason for sending it anyway."""
     lines = []
     open_items = gaps(items)
     cannot = [i for i in items if i.status == CANNOT]
@@ -163,15 +185,17 @@ def gaps_block(items: List[Item], code: str = "en") -> str:
         lines.append(lang.t("ready.block_not_ready", code, n=len(open_items)))
         lines += [f"- {i.label(code)}: {lang.t('ready.status.' + i.status, code)}" + (f" ({i.note})" if i.note else "")
                   for i in open_items]
+    if open_items and reason.strip():
+        lines.append(lang.t("ready.block_reason", code, reason=reason.strip()))
     if cannot:
         lines.append(lang.t("ready.block_cannot", code))
         lines += [f"- {i.label(code)}: {i.note}" for i in cannot]
     return "\n".join(lines)
 
 
-def add_gaps_to_draft(draft: str, items: List[Item], code: str = "en") -> str:
+def add_gaps_to_draft(draft: str, items: List[Item], code: str = "en", reason: str = "") -> str:
     """Put the gaps block under the draft's header lines (the DRAFT line stays first)."""
-    block = gaps_block(items, code)
+    block = gaps_block(items, code, reason)
     if not block:
         return draft
     lines = draft.split("\n")

@@ -133,6 +133,56 @@ def duration(g, today: date, code: str = "en") -> Optional[str]:
     return lang.t(f"cw.about_{unit}{'' if n == 1 else 's'}", code, n=n)
 
 
+NUMBER_WORDS = {"one": 1, "a": 1, "an": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
+                "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "ek": 1, "do": 2, "teen": 3, "tin": 3,
+                "char": 4, "chaar": 4, "paanch": 5, "panch": 5, "chhe": 6, "chhah": 6, "saat": 7, "aath": 8, "nau": 9,
+                "das": 10, "एक": 1, "दो": 2, "तीन": 3, "चार": 4, "पाँच": 5, "पांच": 5, "छह": 6, "सात": 7, "आठ": 8,
+                "नौ": 9, "दस": 10}
+UNITS = {"day": "day", "days": "day", "din": "day", "दिन": "day", "week": "week", "weeks": "week", "hafte": "week",
+         "hafta": "week", "हफ़्ते": "week", "हफ्ते": "week", "हफ़्ता": "week", "सप्ताह": "week", "month": "month",
+         "months": "month", "mahine": "month", "mahina": "month", "maheene": "month", "महीने": "month", "महीना": "month",
+         "year": "year", "years": "year", "saal": "year", "साल": "year", "वर्ष": "year"}
+STATED = re.compile(r"(?<![\w\u0900-\u097F])(\d{1,2}|" + "|".join(sorted(NUMBER_WORDS, key=len, reverse=True)) +
+                    r")[\s-]+(" + "|".join(sorted(UNITS, key=len, reverse=True)) + r")(?![\w\u0900-\u097F])", re.I)
+
+
+def stated_period(g) -> Optional[Tuple[int, str]]:
+    """A length of time the story itself states ("not paid for three months", "teen mahine se"):
+    (3, "month"). None if the story states none. Relative dates ("5 weeks ago") are not periods."""
+    for line in g.what_happened + [n for _, n in g.issues]:
+        for m in STATED.finditer(privacy.normalise_digits(line)):
+            after = line[m.end():m.end() + 6].casefold()
+            if "ago" in after or "पहले" in after or "pehle" in after:
+                continue
+            word = m.group(1).casefold()
+            n = int(word) if word.isdigit() else NUMBER_WORDS.get(word)
+            if n:
+                return n, UNITS[m.group(2).casefold()]
+    return None
+
+
+def duration_text(g, today: date, code: str = "en") -> Optional[str]:
+    """"Going on for", matching the facts: the period the story states (if any) and the first dated
+    event, for example "3 months, as the story says; salary stopped on 30 September 2026". Without a
+    stated period: "about 5 weeks (since 1 October 2026: connection cut)". None if neither is known."""
+    stated = stated_period(g)
+    dated = sorted(((d, w, x) for w, x in g.timeline for d in [parse_when(w, today)] if d and d <= today),
+                   key=lambda v: v[0])
+    anchor = dated[0] if dated else None
+    parts = []
+    if stated:
+        n, unit = stated
+        parts.append(lang.t("cw.dur_stated", code, period=lang.t(f"cw.n_{unit}{'' if n == 1 else 's'}", code, n=n)))
+    if anchor:
+        _, when, what = anchor
+        what = what[:1].lower() + what[1:] if code == "en" and what[:2] != what[:2].upper() else what
+        if stated:
+            parts.append(lang.t("cw.dur_event", code, what=what.rstrip("."), when=when))
+        else:
+            parts.append(lang.t("cw.dur_since", code, about=duration(g, today, code), what=what.rstrip("."), when=when))
+    return "; ".join(parts) or None
+
+
 # ---------- urgency (fixed rules) ----------
 
 @dataclass

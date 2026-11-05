@@ -105,6 +105,7 @@ def test_second_volunteer_continues_without_re_asking(pretend_ai):
     at.radio(key="ge-woman").set_value("Yes")
     button(at, "Next").click().run()
     ok(at)
+    at.button(key="q-not-needed-go").click().run()  # legal aid decided: the app says so, the volunteer continues
     facts = tracker.load(case_id)["facts"]
     assert facts["woman"]["by"] == "Volunteer B" and facts["state"]["by"] == "Volunteer A"
     assert at.session_state["shown_drafts"], "eligible as a woman: the summary is shown with no more questions"
@@ -139,6 +140,9 @@ def test_sending_uses_the_slip_case_number(pretend_ai, monkeypatch, tmp_path):
     button(at, "Open the case").click().run()
     at.radio(key="ge-woman").set_value("Yes")
     button(at, "Next").click().run()
+    at.button(key="q-not-needed-go").click().run()
+    if any(t.key == "g_send_reason" for t in at.text_input):  # unticked items: a short reason is needed
+        at.text_input(key="g_send_reason").set_value("practice: the rest is collected at the next visit")
     at.checkbox(key="g_checked").check().run()
     next(b for b in at.button if b.label.startswith("Send to supervisor")).click().run()
     ok(at)
@@ -231,6 +235,7 @@ def test_finish_intake_on_screen(pretend_ai):
     case_id, _ = volunteer_a_starts()
     at = as_volunteer("Volunteer A")
     at.session_state["case_id"] = case_id
+    at.session_state["gen_sent"] = case_id  # "Finish intake" is at the end of the flow, after sending
     at.run()
     at.button(key="intake-finish").click().run()
     ok(at)

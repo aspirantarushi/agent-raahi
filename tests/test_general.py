@@ -389,9 +389,14 @@ def test_screen_eligibility_questions_when_needed(pretend_ai, monkeypatch):
     at.radio(key="ge-in_custody").set_value("No")
     button(at, "Next").click().run()
     assert any("Is the person needing help a woman?" in m.value for m in at.markdown)
+    counter = next(m.value for m in at.markdown if 'class="q-count"' in m.value)
+    assert "Question 3 of 8" in counter  # 1 AI question + 7 planned legal aid questions, fixed from the start
     at.radio(key="ge-woman").set_value("Yes")
     button(at, "Next").click().run()
-    ok(at)  # a woman qualifies whatever the income: no more questions
+    ok(at)  # a woman qualifies whatever the income: the app says the rest is not needed and waits
+    assert not at.session_state["shown_drafts"]
+    assert "these 5 planned question(s) are not needed" in at.info[0].value
+    at.button(key="q-not-needed-go").click().run()
     assert "Qualifies for free legal aid whatever the income, as a woman." in at.session_state["shown_drafts"][0]
 
 

@@ -74,6 +74,12 @@ def stepper(steps: List[str], current: int) -> str:
     return f'<ol class="stepper" aria-label="Progress">{"".join(items)}</ol>'
 
 
+def step_heading(icon_name: str, text: str) -> str:
+    """A centred section heading with its outlined icon above it ("Tell the story", "What kind of case is it?")."""
+    return (f'<div class="step-title center"><span class="mi step-icon" aria-hidden="true">{html.escape(icon_name)}</span>'
+            f'<div>{html.escape(text)}</div></div>')
+
+
 def chip(kind: str, text: str) -> str:
     return f'<span class="chip {html.escape(kind)}">{html.escape(text)}</span>'
 

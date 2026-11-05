@@ -303,8 +303,9 @@ def follow_up_questions(r: GeneralReading, code: str = "en") -> List[str]:
     for when, what in (r.timeline + r.coming_dates):
         if len([q for q in questions if q.startswith(t("q.year_start"))]) >= 2:
             break
-        if when and not re.search(r"\b(19|20)\d{2}\b", privacy.normalise_digits(when)) and not RELATIVE_WHEN.search(when) \
-                and when != "date not given":
+        already = any(when.casefold() in q.casefold() for q in questions)  # the AI already asks for this date
+        if when and not already and not re.search(r"\b(19|20)\d{2}\b", privacy.normalise_digits(when)) \
+                and not RELATIVE_WHEN.search(when) and when != "date not given":
             questions.append(t("q.year", when=when, what=what))
     return questions[:7]
 
@@ -897,7 +898,7 @@ def _glance_lines(g: "GeneralFacts", code: str) -> List[str]:
     today = date.fromisoformat(g.today)
     label = (lambda k: lang.t(k, code))
     problem = "; ".join(n for _, n in g.issues) or label("cw.not_stated")
-    lasting = casework.duration(g, today, code) or label("cw.not_known_yet")
+    lasting = casework.duration_text(g, today, code) or label("cw.not_known_yet")
     u = casework.urgency(g, today, code)
     return [label("cw.glance"),
             f"- {label('cw.g_problem')}: {problem}",

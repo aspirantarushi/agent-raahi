@@ -164,16 +164,17 @@ def new_case_screen():
     st.title(t("ui.new_case.title"))
     with st.container(key="nc-caption"):  # hidden on phones: the story box repeats it
         st.caption(t("ui.new_case.caption"))
-    with st.container(key="worker-bar", horizontal=True, vertical_alignment="center", gap="small"):
-        volunteer_line()  # who is signed in, Sign out, today's camp and Continue a case: one compact bar
+    with st.container(key="worker-bar", gap="small"):
+        volunteer_line()  # who is signed in, then Sign out, today's camp and Continue a case, one below the other
         continue_box("new")
     msg = st.session_state.pop("case-msg", None)
     if msg:
         st.error(msg[1])
     current_case_panel()
 
+    st.markdown(ui.step_heading("category", t("ui.new_case.kind")), unsafe_allow_html=True)
     case_type = st.radio(t("ui.new_case.kind"), CASE_TYPES, horizontal=True, key="case_type",
-                         format_func=option_text("case_type."),
+                         format_func=option_text("case_type."), label_visibility="collapsed",
                          captions=[t("case_type.cap.any"), t("case_type.cap.479")])
     if case_type == ANY_CASE:
         general_screen()
@@ -185,18 +186,31 @@ def new_case_screen():
                 undertrial_form()
     sent = st.session_state.get("sent") if case_type != ANY_CASE else None
     case_id = sent["id"] if sent else st.session_state.get("gen_sent")
+    if case_id:
+        finish_intake_box(case_id)  # the end of the flow: after the draft was sent
     report_problem_box("new-case", "New case", case_id)
+
+
+def finish_intake_box(case_id: str):
+    """"Finish intake" once the draft is sent (and the next step, once it is finished)."""
+    record = tracker.load(case_id) or {}
+    if not record.get("intake_finished"):
+        st.button(t("intake.finish"), key="intake-finish", type="primary", icon=":material/task_alt:",
+                  on_click=finish_intake, args=(case_id,))
+    elif record.get("next"):
+        n = record["next"]
+        st.success(t("intake.done", step=next_step_words(n["step"], None),
+                     due=show_date(date.fromisoformat(n["due"])) if n.get("due") else "-"), icon=":material/task_alt:")
 
 
 # ----- voice: "Speak the story" -----
 
 def transcribe_recording(audio_key: str, target_key: str):
-    """Runs when "Turn speech into text" is clicked. The recording is only sent to Gemini to become
-    text; it is never saved. The text goes through the privacy filter, then into the notes box."""
+    """Runs by itself when a recording stops. The recording is only sent to Gemini to become text; it
+    is never saved. The text goes through the privacy filter, then into the notes box."""
     st.session_state.pop(f"{audio_key}-msg", None)
     recording = st.session_state.get(audio_key)
-    if recording is None:
-        st.session_state[f"{audio_key}-msg"] = ("error", t("ui.voice.nothing"))
+    if recording is None:  # the recording was cleared: nothing to do
         return
     try:
         language = st.session_state.get(NOTES_LANGUAGE_KEYS.get(target_key, ""), code())
@@ -211,6 +225,8 @@ def transcribe_recording(audio_key: str, target_key: str):
         return
     before = st.session_state.get(target_key, "").rstrip()
     st.session_state[target_key] = (before + "\n" if before else "") + transcript.text
+    if target_key in NOTES_LANGUAGE_KEYS:
+        detect_notes_language(target_key)
     msg = t("ui.voice.done")
     if transcript.removed:
         msg += " " + t("ui.voice.removed", what=", ".join(f"{n} × {k}" for k, n in transcript.removed.items()))
@@ -218,18 +234,28 @@ def transcribe_recording(audio_key: str, target_key: str):
 
 
 def voice_box(audio_key: str, target_key: str):
-    with st.expander(t("ui.voice.title"), expanded=bool(st.session_state.pop(f"{audio_key}-open", False))):
-        st.warning(t("ui.voice.warning"))
+    """"Speak the story": one tap on the mic starts recording (with a timer), one tap stops it; the
+    speech then becomes text in the story box by itself. No dropdown to open first."""
+    st.session_state.pop(f"{audio_key}-open", None)
+    with st.container(key=f"{audio_key}-box"):
         if not llm.gemini_available():  # voice needs Gemini (Groq is only for reading stories)
             st.info(t("ui.voice.no_ai"))
             return
-        st.audio_input(t("ui.voice.record"), key=audio_key)
-        st.button(t("ui.voice.convert"), key=f"{audio_key}-go", on_click=transcribe_recording,
-                  args=(audio_key, target_key))
-        st.caption(t("ui.voice.caption"))
+        st.audio_input(t("ui.voice.title"), key=audio_key, on_change=transcribe_recording,
+                       args=(audio_key, target_key))
+        # While recording, the label says so (Streamlit's recorder shows the timer and the stop button)
+        st.markdown(f"<style>.st-key-{audio_key}-box [data-testid=\"stAudioInput\"]:has(button[aria-label=\"Stop recording\"])"
+                    f" [data-testid=\"stWidgetLabel\"] p::after {{ content: \" \\2014  {css_text(t('ui.voice.recording'))}\"; "
+                    f"color: var(--red); font-weight: 700; }}</style>", unsafe_allow_html=True)
+        st.caption(t("ui.voice.warning") + " " + t("ui.voice.caption"))
         msg = st.session_state.pop(f"{audio_key}-msg", None)
         if msg:
             (st.success if msg[0] == "ok" else st.error)(msg[1])
+
+
+def css_text(text: str) -> str:
+    """Text safe inside a CSS content: "..." string."""
+    return "".join(c if c.isalnum() or c in " .,:;!?…-" else f"\\{ord(c):x} " for c in text)
 
 
 # ----- any case: general intake -----
@@ -380,22 +406,43 @@ def general_question(gen):
     if gen["done"]:
         return None
     questions = gen["reading"].questions
+    plan = elig_plan(gen)
     if gen["q_index"] < len(questions):
         return ("ai", gen["q_index"], questions[gen["q_index"]])
     missing = [m for m in general.check_eligibility(gen["facts"]).missing if m not in gen["skipped"]]
     if missing:
+        if missing[0] not in plan:
+            plan.append(missing[0])  # needed after all (the count grows, and says so by its new total)
         return ("eligibility", missing[0], t(f"elig.q.{missing[0]}"))
+    # Free legal aid is decided before every planned question was asked: say so; never move on silently
+    if not_needed(gen) and not gen.get("elig_ack"):
+        return ("not_needed", None, "")
     return None
 
 
+def elig_plan(gen) -> list:
+    """The free legal aid questions planned when the questions start: fixed, so the count stays right."""
+    if gen.get("elig_plan") is None:
+        gen["elig_plan"] = [m for m in general.check_eligibility(gen["facts"]).missing if m not in gen["skipped"]]
+    return gen["elig_plan"]
+
+
+def not_needed(gen) -> list:
+    asked = set(gen.get("elig_asked", [])) | set(gen["skipped"])
+    return [m for m in elig_plan(gen) if m not in asked]
+
+
 def question_position(gen, kind: str, ref) -> tuple:
-    """(n, total) for "Question n of total": the AI's questions, then the free legal aid questions."""
+    """(n, total) for "Question n of total": the AI's questions, then the planned free legal aid questions.
+    The total is fixed when the questions start."""
     ai_total = len(gen["reading"].questions)
-    remaining = [m for m in general.check_eligibility(gen["facts"]).missing if m not in gen["skipped"]]
-    done = gen.get("elig_done", 0)
-    total = ai_total + done + len(remaining)
-    n = ref + 1 if kind == "ai" else ai_total + done + 1
+    total = ai_total + len(elig_plan(gen))
+    n = ref + 1 if kind == "ai" else ai_total + len(set(gen.get("elig_asked", [])) | set(gen["skipped"])) + 1
     return n, max(total, n)
+
+
+def continue_after_not_needed():
+    st.session_state["gen"]["elig_ack"] = True
 
 
 def answer_general(kind: str, ref, skip: bool = False):
@@ -432,6 +479,7 @@ def answer_general(kind: str, ref, skip: bool = False):
             skip = True
     if skip or value is not None:
         gen["elig_done"] = gen.get("elig_done", 0) + 1
+        gen.setdefault("elig_asked", []).append(fact)
     if skip:
         gen["skipped"].add(fact)
     elif value is not None:
@@ -464,9 +512,12 @@ def general_step(gen) -> int:
     return 4 if st.session_state.get("g_checked") else 3
 
 
+FLOW_ICONS = ["edit_note", "quiz", "description", "send"]
+
+
 def flow_title(n: int):
-    """The step's heading, centred and without its number (the progress steps above show it)."""
-    st.markdown(f'<div class="step-title center">{t(GENERAL_FLOW[n - 1])}</div>', unsafe_allow_html=True)
+    """The step's heading with its icon above, centred, without its number (the progress steps show it)."""
+    st.markdown(ui.step_heading(FLOW_ICONS[n - 1], t(GENERAL_FLOW[n - 1])), unsafe_allow_html=True)
 
 
 def back_to_story():
@@ -485,7 +536,7 @@ def back_to_questions():
         if question in answers:
             st.session_state[f"gq-{i}"] = answers[question]
     gen["unanswered"] = []
-    gen["q_index"], gen["done"] = 0, False
+    gen["q_index"], gen["done"], gen["elig_ack"] = 0, False, False
 
 
 def restore_held_story():
@@ -557,6 +608,17 @@ def general_screen():
         return  # "Cannot conclude yet" until a volunteer chooses which value is right
 
     question = general_question(gen)
+    if question and question[0] == "not_needed":
+        flow_title(2)
+        left = not_needed(gen)
+        eligibility = general.check_eligibility(gen["facts"])
+        st.info(t("ui.q_not_needed", n=len(left), reason=eligibility_text(eligibility)), icon=":material/task_alt:")
+        st.markdown("\n".join(f"- {t(f'elig.q.{m}')}" for m in left))
+        st.button(t("ui.q_continue"), key="q-not-needed-go", type="primary", icon=":material/arrow_forward:",
+                  on_click=continue_after_not_needed)
+        st.button(t("ui.back_story"), key="g-back-story", type="tertiary", icon=":material/arrow_back:",
+                  on_click=back_to_story)
+        return
     if question:
         kind, ref, text = question
         flow_title(2)
@@ -721,12 +783,14 @@ def general_summary(gen):
         st.caption(t("ui.hindi_label_note"))
     kind = casework.problem_type(facts)
     missing_years = casework.missing_years(facts)
-    items = readiness.case_items(facts, eligibility, kind, missing_years, cannot_marks("g"))
+    app_items = readiness.case_items(facts, eligibility, kind, missing_years, cannot_marks("g"))
+    items = readiness.with_ticks(app_items, volunteer_ticks(app_items))  # the volunteer decides
+    send_reason = tracker.clean_text(st.session_state.get("g_send_reason") or "", 200)
     approved = research.approved_points(case_id) if case_id else []
     issue = (uncovered[0] if uncovered else "; ".join(n for _, n in facts.issues)) or t("ui.general.problem_described")
 
     documents = [(t("cw.doc_summary"), readiness.add_gaps_to_draft(
-        general.make_summary_draft(facts, gen["model"], draft_lang), items, draft_lang))]
+        general.make_summary_draft(facts, gen["model"], draft_lang), items, draft_lang, send_reason))]
     if approved:
         documents.append((t("cw.doc_letter"), casework.complaint_letter(facts, approved, issue, gen["model"],
                                                                          draft_lang)))
@@ -739,7 +803,7 @@ def general_summary(gen):
     with col_cards:
         case_cards(facts, eligibility, approved, kind, draft_lang)
     with col_check:
-        fix_checklist(items, facts, eligibility, kind, missing_years, approved, gen)
+        fix_checklist(app_items, facts, eligibility, kind, missing_years, approved, gen)
     research_slot = st.container(key="research-slot")
     with research_slot:
         research_panel(facts, uncovered, "loading" if research_now else status, case_id, state)
@@ -755,27 +819,28 @@ def general_summary(gen):
     flow_title(4)
     sent = st.session_state.get("gen_sent")
     if sent:
-        st.success(t("ui.sent", case_id=sent))
-        record = tracker.load(sent) or {}
-        if not record.get("intake_finished"):  # the next thing to do, right here
-            st.button(t("intake.finish"), key="intake-finish-sent", type="primary", icon=":material/task_alt:",
-                      on_click=finish_intake, args=(sent,))
-        elif record.get("next"):
-            n = record["next"]
-            st.success(t("intake.done", step=next_step_words(n["step"], None),
-                         due=show_date(date.fromisoformat(n["due"])) if n.get("due") else "-"),
-                       icon=":material/task_alt:")
+        st.success(t("ui.sent", case_id=sent))  # "Finish intake" follows right below
         return
+    unticked = readiness.gaps(items)
+    if unticked:  # sending with unticked items needs a short reason; the supervisor sees both
+        st.warning(t("ready.sup_unticked", items="; ".join(i.label(code()) for i in unticked)), icon=":material/rule:")
+        st.text_input(t("ready.send_reason"), key="g_send_reason", max_chars=200)
     checked = st.checkbox(t("ui.general.checked_no_names"), key="g_checked")
-    if st.button(send_label(items), disabled=not checked or bool(research_now), key="send-g", type="primary",
-                 icon=":material/send:"):
+    label = f"{t('ui.send_to_supervisor')} \u2014 " + (t("ready.button_unticked", n=len(unticked)) if unticked
+                                                      else t("ready.button_ready"))
+    if unticked and checked and not send_reason:
+        st.caption(t("ready.send_reason_needed"))
+    if st.button(label, disabled=not checked or bool(research_now) or (bool(unticked) and not send_reason),
+                 key="send-g", type="primary", icon=":material/send:"):
         ai = None
         if gen["model"]:
             ai = {"model": gen["model"], "read_at": gen["read_at"], "extracted": dict(reading.facts),
                   "not_accepted": sorted(set(reading.dropped))}
         try:
             case_id = ensure_case(general.CASE_TYPE)
-            case_id = store.submit(packet, facts, ai=ai, draft_lang=draft_lang, readiness=readiness_rows(items),
+            case_id = store.submit(packet, facts, ai=ai, draft_lang=draft_lang,
+                                   readiness=readiness_rows(items) + ([{"key": "send_reason", "status": "note",
+                                                                        "note": send_reason}] if unticked else []),
                                    ledger=[e.as_dict() for e in entries], case_id=case_id, by=who())
             tracker.confirm_facts(case_id, gen["facts"], who())
         except (ValueError, storage.StorageError) as err:
@@ -798,7 +863,7 @@ def case_cards(g, eligibility, approved, kind, code_):
     u = casework.urgency(g, today, code_)
     glance = [f'<span class="k">{e(t("cw.g_problem"))}</span>{e("; ".join(n for _, n in g.issues) or t("cw.not_stated"))}',
               f'<span class="k">{e(t("cw.g_wants"))}</span>{e(g.outcome or t("cw.not_stated"))}',
-              f'<span class="k">{e(t("cw.g_how_long"))}</span>{e(casework.duration(g, today, code_) or t("cw.not_known_yet"))}',
+              f'<span class="k">{e(t("cw.g_how_long"))}</span>{e(casework.duration_text(g, today, code_) or t("cw.not_known_yet"))}',
               f'<span class="k">{e(t("cw.g_urgency"))}</span>{e(" ".join(u.reasons))}']
     st.markdown(ui.info_card(t("cw.glance"), glance, "glance" + (" urgent" if u.level != "normal" else ""), "bolt"),
                 unsafe_allow_html=True)
@@ -855,17 +920,42 @@ def save_fix(gen_key: str, field: str, value):
             merge_into_case(case_id, {field: value}, "fixed in the checklist")
 
 
-def fix_checklist(items, g, eligibility, kind, missing_years, approved, gen):
-    """The checklist in plain words; each missing item can be fixed right here."""
-    st.markdown(f"**{t('ready.title')}**")
-    st.caption(t("ready.cannot_help"))
+def volunteer_ticks(items) -> dict:
+    """{item key: ticked}. The app pre-ticks what it found, until the volunteer ticks or unticks an item;
+    from then on the volunteer's choice stays."""
+    ticks = {}
     for item in items:
+        key = f"tick-{item.key}"
+        if not st.session_state.get(f"{key}-touched"):
+            st.session_state[key] = item.status == readiness.PRESENT
+        ticks[item.key] = bool(st.session_state.get(key))
+    return ticks
+
+
+def tick_why(item, g, eligibility) -> str:
+    """Why the app pre-ticked an item (or what is missing)."""
+    if item.status != readiness.PRESENT:
+        return t("ready.why.missing") if item.status != readiness.CANNOT else item.note
+    if item.key == "case_documents":
+        return t("ready.why.case_documents", docs="; ".join(g.documents_held))
+    if item.key == "case_legal_aid":
+        return t("ready.why.case_legal_aid", reason=eligibility_text(eligibility))
+    key = f"ready.why.{item.key}"
+    return t(key) if key in lang.strings("en") else t("ready.why.answered")
+
+
+def fix_checklist(items, g, eligibility, kind, missing_years, approved, gen):
+    """A real checklist: a tick box per item, pre-ticked by the app with the reason; the volunteer can
+    tick or untick anything. Items not done yet can be fixed right here."""
+    st.markdown(f"**{t('ready.title')}**")
+    st.caption(t("ready.ticks_caption"))
+    for item in items:
+        key = f"tick-{item.key}"
+        st.checkbox(item.label(code()), key=key,
+                    on_change=lambda k=key: st.session_state.update({f"{k}-touched": True}))
+        st.markdown(f'<p class="tick-why">{html.escape(tick_why(item, g, eligibility))}</p>', unsafe_allow_html=True)
         done = item.status == readiness.PRESENT
-        icon = ":material/check_circle:" if done else ":material/radio_button_unchecked:" \
-            if item.status != readiness.CANNOT else ":material/block:"
-        st.markdown(f"{icon} {item.label(code())}: **{t('ready.status.' + item.status)}**"
-                    + (f" ({item.note})" if item.note and item.status == readiness.CANNOT else ""))
-        if done or item.status == readiness.CANNOT:
+        if done or item.status == readiness.CANNOT or st.session_state.get(key):
             continue
         how = readiness.FIXES.get(item.key)
         k = f"fix-{item.key}"
@@ -909,8 +999,10 @@ def fix_checklist(items, g, eligibility, kind, missing_years, approved, gen):
                              on_change=lambda f=m, kk=f"{k}-{m}": save_fix("g", f, st.session_state.get(kk)))
             elif how == "back":
                 st.button(t("ready.fix_back"), key=f"{k}-go", type="tertiary", on_click=back_to_questions)
-            if st.checkbox(t("ready.cannot_box"), key=f"cant-g-{item.key}"):
-                st.text_input(t("ready.reason"), max_chars=120, key=f"cantr-g-{item.key}")
+            if item.key == "case_documents":  # "Can't get this" stays for documents
+                st.caption(t("ready.cannot_help"))
+                if st.checkbox(t("ready.cannot_box"), key=f"cant-g-{item.key}"):
+                    st.text_input(t("ready.reason"), max_chars=120, key=f"cantr-g-{item.key}")
 
 
 def research_panel(g, uncovered, status, case_id, state):
@@ -2419,8 +2511,14 @@ def review_one(record: dict):
                 document_view(part.strip(), f"sup-{case_id}-{n}", f"{case_id} draft {n + 1}")
         blocked = review_research_inside(case_id)
         if record.get("readiness"):
+            rows = [r for r in record["readiness"] if r["key"] != "send_reason"]
+            unticked = [r for r in rows if r.get("note") == readiness.NOT_TICKED]
+            reason = next((r["note"] for r in record["readiness"] if r["key"] == "send_reason"), "")
+            if unticked:
+                st.warning(t("ready.sup_unticked", items="; ".join(t("ready." + r["key"]) for r in unticked))
+                           + (" " + t("ready.sup_reason", reason=reason) if reason else ""), icon=":material/rule:")
             with st.expander(t("ready.sup_title")):
-                for r in record["readiness"]:
+                for r in rows:
                     st.markdown(f"- {t('ready.' + r['key'])}: {t('ready.status.' + r['status'])}"
                                 + (f" \u2014 {r['note']}" if r.get("note") else ""))
         if record.get("ledger"):
@@ -2511,7 +2609,7 @@ def volunteer_line():
     if clinic_passcode():
         st.markdown(f'<span class="who" title="{html.escape(t("gate.name_help"))}">'
                     f'{html.escape(t("gate.signed_in_short", name=who()))}</span>', unsafe_allow_html=True)
-        if st.button(t("gate.sign_out"), key="gate-out", icon=":material/logout:"):
+        if st.button(t("gate.sign_out"), key="gate-out", type="primary", icon=":material/logout:"):
             for key in ("clinic_ok", "volunteer", "case_id"):
                 st.session_state.pop(key, None)
             st.rerun()
@@ -3041,8 +3139,10 @@ def current_case_panel():
     if st.session_state.pop("case_opened", False):
         st.session_state[tab_key] = "file"  # a continued case opens on its case file
     with st.container(border=True, key="case-panel"):
-        st.markdown(f'<div class="case-head"><b>{html.escape(t("ui.case_title", case_id=case_id))}</b> · '
-                    f'{html.escape(t("slip.code"))} <b>{html.escape(record["code"])}</b> {status_chip(status)}</div>',
+        # The code is what volunteers use, so it is large; the long case number is small and grey
+        st.markdown(f'<div class="case-head"><span class="lbl">{html.escape(t("slip.code"))}</span>'
+                    f'<span class="code">{html.escape(record["code"])}</span>{status_chip(status)}</div>'
+                    f'<div class="case-id">{html.escape(t("ui.case_title", case_id=case_id))}</div>',
                     unsafe_allow_html=True)
         if st.session_state.pop("slip_new", False):
             st.success(t("slip.new_short", slip_code=record["code"]), icon=":material/qr_code_2:")
@@ -3053,14 +3153,11 @@ def current_case_panel():
                        icon=":material/task_alt:")
         with st.container(horizontal=True, vertical_alignment="center", gap="small", key="case-actions"):
             current = st.session_state.get(tab_key)
-            for option, icon in CASE_TABS:  # open one panel; press again to close it
+            for option, icon in CASE_TABS:  # small quiet buttons; open one panel, press again to close it
                 st.button(t(f"case.tab.{option}"), key=f"case-tab-{option}", icon=icon,
-                          type="primary" if current == option else "secondary",
+                          type="secondary" if current == option else "tertiary",
                           on_click=toggle_case_tab, args=(tab_key, option))
-            if status == tracker.INTAKE:
-                st.button(t("intake.finish"), key="intake-finish", type="primary", icon=":material/task_alt:",
-                          on_click=finish_intake, args=(case_id,))
-            st.button(t("cont.another"), key="case-another", icon=":material/add:", on_click=clear_case)
+            st.button(t("cont.another"), key="case-another", type="tertiary", icon=":material/add:", on_click=clear_case)
         tab = st.session_state.get(tab_key)
         if tab == "slip":
             slip_content(record)
