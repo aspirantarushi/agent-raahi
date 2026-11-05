@@ -8,7 +8,7 @@ It never contains a password or key: only the **names** of the settings. The val
 
 1. **The Supabase table exists.** Supabase > project `legal-aid-agent` > Table Editor: you should see
    `raahi_records`. If not: SQL Editor > New query > paste all of `supabase/tracker.sql` > Run.
-2. **The latest code is on GitHub** (`aspirantarushi/legal-aid-agent`, branch `main`).
+2. **The latest code is on GitHub** (`aspirantarushi/agent-raahi`, branch `main`).
 3. **Your values are at hand.** Open `.env` and `.streamlit/secrets.toml` on your Mac. You will copy
    the values from there into the Secrets box. Do not paste them into a chat, an email or GitHub.
 
@@ -18,7 +18,7 @@ It never contains a password or key: only the **names** of the settings. The val
 2. Top right: **Create app**.
 3. Choose **"Deploy a public app from GitHub"** (the first option).
 4. Fill in:
-   - **Repository:** `aspirantarushi/legal-aid-agent`
+   - **Repository:** `aspirantarushi/agent-raahi`
    - **Branch:** `main`
    - **Main file path:** `app.py`
    - **App URL:** choose a short address, for example `agent-raahi` (it becomes
