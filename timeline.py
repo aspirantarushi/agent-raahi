@@ -3,11 +3,9 @@
 Each approved case gets steps with a status (to do / done / not needed), a due date and who did
 it. Dates that come from the law show their knowledge-file Source line; every other date is a
 suggested follow-up (or a date the volunteer entered), never presented as a legal deadline.
-Every change is added to the case's audit record. Saved in timelines/ (kept out of git).
+Every change is added to the case's audit record. Saved through storage.py (timelines, kept out of git).
 """
 
-import json
-import os
 from dataclasses import asdict, dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
@@ -17,6 +15,7 @@ import audit
 import knowledge
 import privacy
 import section479
+import storage
 
 HERE = Path(__file__).resolve().parent
 TO_DO, DONE, NOT_NEEDED = "to do", "done", "not needed"
@@ -138,21 +137,16 @@ def create_for_undertrial(case_id: str, facts, result: section479.Result, approv
 
 # ---------- reading and saving ----------
 
-def _path(case_id: str, base: Path) -> Path:
-    return base / "timelines" / f"{case_id}.json"
-
-
 def _save(record: dict, base: Path) -> None:
-    path = _path(record["case_id"], base)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(record, indent=2, ensure_ascii=False), encoding="utf-8")
-    os.replace(tmp, path)
+    storage.write_json("timelines", record["case_id"], record, base)
 
 
 def load(case_id: str, base: Path = HERE) -> Optional[dict]:
-    path = _path(case_id, base)
-    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+    return storage.read_json("timelines", case_id, base)
+
+
+def load_all(base: Path = HERE) -> List[dict]:
+    return storage.all_json("timelines", base)
 
 
 def steps_of(record: dict) -> List[Step]:
@@ -290,11 +284,9 @@ def due_this_week(today: date, base: Path = HERE) -> List[Tuple[str, Step, str]]
     """(case number, step, state) for to-do steps that are overdue or due in the next 7 days, earliest
     first. state: "overdue" (red), "due", or "eligibility" (an eligibility date falling this week).
     Eligibility dates already passed are left out: the "ask" step carries the follow-up."""
-    folder = base / "timelines"
     found = []
-    if folder.exists():
-        for path in sorted(folder.glob("*.json")):
-            record = json.loads(path.read_text(encoding="utf-8"))
+    if True:
+        for record in load_all(base):
             for s in steps_of(record):
                 d = s.due_date()
                 if s.status != TO_DO or d is None or d > today + timedelta(days=6):

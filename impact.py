@@ -4,12 +4,11 @@ Each entry: case ID (the app's pseudonymous case number), permission status, wor
 end times, review outcome, referral made by an authorised worker, external acknowledgement or
 reference, reviewer feedback. Facts are taken from what the app already recorded (audit record,
 timeline, case status), not typed again. Practice cases (evaluation sessions) are refused, so practice
-and real use stay separate. Saved in impact/ (kept out of git).
+and real use stay separate. Saved through storage.py (impact log, kept out of git).
 """
 
 import csv
 import io
-import json
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
@@ -17,6 +16,7 @@ from typing import List, Optional
 import audit
 import evaluation
 import privacy
+import storage
 import store
 import timeline
 
@@ -24,10 +24,6 @@ HERE = Path(__file__).resolve().parent
 CSV_COLUMNS = ["case_id", "partner", "permission", "permission_reference", "workflow", "started", "ended",
                "review_outcome", "referral_by_authorised_worker", "referral_on", "external_acknowledgement",
                "acknowledgement_reference", "reviewer_feedback", "logged_at"]
-
-
-def _path(base: Path) -> Path:
-    return base / "impact" / "log.jsonl"
 
 
 def practice_case_ids(base: Path = HERE) -> set:
@@ -79,19 +75,13 @@ def log(case_id: str, partner: str, permission_given: bool, permission_reference
     entry = {**entry_for(case_id, base), "partner": partner, "permission": "given",
              "permission_reference": reference, "reviewer_feedback": _clean(reviewer_feedback, 300),
              "logged_at": datetime.now().isoformat(timespec="seconds"), "kind": "real"}
-    path = _path(base)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "a", encoding="utf-8") as f:
-        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    storage.backend(base).log_append("impact", entry)
     audit.add_event(case_id, "added to the impact log", audit.SUPERVISOR, f"partner permission: {reference}", base=base)
     return entry
 
 
 def entries(base: Path = HERE) -> List[dict]:
-    path = _path(base)
-    if not path.exists():
-        return []
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    return storage.backend(base).log_entries("impact")
 
 
 def export_csv(base: Path = HERE) -> str:

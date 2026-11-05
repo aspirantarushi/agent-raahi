@@ -380,14 +380,25 @@ Volunteer's notes:
 OUTPUT_LANGUAGES = {"en": "English", "hi": "simple everyday Hindi (Devanagari script)"}
 
 
-def read_general_notes(notes: str, output_lang: str = "en") -> NotesReading:
+KNOWN_FACTS_NOTE = """
+Facts already known from earlier visits (do not ask about these again in questions_to_ask; only extract
+them if these notes state them):
+{known}
+"""
+
+
+def read_general_notes(notes: str, output_lang: str = "en", known: Optional[Dict[str, object]] = None) -> NotesReading:
     """Send a story to the AI for a structured summary. Phone numbers, Aadhaar numbers and email
-    addresses are removed before sending. Check the answer with general.check_general_answer."""
+    addresses are removed before sending. Check the answer with general.check_general_answer.
+    known: facts already in the case file (from the tracker), so the AI doesn't ask for them again."""
     clean, removed = privacy.redact(notes)
     if not clean.strip():
         raise AIUnavailable("There are no case notes to read.")
-    answer, model = _generate_json(GENERAL_PROMPT.format(notes=clean, output_language=OUTPUT_LANGUAGES.get(
-        output_lang, "English")), GENERAL_SCHEMA)
+    prompt = GENERAL_PROMPT.format(notes=clean, output_language=OUTPUT_LANGUAGES.get(output_lang, "English"))
+    if known:
+        listed = "\n".join(f"- {fact}: {value}" for fact, value in known.items())
+        prompt += KNOWN_FACTS_NOTE.format(known=privacy.redact(listed)[0])
+    answer, model = _generate_json(prompt, GENERAL_SCHEMA)
     if not isinstance(answer, dict):
         raise AIUnavailable("AI reading failed: the answer could not be read.")
     return NotesReading(answer=answer, notes_sent=clean, removed=removed, model=model)

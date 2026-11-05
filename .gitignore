@@ -29,6 +29,9 @@ timelines/
 drafts/U-*
 cases/U-*
 
+# Shared case tracker records (facts known, visit log, slip codes)
+tracker/
+
 # Evaluation sessions (practice) and the impact log (real use, with permission)
 evaluation/sessions/
 impact/

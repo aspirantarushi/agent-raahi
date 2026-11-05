@@ -60,6 +60,35 @@ Version 1 content for the legal aid agent (Code for a Billion, Timely Justice tr
 - **Privacy**: see docs/PRIVACY.md. Supervisors can delete a case; the audit log then keeps only
   "case deleted" and the date.
 
+## One clinic, one shared case tracker
+Set up for one institution (details and setup steps: docs/ONLINE_ROLLOUT_STATUS.md).
+- **Access**: one clinic passcode for volunteers, a separate supervisor password for approving,
+  editing and sending back drafts. Both only in `.streamlit/secrets.toml` / the host's secret settings.
+  Volunteers type their name or initials; it is saved with every action.
+- **Case slip**: a case opens when intake starts and gets a case number and a 6-character code
+  (no 0/O or 1/I). The slip shows only the clinic, the case number, the code, a QR code, "Bring this
+  next time / अगली बार यह साथ लाएँ" and 112 / 15100: never the case type or the problem. Print it, or
+  save it as an image for WhatsApp.
+- **Continue a case** on Home or New case by typing the code or scanning the QR code. Known facts are
+  never asked again; a fact that contradicts an earlier one shows "Cannot conclude yet" with both values
+  until a volunteer chooses.
+- **Visit log** (who, how, what was learned, what was done, next step) and **camp** tags (village,
+  district, date).
+- **Case tracker**: every case with status, next step and due date, overdue in red, filters by status,
+  camp and volunteer; "Intake not finished" cases can be hidden.
+- **Storage**: local folders, or one Supabase table (`supabase/tracker.sql`) used only by the app's
+  server, with row level security and no public access (`storage.py`). Tests never use real data.
+
+### Try it with two practice volunteers
+1. Open the app, go to New case, type "Volunteer A" as your name (or sign in with the clinic passcode).
+2. Paste a fake story and press "Read the story". A case opens: note the code on the slip. Answer one
+   or two questions, then stop.
+3. Open the app in a second browser window (or sign out), type "Volunteer B", and use "Continue a
+   case" with the code. The case file shows what Volunteer A found; only the missing questions are asked.
+4. Add a new fake story that changes a fact (for example the state). "Cannot conclude yet" shows both
+   values; choose one.
+5. Log a visit, tag a camp, then see both on "Case tracker".
+
 ## Measuring impact honestly
 - **Evaluation mode (practice)**: 10 fictional cases in `evaluation/cases/` with answer keys. Each can
   be done "by hand" (a plain form, no AI) or "with the agent"; the app records the time. A reviewer

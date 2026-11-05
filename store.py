@@ -1,14 +1,13 @@
-"""Saving drafts and cases. Plain files, no database.
+"""Saving drafts and cases, through storage.py (local files, or the clinic's Supabase table).
 
-- pending/  drafts waiting for the supervisor, or sent back (kept out of git)
-- drafts/   approved drafts only
-- cases/    approved case files only
+- pending   drafts waiting for the supervisor, or sent back (kept out of git)
+- drafts    approved drafts only
+- cases     approved case files only
 
-Nothing is written to drafts/ or cases/ until the supervisor approves.
+Nothing is written to drafts or cases until the supervisor approves.
 """
 
 import json
-import os
 import re
 import secrets
 from datetime import date, datetime
@@ -18,6 +17,7 @@ from typing import List, Optional
 import audit
 import drafts
 import general
+import storage
 import timeline
 from drafts import UndertrialFacts
 
@@ -31,16 +31,8 @@ SENT_BACK = "sent back"
 APPROVED = "approved"
 
 
-def _dirs(base: Path):
-    return base / "pending", base / "drafts", base / "cases"
-
-
-def _write(path: Path, text: str) -> None:
-    """Write via a temporary file, so a half-written file is never left behind."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, path)
+def _save_pending(record: dict, base: Path) -> None:
+    storage.write_json("pending", record["id"], record, base)
 
 
 def _check_id(case_id: str) -> None:
@@ -50,27 +42,34 @@ def _check_id(case_id: str) -> None:
 
 def new_case_id(base: Path = HERE, today: Optional[date] = None) -> str:
     today = today or date.today()
-    pending, drafts_dir, cases = _dirs(base)
+    store = storage.backend(base)
     while True:
         case_id = f"U-{today:%Y%m%d}-{secrets.choice('abcdefghjkmnpqrstuvwxyz')}{secrets.token_hex(2)[:3]}"
-        if not any((d / f"{case_id}{ext}").exists()
-                   for d, ext in ((pending, ".json"), (drafts_dir, ".md"), (cases, ".md"))):
+        if not any(store.read(kind, case_id) is not None for kind in ("pending", "drafts", "cases", "tracker")):
             return case_id
 
 
 def submit(draft_text: str, facts: UndertrialFacts, base: Path = HERE, ai: Optional[dict] = None,
-           draft_lang: str = "en", readiness: Optional[list] = None, ledger: Optional[list] = None) -> str:
-    """Send a draft to the supervisor. Saved in pending/ only, plus its audit record.
+           draft_lang: str = "en", readiness: Optional[list] = None, ledger: Optional[list] = None,
+           case_id: Optional[str] = None, by: str = "") -> str:
+    """Send a draft to the supervisor. Saved in pending only, plus its audit record.
 
     ai: what the AI did for this case ({"model", "read_at", "extracted", "not_accepted"}),
         or None if no AI was used.
+    case_id: the case number given when intake started (case slip); a new one if None.
+    by: the volunteer's name or initials, saved with the action.
     """
     if not draft_text.startswith(drafts.DRAFT_HEADER):
         raise ValueError(f"A draft must start with '{drafts.DRAFT_HEADER}'.")
     found = drafts.personal_details_found(draft_text)
     if found:
         raise ValueError("The draft seems to contain " + " and ".join(found) + ". Remove it first.")
-    case_id = new_case_id(base)
+    if case_id:
+        _check_id(case_id)
+        if storage.backend(base).read("pending", case_id) is not None:
+            raise ValueError("This case already has a draft waiting for the supervisor.")
+    else:
+        case_id = new_case_id(base)
     record = {
         "id": case_id,
         "case_type": getattr(facts, "CASE_TYPE", "Undertrial"),
@@ -83,10 +82,12 @@ def submit(draft_text: str, facts: UndertrialFacts, base: Path = HERE, ai: Optio
         "draft_lang": draft_lang,
         "readiness": readiness or [],  # [{"key", "status", "note"}] when sent
         "ledger": ledger or [],        # [{"fact", "value", "source", "source_line"}]: where each fact came from
+        "sent_by": by,
     }
-    pending, _, _ = _dirs(base)
-    _write(pending / f"{case_id}.json", json.dumps(record, indent=2, ensure_ascii=False))
+    _save_pending(record, base)
     audit.start_record(case_id, facts.to_dict(), ai, base=base)
+    if by:
+        audit.add_event(case_id, "sent to the supervisor", audit.VOLUNTEER, f"by {by}", base=base)
     if readiness is not None:
         open_items = [r for r in readiness if r["status"] in ("missing", "uncertain")]
         audit.add_event(case_id, "readiness when sent", audit.VOLUNTEER,
@@ -97,15 +98,14 @@ def submit(draft_text: str, facts: UndertrialFacts, base: Path = HERE, ai: Optio
 
 def _load(case_id: str, base: Path) -> dict:
     _check_id(case_id)
-    pending, _, _ = _dirs(base)
-    return json.loads((pending / f"{case_id}.json").read_text(encoding="utf-8"))
+    record = storage.read_json("pending", case_id, base)
+    if record is None:
+        raise ValueError("No such draft waiting or sent back.")
+    return record
 
 
 def list_pending(base: Path = HERE, status: str = WAITING) -> List[dict]:
-    pending, _, _ = _dirs(base)
-    if not pending.exists():
-        return []
-    records = [json.loads(p.read_text(encoding="utf-8")) for p in sorted(pending.glob("U-*.json"))]
+    records = [r for r in storage.all_json("pending", base) if ID_PATTERN.match(r.get("id", ""))]
     return [r for r in records if r["status"] == status]
 
 
@@ -137,10 +137,10 @@ def approve(case_id: str, edited_text: Optional[str] = None, base: Path = HERE,
         result = drafts.recalculate(facts)
         case_text = drafts.make_case_file(case_id, facts, result, approved_on)
 
-    pending, drafts_dir, cases = _dirs(base)
-    _write(drafts_dir / f"{case_id}.md", text if text.endswith("\n") else text + "\n")
-    _write(cases / f"{case_id}.md", case_text)
-    (pending / f"{case_id}.json").unlink()
+    store = storage.backend(base)
+    store.write("drafts", case_id, text if text.endswith("\n") else text + "\n")
+    store.write("cases", case_id, case_text)
+    store.delete("pending", case_id)
     audit.add_event(case_id, "approved", audit.SUPERVISOR,
                     "edited by the supervisor before approval" if edited else "approved as sent", base=base)
     # Next-step timeline for the approved case
@@ -161,12 +161,11 @@ def reject(case_id: str, reason: str, base: Path = HERE) -> None:
         raise ValueError("Only waiting drafts can be sent back.")
     record["status"] = SENT_BACK
     record["reason"] = reason
-    pending, _, _ = _dirs(base)
-    _write(pending / f"{case_id}.json", json.dumps(record, indent=2, ensure_ascii=False))
+    _save_pending(record, base)
     audit.add_event(case_id, "sent back", audit.SUPERVISOR, f"reason: {reason}", base=base)
 
 
-def resend(case_id: str, fixed_text: str, base: Path = HERE) -> None:
+def resend(case_id: str, fixed_text: str, base: Path = HERE, by: str = "") -> None:
     """Fix a sent-back draft and send it to the supervisor again (same case number)."""
     record = _load(case_id, base)
     if record["status"] != SENT_BACK:
@@ -181,9 +180,8 @@ def resend(case_id: str, fixed_text: str, base: Path = HERE) -> None:
         {"sent_back_reason": record["reason"], "resent": datetime.now().isoformat(timespec="minutes")}
     )
     record.update(status=WAITING, reason="", draft=text)
-    pending, _, _ = _dirs(base)
-    _write(pending / f"{case_id}.json", json.dumps(record, indent=2, ensure_ascii=False))
-    audit.add_event(case_id, "fixed and resent", audit.VOLUNTEER, base=base)
+    _save_pending(record, base)
+    audit.add_event(case_id, "fixed and resent", audit.VOLUNTEER, f"by {by}" if by else "", base=base)
 
 
 def get_pending(case_id: str, base: Path = HERE) -> dict:
@@ -193,44 +191,39 @@ def get_pending(case_id: str, base: Path = HERE) -> dict:
 def list_cases(base: Path = HERE) -> List[dict]:
     """Every case with its status: waiting, sent back (with reason) or approved."""
     cases_list = []
-    pending, _, cases = _dirs(base)
-    if pending.exists():
-        for p in sorted(pending.glob("U-*.json")):
-            r = json.loads(p.read_text(encoding="utf-8"))
+    store = storage.backend(base)
+    for r in storage.all_json("pending", base):
+        if ID_PATTERN.match(r.get("id", "")):
             cases_list.append({"id": r["id"], "case_type": r["case_type"], "status": r["status"],
                                "reason": r.get("reason", ""), "date": r["submitted"][:10]})
-    if cases.exists():
-        for p in sorted(cases.glob("U-*.md")):
-            if not ID_PATTERN.match(p.stem):
-                continue
-            case_type = "Undertrial"
-            for line in p.read_text(encoding="utf-8").splitlines()[:8]:
-                if line.startswith("- Case type: "):
-                    case_type = (general.CASE_TYPE if line.endswith(general.CASE_TYPE_LABEL)
-                                 else line[len("- Case type: "):].split(" (")[0])
-            cases_list.append({"id": p.stem, "case_type": case_type, "status": APPROVED,
-                               "reason": "", "date": "", "file": p})
+    for case_id, text in store.all("cases"):
+        if not ID_PATTERN.match(case_id):
+            continue
+        case_type = "Undertrial"
+        for line in text.splitlines()[:8]:
+            if line.startswith("- Case type: "):
+                case_type = (general.CASE_TYPE if line.endswith(general.CASE_TYPE_LABEL)
+                             else line[len("- Case type: "):].split(" (")[0])
+        cases_list.append({"id": case_id, "case_type": case_type, "status": APPROVED,
+                           "reason": "", "date": "", "text": text})
     return sorted(cases_list, key=lambda c: c["id"], reverse=True)
 
 
-def delete_case(case_id: str, base: Path = HERE) -> List[str]:
-    """Remove a case completely: waiting or sent-back record, approved draft, case file, timeline and its
-    problem reports. The audit record keeps only "case deleted" with the date. Returns what was removed."""
+def approved_draft(case_id: str, base: Path = HERE) -> Optional[str]:
     _check_id(case_id)
-    removed = []
-    for folder, ext in (("pending", ".json"), ("drafts", ".md"), ("cases", ".md"), ("timelines", ".json")):
-        path = base / folder / f"{case_id}{ext}"
-        if path.exists():
-            path.unlink()
-            removed.append(folder)
+    return storage.backend(base).read("drafts", case_id)
+
+
+def delete_case(case_id: str, base: Path = HERE) -> List[str]:
+    """Remove a case completely: waiting or sent-back record, approved draft, case file, timeline, the
+    tracker record (facts, visit log) and its problem reports. The audit record keeps only "case deleted"
+    with the date. Returns what was removed."""
+    _check_id(case_id)
+    store = storage.backend(base)
+    removed = [kind for kind in ("pending", "drafts", "cases", "timelines", "tracker") if store.delete(kind, case_id)]
     if not removed and audit.read_record(case_id, base=base) is None:
         raise ValueError("No such case.")
-    problems = base / "problems" / "problems.jsonl"
-    if problems.exists():
-        lines = problems.read_text(encoding="utf-8").splitlines()
-        kept = [l for l in lines if l.strip() and json.loads(l).get("case_id") != case_id]
-        if len(kept) != len([l for l in lines if l.strip()]):
-            _write(problems, "\n".join(kept) + ("\n" if kept else ""))
-            removed.append("problems")
+    if store.log_remove("problems", lambda e: e.get("case_id") == case_id):
+        removed.append("problems")
     audit.replace_with_deletion(case_id, base=base)
     return removed

@@ -11,9 +11,10 @@ import hmac
 import json
 import os
 import re
-from datetime import date
+from datetime import date, timedelta
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 import audit
 import consistency
@@ -30,8 +31,10 @@ import multilingual
 import ledger
 import readiness
 import section479
+import storage
 import store
 import timeline
+import tracker
 import ui
 
 st.set_page_config(page_title=lang.t("app.name", st.session_state.get("ui_lang", lang.DEFAULT)),
@@ -145,7 +148,7 @@ def report_problem_box(key: str, where: str, case_id=None):
 def ai_info_for_audit():
     """What the AI did for this form, for the audit record (None if no AI was used)."""
     ai = st.session_state.get("ai")
-    if not ai:
+    if not ai or not ai.get("model"):
         return None
     reading = ai["reading"]
     return {"model": ai["model"], "read_at": ai["read_at"], "extracted": dict(reading.values),
@@ -153,8 +156,15 @@ def ai_info_for_audit():
 
 
 def new_case_screen():
+    open_by_code()
     st.title(t("ui.new_case.title"))
     st.caption(t("ui.new_case.caption"))
+    volunteer_line()
+    continue_box("new")
+    msg = st.session_state.pop("case-msg", None)
+    if msg:
+        st.error(msg[1])
+    current_case_panel()
 
     case_type = st.radio(t("ui.new_case.kind"), CASE_TYPES, horizontal=True, key="case_type",
                          format_func=option_text("case_type."))
@@ -163,8 +173,9 @@ def new_case_screen():
     else:
         init_form()
         notes_box()
-        if not ask_missing_facts():  # while missing facts are asked one at a time, the form waits
-            undertrial_form()
+        if not conflicts_block(st.session_state.get("case_id")):  # contradictions first: no dates until resolved
+            if not ask_missing_facts():  # while missing facts are asked one at a time, the form waits
+                undertrial_form()
     sent = st.session_state.get("sent") if case_type != ANY_CASE else None
     case_id = sent["id"] if sent else st.session_state.get("gen_sent")
     report_problem_box("new-case", "New case", case_id)
@@ -267,8 +278,12 @@ def read_general():
     prepared = prepare_notes("g_notes", "gen_error")
     if prepared is None:
         return
+    case_id = st.session_state.get("case_id")
+    record = tracker.load(case_id) if case_id else None
     try:
-        notes_reading = llm.read_general_notes(prepared.text, output_lang=code() if code() in ("en", "hi") else "en")
+        extra = {"known": tracker.known(record)} if record and record.get("facts") else {}  # continuing a case
+        notes_reading = llm.read_general_notes(prepared.text, output_lang=code() if code() in ("en", "hi") else "en",
+                                               **extra)
     except llm.AIUnavailable as err:
         st.session_state["gen_error"] = str(err)
         return
@@ -276,8 +291,28 @@ def read_general():
     removed = dict(prepared.removed)
     for kind, n in notes_reading.removed.items():
         removed[kind] = removed.get(kind, 0) + n
+    answers = []
+    try:
+        case_id = ensure_case(general.CASE_TYPE)
+        tracker.merge_facts(case_id, reading.facts, who(), "story read by AI, checked by code")
+        tracker.add_summary(case_id, reading.what_happened, reading.issues, reading.documents_held, who(),
+                            ai_model=notes_reading.model)
+        record = tracker.load(case_id)
+        # The case so far plus the new story; known facts (earlier values while a contradiction is open)
+        reading.what_happened = list(record["summary"])
+        reading.issues = [tuple(i) for i in record["issues"]]
+        reading.documents_held = list(record["documents_held"])
+        answers = [tuple(a) for a in record.get("answers", [])]
+        asked = {q for q, _ in answers}
+        reading.questions = [q for q in reading.questions if q not in asked]
+        known_values = tracker.known_for_form(record)
+    except (tracker.TrackerError, storage.StorageError) as err:
+        tracker_error(err)
+        known_values = {}
     _start_general(reading, notes_reading.model, removed)
-    st.session_state["gen"].update(translated_from=prepared.translated_from, translation=prepared.text)
+    st.session_state["gen"]["facts"].update(known_values)
+    st.session_state["gen"].update(translated_from=prepared.translated_from, translation=prepared.text,
+                                   answers=answers)
 
 
 def start_general_without_ai():
@@ -286,7 +321,17 @@ def start_general_without_ai():
         what_happened=[general.clean(x) for x in re.split(r"(?<=[.!?।])\s+", text) if x.strip()][:6],
         issues=[("other", t("ui.general.problem_described"))])
     st.session_state.pop("gen_error", None)
+    try:
+        case_id = ensure_case(general.CASE_TYPE)
+        tracker.add_summary(case_id, reading.what_happened, [], [], who())
+        record = tracker.load(case_id)
+        reading.what_happened = list(record["summary"])
+        known_values = tracker.known_for_form(record)
+    except (tracker.TrackerError, storage.StorageError) as err:
+        tracker_error(err)
+        known_values = {}
     _start_general(reading, None, {})
+    st.session_state["gen"]["facts"].update(known_values)
 
 
 def clear_general():
@@ -327,6 +372,11 @@ def answer_general(kind: str, ref, skip: bool = False):
             gen["unanswered"].append(question)
         elif text:
             gen["answers"].append((question, text))
+            if st.session_state.get("case_id"):
+                try:
+                    tracker.add_answers(st.session_state["case_id"], [(question, text)], who())
+                except (tracker.TrackerError, storage.StorageError) as err:
+                    tracker_error(err)
         else:
             return  # nothing typed yet: stay on this question
         gen["q_index"] += 1
@@ -346,6 +396,8 @@ def answer_general(kind: str, ref, skip: bool = False):
         gen["skipped"].add(fact)
     elif value is not None:
         gen["facts"][fact] = value
+        if st.session_state.get("case_id"):
+            merge_into_case(st.session_state["case_id"], {fact: value}, "answer to a question")
 
 
 def skip_general_questions():
@@ -402,6 +454,7 @@ def general_screen():
     if gen:  # urgent actions always at the top
         for action in general.urgent_actions(gen["facts"], gen["reading"].unconfirmed_yes):
             st.error(f"## \U0001F6A8 {t(URGENT_KEYS[action])}")
+    blocked = conflicts_block(st.session_state.get("case_id")) if gen else False
 
     if gen is None or st.session_state.get("g_story_open"):
         flow_title(1)
@@ -432,6 +485,8 @@ def general_screen():
     if gen["removed"]:
         st.caption(t("ui.removed_before_sending") + ", ".join(f"{n} × {k}" for k, n in gen["removed"].items()))
     show_translation_note(gen.get("translated_from"), gen.get("translation", ""))
+    if blocked:
+        return  # "Cannot conclude yet" until a volunteer chooses which value is right
 
     question = general_question(gen)
     if question:
@@ -546,9 +601,11 @@ def general_summary(gen):
             ai = {"model": gen["model"], "read_at": gen["read_at"], "extracted": dict(reading.facts),
                   "not_accepted": sorted(set(reading.dropped))}
         try:
+            case_id = ensure_case(general.CASE_TYPE)
             case_id = store.submit(draft, facts, ai=ai, draft_lang=draft_lang, readiness=readiness_rows(items),
-                                   ledger=[e.as_dict() for e in entries])
-        except ValueError as err:
+                                   ledger=[e.as_dict() for e in entries], case_id=case_id, by=who())
+            tracker.confirm_facts(case_id, gen["facts"], who())
+        except (ValueError, storage.StorageError) as err:
             st.error(str(err))
             return
         st.session_state["gen_sent"] = case_id
@@ -594,13 +651,22 @@ def read_notes():
     for key, value in FORM_DEFAULTS.items():  # start from an empty form
         st.session_state[key] = value
     st.session_state["f_today"] = date.today()
+    values = dict(reading.values)
+    try:
+        case_id = ensure_case("Undertrial")
+        tracker.merge_facts(case_id, reading.values, who(), "notes read by AI, checked by code")
+        record = tracker.load(case_id)
+        tracker.add_summary(case_id, [], [], [], who(), ai_model=notes_reading.model)
+        values.update(tracker.known_for_form(record))  # earlier values stay while a contradiction is open
+    except (tracker.TrackerError, storage.StorageError) as err:
+        tracker_error(err)
     st.session_state["ai"] = {"reading": reading, "removed": removed, "skipped": set(),
-                              "values": dict(reading.values), "model": notes_reading.model,
+                              "values": values, "model": notes_reading.model,
                               "read_at": audit.now(), "translated_from": prepared.translated_from,
                               "translation": prepared.text}
     st.session_state.pop("draft", None)
-    if not intake.missing_facts(reading.values):
-        apply_to_form(reading.values)
+    if not intake.missing_facts(values):
+        apply_to_form(values)
 
 
 def clear_notes():
@@ -645,6 +711,10 @@ def answer_fact(fact: str, skip: bool = False):
         if fact == "section":
             ai["values"]["law"] = st.session_state.get("q-law", "IPC")
             ai["values"]["more_than_one_section"] = bool(st.session_state.get("q-many"))
+        if st.session_state.get("case_id"):
+            merge_into_case(st.session_state["case_id"],
+                            {f: ai["values"][f] for f in (fact, "law", "more_than_one_section") if f in ai["values"]},
+                            "answer to a question")
     if not intake.missing_facts(ai["values"], ai["skipped"]):
         apply_to_form(ai["values"])
 
@@ -1020,9 +1090,16 @@ def draft_section(known: dict, result: section479.Result):
         st.success(t("ui.sent", case_id=sent["id"]))
     elif st.button(send_label(items), key="send-f"):
         try:
+            case_id = ensure_case("Undertrial")
             case_id = store.submit(text, facts, ai=ai_info, draft_lang=draft_lang, readiness=readiness_rows(items),
-                                   ledger=[e.as_dict() for e in entries])
-        except ValueError as err:
+                                   ledger=[e.as_dict() for e in entries], case_id=case_id, by=who())
+            tracker.confirm_facts(case_id, {
+                "law": facts.law_typed, "section": facts.section_typed, "custody_began": facts.custody_began,
+                "offence_date": facts.offence_date, "never_convicted": facts.never_convicted,
+                "other_cases_pending": facts.other_cases_pending, "more_than_one_section": facts.more_than_one_section,
+                "delay_days_by_accused": facts.delay_days_by_accused, "lawyer": facts.lawyer,
+                "answer": facts.answer or None}, who())
+        except (ValueError, storage.StorageError) as err:
             st.error(str(err))
             return
         st.session_state["sent"] = {"sig": signature, "id": case_id}
@@ -1262,39 +1339,85 @@ def handoff_box(case_id: str):
         (st.success if msg[0] == "ok" else st.error)(msg[1])
 
 
+def continue_from_tracker(case_id: str):
+    record = tracker.load(case_id)
+    if record:
+        open_existing(record)
+        go("New case")
+
+
+def tracker_filters(rows: list) -> list:
+    """Filters: status, camp, volunteer, and hide "intake not finished"."""
+    c1, c2, c3 = st.columns(3)
+    status = c1.selectbox(t("tr.filter.status"), [None] + tracker.STATUSES, key="tr-status",
+                          format_func=lambda s: t("tr.all") if s is None else status_text(s))
+    camps = sorted({r["camp"] for r in rows if r["camp"]})
+    camp = c2.selectbox(t("tr.filter.camp"), [None] + camps, key="tr-camp",
+                        format_func=lambda c: t("tr.all") if c is None else c)
+    names = sorted({n for r in rows for n in r["volunteers"]})
+    volunteer = c3.selectbox(t("tr.filter.volunteer"), [None] + names, key="tr-volunteer",
+                             format_func=lambda n: t("tr.all") if n is None else n)
+    hide = st.checkbox(t("tr.hide_intake"), key="tr-hide-intake")
+    return tracker.filter_rows(rows, status=status, camp=camp, volunteer=volunteer, hide_intake=hide)
+
+
+def tracker_table(rows: list):
+    table = [{"case": r["id"], "code": r["code"], "status": status_chip(r["status"]),
+              "next": next_step_text(r),
+              "due": (show_date(date.fromisoformat(r["due"])) if r["due"] else ""),
+              "overdue": r["overdue"], "camp": r["camp"], "who": r["last_by"]} for r in rows]
+    headers = {k: t(f"tr.col.{k}") for k in ("case", "code", "status", "next", "due", "camp", "who")}
+    st.markdown(ui.tracker_table(table, headers, t("tr.overdue")), unsafe_allow_html=True)
+
+
 def my_cases_screen():
+    """The clinic's case tracker: every case with status, next step and due date (overdue in red),
+    filters, and each case's file, visit log, slip and progress."""
     st.title(t("ui.cases.title"))
-    due_this_week_box()
-    cases = store.list_cases()
-    if not cases:
+    volunteer_line()
+    msg = st.session_state.pop("case-msg", None)
+    if msg:
+        st.error(msg[1])
+    try:
+        rows = tracker.rows()
+    except storage.StorageError as err:
+        st.error(str(err))
+        return
+    if not rows:
         st.info(t("ui.cases.none"))
         return
-    for c in cases:
+    shown = tracker_filters(rows)
+    st.caption(t("tr.count", shown=len(shown), total=len(rows)))
+    tracker_table(shown)
+    due_this_week_box()
+    approved_text = {c["id"]: c.get("text", "") for c in store.list_cases() if c["status"] == store.APPROVED}
+    for row in shown:
+        case_id = row["id"]
+        record = tracker.load(case_id)
         with st.container(border=True):
-            status_key = STATUS_KEYS[c["status"]]
-            if c["status"] == store.APPROVED:
-                stage = timeline.stage(timeline.load(c["id"]))
-                status_key = {timeline.SUBMITTED_STAGE: "ui.status.submitted",
-                              timeline.ACKNOWLEDGED_STAGE: "ui.status.acknowledged"}.get(stage, status_key)
-            chip_kind = {"ui.status.waiting": "waiting", "ui.status.sent_back": "sent-back",
-                         "ui.status.approved": "approved", "ui.status.submitted": "submitted",
-                         "ui.status.acknowledged": "acknowledged"}[status_key]
-            label = t(status_key).split(" ", 1)[-1]  # the words, without the old emoji
-            st.markdown(f"**{t('ui.case_title', case_id=c['id'])}** · {case_type_label(c['case_type'])} "
-                        f"&nbsp; {ui.chip(chip_kind, label)}", unsafe_allow_html=True)
-            if c["status"] == store.SENT_BACK:
-                st.warning(t("ui.cases.reason", reason=c["reason"]))
-                fix_and_resend(c["id"])
-            if c["status"] == store.APPROVED:
-                handoff_box(c["id"])
-                timeline_box(c["id"])
+            title = f"**{t('ui.case_title', case_id=case_id)}**"
+            if row["case_type"]:
+                title += f" · {case_type_label(row['case_type'])}"
+            if row["code"]:
+                title += f" · {t('slip.code')} {row['code']}"
+            st.markdown(f"{title} &nbsp; {status_chip(row['status'])}", unsafe_allow_html=True)
+            if row["status"] == tracker.INTAKE:
+                st.button(t("tr.continue"), key=f"tr-cont-{case_id}", on_click=continue_from_tracker, args=(case_id,))
+            if row["status"] == store.SENT_BACK:
+                st.warning(t("ui.cases.reason", reason=store.get_pending(case_id).get("reason", "")))
+                fix_and_resend(case_id)
+            if record:
+                case_tools(case_id, record)
+            if case_id in approved_text:
+                handoff_box(case_id)
+                timeline_box(case_id)
                 with st.expander(t("ui.cases.case_file")):
-                    st.markdown(c["file"].read_text(encoding="utf-8"))
-                draft_file = c["file"].parent.parent / "drafts" / c["file"].name
-                if draft_file.exists():
+                    st.markdown(approved_text[case_id])
+                approved = store.approved_draft(case_id)
+                if approved:
                     with st.expander(t("ui.cases.approved_draft")):
-                        st.code(draft_file.read_text(encoding="utf-8"), language=None, wrap_lines=True)
-            report_problem_box(f"case-{c['id']}", "My cases", c["id"])
+                        st.code(approved, language=None, wrap_lines=True)
+            report_problem_box(f"case-{case_id}", "My cases", case_id)
 
 
 def fix_and_resend(case_id: str):
@@ -1310,7 +1433,7 @@ def fix_and_resend(case_id: str):
     col1, col2 = st.columns(2)
     if col1.button(t("ui.cases.resend"), type="primary", key=f"resend-{case_id}"):
         try:
-            store.resend(case_id, fixed)
+            store.resend(case_id, fixed, by=who())
         except ValueError as err:
             st.error(str(err))
             return
@@ -1613,6 +1736,407 @@ def review_one(record: dict):
             st.error(str(err))
 
 
+# ---------- clinic sign-in, and the shared case tracker ----------
+# One clinic passcode for volunteers (CLINIC_PASSCODE) and a separate supervisor password
+# (SUPERVISOR_PASSWORD), both only in the host's secret settings / .streamlit/secrets.toml.
+
+def clinic_passcode() -> str:
+    return storage.setting("CLINIC_PASSCODE")
+
+
+def clinic_name() -> str:
+    return storage.setting("CLINIC_NAME") or t("slip.default_clinic")
+
+
+def app_url() -> str:
+    return storage.setting("APP_URL")
+
+
+def who() -> str:
+    """The volunteer's name or initials, saved with every action. Without a clinic passcode (practice
+    on one computer) a stand-in is used if none was typed."""
+    name = (st.session_state.get("volunteer") or "").strip()
+    return name or ("" if clinic_passcode() else t("gate.no_name"))
+
+
+def clinic_ok() -> bool:
+    return not clinic_passcode() or bool(st.session_state.get("clinic_ok"))
+
+
+def clinic_sign_in():
+    typed = st.session_state.get("gate-pass") or ""
+    name = (st.session_state.get("gate-name") or "").strip()
+    if not name:
+        st.session_state["gate-msg"] = t("gate.need_name")
+        return
+    if not hmac.compare_digest(typed.encode(), clinic_passcode().encode()):
+        st.session_state["gate-msg"] = t("gate.wrong")
+        return
+    st.session_state.update(clinic_ok=True, volunteer=tracker.clean_text(name, 40), **{"gate-pass": ""})
+
+
+def clinic_gate():
+    st.title(t("gate.title"))
+    st.caption(t("gate.caption"))
+    with st.container(border=True):
+        st.text_input(t("gate.passcode"), type="password", key="gate-pass")
+        st.text_input(t("gate.name"), key="gate-name", max_chars=40, help=t("gate.name_help"))
+        st.button(t("gate.go"), type="primary", key="gate-go", on_click=clinic_sign_in)
+    msg = st.session_state.pop("gate-msg", None)
+    if msg:
+        st.error(msg)
+
+
+def volunteer_line():
+    """Who is acting, and today's camp (optional, tagged on new cases)."""
+    if clinic_passcode():
+        c1, c2 = st.columns([4, 1])
+        c1.caption(t("gate.signed_in", name=who()))
+        if c2.button(t("gate.sign_out"), key="gate-out", type="tertiary"):
+            for key in ("clinic_ok", "volunteer", "case_id"):
+                st.session_state.pop(key, None)
+            st.rerun()
+    else:
+        st.text_input(t("gate.name"), key="volunteer", max_chars=40, help=t("gate.name_help"))
+    with st.expander(t("camp.today")):
+        st.caption(t("camp.today_caption"))
+        c1, c2, c3 = st.columns(3)
+        c1.text_input(t("camp.village"), key="camp-today-village", max_chars=60)
+        c2.text_input(t("camp.district"), key="camp-today-district", max_chars=60)
+        c3.date_input(t("camp.date"), key="camp-today-date", format="DD/MM/YYYY", max_value=date.today())
+
+
+def todays_camp():
+    village = (st.session_state.get("camp-today-village") or "").strip()
+    district = (st.session_state.get("camp-today-district") or "").strip()
+    on = st.session_state.get("camp-today-date")
+    return {"village": village, "district": district, "on": on or date.today()} if village and district else None
+
+
+def ensure_case(case_type: str) -> str:
+    """The case number for the intake in progress: opened (with its slip code) the first time."""
+    case_id = st.session_state.get("case_id")
+    if case_id:
+        return case_id
+    record = tracker.open_case(case_type, who(), camp=todays_camp())
+    st.session_state["case_id"] = record["id"]
+    st.session_state["slip_new"] = True
+    return record["id"]
+
+
+def tracker_error(err: Exception):
+    st.session_state["case-msg"] = ("error", str(err))
+
+
+def clear_case():
+    """Start another case: the current one stays saved in the tracker."""
+    clear_general()
+    clear_notes()
+    for key in ("case_id", "slip_new", "case_opened", "sent", "case-msg"):
+        st.session_state.pop(key, None)
+
+
+def continue_case(where: str):
+    st.session_state["continue_code"] = st.session_state.get(f"cont-code-{where}", "")
+    st.session_state[f"cont-code-{where}"] = ""
+    go("New case")
+
+
+def open_existing(record: dict):
+    """Open a case from its slip code. Known facts fill the questions, so they are never asked again."""
+    clear_case()
+    case_id = record["id"]
+    st.session_state["case_id"] = case_id
+    st.session_state["case_opened"] = True
+    values = tracker.known_for_form(record)
+    if record.get("case_type") == "Undertrial":
+        st.session_state["case_type"] = "Undertrial"
+        init_form()
+        st.session_state["ai"] = {"reading": intake.Reading(values=dict(values)), "removed": {}, "skipped": set(),
+                                  "values": dict(values), "model": record.get("ai_model"),
+                                  "read_at": record.get("ai_read_at"), "translated_from": None, "translation": ""}
+        if not intake.missing_facts(values):
+            apply_to_form(values)
+    else:
+        st.session_state["case_type"] = ANY_CASE
+        reading = general.GeneralReading(what_happened=list(record.get("summary", [])),
+                                         issues=[tuple(i) for i in record.get("issues", [])],
+                                         documents_held=list(record.get("documents_held", [])), facts=dict(values))
+        _start_general(reading, record.get("ai_model"), {})
+        st.session_state["gen"].update(answers=[tuple(a) for a in record.get("answers", [])],
+                                       read_at=record.get("ai_read_at"))
+    try:
+        audit.add_event(case_id, "case continued", audit.VOLUNTEER, f"by {who()}")
+    except storage.StorageError:
+        pass
+
+
+def open_by_code():
+    """A code typed on Home or New case, or from the slip's QR code (?code=...)."""
+    typed = st.session_state.pop("continue_code", None)
+    if not typed:
+        return
+    try:
+        open_existing(tracker.find_by_code(typed))
+    except (tracker.TrackerError, storage.StorageError) as err:
+        st.session_state["case-msg"] = ("error", str(err))
+
+
+def continue_box(where: str):
+    with st.expander(t("cont.title"), expanded=where == "new" and not st.session_state.get("case_id")):
+        st.text_input(t("cont.code"), key=f"cont-code-{where}", max_chars=12, placeholder="K7M2QX")
+        st.button(t("cont.open"), key=f"cont-go-{where}", on_click=continue_case, args=(where,))
+        st.caption(t("cont.qr_hint"))
+
+
+def merge_into_case(case_id: str, facts: dict, source: str):
+    try:
+        tracker.merge_facts(case_id, facts, who(), source)
+    except (tracker.TrackerError, storage.StorageError) as err:
+        tracker_error(err)
+
+
+def resolve_conflict(case_id: str, fact: str, keep: str):
+    try:
+        tracker.resolve(case_id, fact, keep, who())
+    except (tracker.TrackerError, storage.StorageError) as err:
+        tracker_error(err)
+        return
+    record = tracker.load(case_id)  # the questions and the form use the chosen value
+    value = tracker.known_for_form(record).get(fact)
+    if st.session_state.get("gen"):
+        st.session_state["gen"]["facts"][fact] = value
+    if st.session_state.get("ai"):
+        st.session_state["ai"]["values"][fact] = value
+        apply_to_form({fact: value})
+
+
+def any_fact_label(fact: str) -> str:
+    for key in (f"fact.{fact}", f"tfact.{fact}"):
+        if key in lang.strings("en"):
+            return t(key)
+    return fact
+
+
+def show_fact_value(fact: str, value) -> str:
+    if fact in tracker.DATE_FACTS and isinstance(value, str):
+        try:
+            return show_date(date.fromisoformat(value))
+        except ValueError:
+            return value
+    if fact == "annual_income" and isinstance(value, int):
+        return f"₹{value:,} " + t("tfact.per_year")
+    return show_value(value)
+
+
+def conflicts_block(case_id) -> bool:
+    """A new value that contradicts an earlier one: "Cannot conclude yet" with both values, until a
+    volunteer chooses. Returns True while any is open (no dates, summary or draft until then)."""
+    record = tracker.load(case_id) if case_id else None
+    open_ones = tracker.open_conflicts(record) if record else []
+    for c in open_ones:
+        fact = any_fact_label(c["fact"])
+        earlier, new = c["earlier"], c["new"]
+        st.error(t("abstain.title", reason=t("abstain.earlier_vs_new", fact=fact,
+                                              earlier=show_fact_value(c["fact"], earlier["value"]),
+                                              new=show_fact_value(c["fact"], new["value"]))))
+        st.caption(t("abstain.earlier_vs_new_who", earlier_by=earlier["by"], earlier_on=earlier["on"][:10],
+                     new_by=new["by"], new_on=new["on"][:10]) + " " + t("abstain.needed.earlier_vs_new"))
+        b1, b2 = st.columns(2)
+        b1.button(t("abstain.keep_earlier", value=show_fact_value(c["fact"], earlier["value"])),
+                  key=f"keep-earlier-{c['fact']}", on_click=resolve_conflict, args=(case_id, c["fact"], "earlier"))
+        b2.button(t("abstain.use_new", value=show_fact_value(c["fact"], new["value"])),
+                  key=f"keep-new-{c['fact']}", on_click=resolve_conflict, args=(case_id, c["fact"], "new"))
+    return bool(open_ones)
+
+
+# ----- the case slip -----
+
+def slip_box(record: dict, expanded: bool = False):
+    with st.expander(t("slip.title"), expanded=expanded):
+        st.caption(t("slip.caption"))
+        lines = tracker.slip_lines(record, clinic_name())
+        qr = tracker.qr_png_data_uri(app_url(), record["code"])
+        page = ui.slip_page(lines, qr, t("slip.print"), t("slip.save_image"))
+        components.html(page, height=640)
+        st.download_button(t("slip.download_print"), ui.slip_page(lines, qr, print_only=True),
+                           file_name=f"case-slip-{record['code']}.html", mime="text/html",
+                           key=f"slip-dl-{record['id']}")
+        if not app_url():
+            st.caption(t("slip.no_url"))
+
+
+# ----- the case file: summary, facts known, still missing, documents, next step, visits -----
+
+def still_missing(record: dict) -> list:
+    values = tracker.known_for_form(record)
+    if record.get("case_type") == "Undertrial":
+        return [fact_label(f) for f in intake.missing_facts(values)]
+    return [t(f"elig.q.{m}") for m in general.check_eligibility(values).missing]
+
+
+def case_file_view(case_id: str, record: dict):
+    status = tracker.status_of(case_id)
+    st.markdown(f"**{t('cf.summary')}**")
+    if record.get("summary"):
+        st.markdown("\n".join(f"- {line}" for line in record["summary"]))
+    else:
+        st.caption(t("cf.no_summary"))
+    st.markdown(f"**{t('cf.facts')}**")
+    facts = record.get("facts", {})
+    if facts:
+        st.markdown("\n".join(f"- {any_fact_label(f)}: {show_fact_value(f, e['value'])} "
+                              f"<small>· {t('cf.added', on=e['on'][:10], by=e['by'])}</small>"
+                              for f, e in facts.items()), unsafe_allow_html=True)
+    else:
+        st.caption(t("cf.no_facts"))
+    for c in tracker.open_conflicts(record):
+        st.warning(t("cf.conflict", fact=any_fact_label(c["fact"])))
+    missing = still_missing(record)
+    st.markdown(f"**{t('cf.missing')}**")
+    st.markdown("\n".join(f"- {m}" for m in missing) if missing else t("cf.nothing_missing"))
+    st.markdown(f"**{t('cf.documents')}**")
+    held = record.get("documents_held", [])
+    if held:
+        st.markdown(t("cf.held") + " " + ", ".join(held))
+    categories = [i[0] for i in record.get("issues", [])] or (
+        ["arrest_or_custody"] if record.get("case_type") == "Undertrial" else ["other"])
+    for _, items, source in general.document_lists(categories, held, record.get("summary", [])):
+        if items:
+            st.markdown(t("cf.to_collect") + " " + ", ".join(lang.strings(code()).get(f"doc:{x}", x) for x in items))
+            if source:
+                st.caption(source)
+    step, due, tl_step = tracker.next_step(record, status, case_id)
+    st.markdown(f"**{t('cf.next')}** " + (step_title(tl_step) if tl_step else lang.strings(code()).get(
+        f"next:{step}", t(f"tr.next.{step}") if f"tr.next.{step}" in lang.strings("en") else step))
+                + (f" · {t('cf.due', due=show_date(date.fromisoformat(due)))}" if due else ""))
+    st.markdown(f"**{t('cf.visits')}**")
+    visits = record.get("visits", [])
+    if not visits:
+        st.caption(t("cf.no_visits"))
+    for v in reversed(visits):
+        parts = [f"**{show_date(date.fromisoformat(v['on']))}** · {t('visit.how.' + v['how'])} · {v['by']}"]
+        for key in ("learned", "done"):
+            if v.get(key):
+                parts.append(f"{t('visit.' + key)}: {v[key]}")
+        if v.get("next_step"):
+            parts.append(f"{t('visit.next')}: {v['next_step']}"
+                         + (f" ({show_date(date.fromisoformat(v['next_due']))})" if v.get("next_due") else ""))
+        st.markdown("- " + "  \n  ".join(parts))
+    if record.get("camp"):
+        st.caption(t("camp.tagged", camp=tracker.camp_label(record["camp"])))
+    st.caption(t("cf.last", by=record.get("last_by", ""), at=(record.get("last_at") or "").replace("T", " ")))
+
+
+def save_visit(case_id: str):
+    get = st.session_state.get
+    try:
+        tracker.add_visit(case_id, get(f"vis-on-{case_id}") or date.today(), who(), get(f"vis-how-{case_id}") or "",
+                          learned=get(f"vis-learned-{case_id}") or "", done=get(f"vis-done-{case_id}") or "",
+                          next_step=get(f"vis-next-{case_id}") or "", next_due=get(f"vis-due-{case_id}"))
+    except (tracker.TrackerError, storage.StorageError) as err:
+        st.session_state[f"vis-msg-{case_id}"] = ("error", str(err))
+        return
+    for key in ("learned", "done", "next"):
+        st.session_state[f"vis-{key}-{case_id}"] = ""
+    st.session_state[f"vis-due-{case_id}"] = None
+    st.session_state[f"vis-msg-{case_id}"] = ("ok", t("visit.saved"))
+
+
+def visit_form(case_id: str):
+    with st.expander(t("visit.title")):
+        st.caption(t("visit.caption"))
+        c1, c2 = st.columns(2)
+        c1.date_input(t("visit.on"), key=f"vis-on-{case_id}", value=date.today(), format="DD/MM/YYYY",
+                      max_value=date.today())
+        c2.selectbox(t("visit.how"), tracker.VISIT_WAYS, key=f"vis-how-{case_id}", format_func=option_text("visit.how."))
+        st.text_area(t("visit.learned"), key=f"vis-learned-{case_id}", max_chars=300, height=80)
+        st.text_area(t("visit.done"), key=f"vis-done-{case_id}", max_chars=300, height=80)
+        c3, c4 = st.columns([2, 1])
+        c3.text_input(t("visit.next"), key=f"vis-next-{case_id}", max_chars=200)
+        c4.date_input(t("visit.next_due"), key=f"vis-due-{case_id}", value=None, format="DD/MM/YYYY",
+                      min_value=date.today() - timedelta(days=365))
+        st.button(t("visit.save"), key=f"vis-save-{case_id}", on_click=save_visit, args=(case_id,), type="primary")
+        msg = st.session_state.pop(f"vis-msg-{case_id}", None)
+        if msg:
+            (st.success if msg[0] == "ok" else st.error)(msg[1])
+
+
+def save_camp(case_id: str):
+    get = st.session_state.get
+    try:
+        tracker.set_camp(case_id, get(f"camp-village-{case_id}") or "", get(f"camp-district-{case_id}") or "",
+                         get(f"camp-date-{case_id}") or date.today(), who())
+    except (tracker.TrackerError, storage.StorageError) as err:
+        st.session_state[f"camp-msg-{case_id}"] = ("error", str(err))
+        return
+    st.session_state[f"camp-msg-{case_id}"] = ("ok", t("camp.saved"))
+
+
+def camp_form(case_id: str, record: dict):
+    with st.expander(t("camp.title")):
+        camp = record.get("camp") or {}
+        c1, c2, c3 = st.columns(3)
+        c1.text_input(t("camp.village"), key=f"camp-village-{case_id}", value=camp.get("village", ""), max_chars=60)
+        c2.text_input(t("camp.district"), key=f"camp-district-{case_id}", value=camp.get("district", ""), max_chars=60)
+        c3.date_input(t("camp.date"), key=f"camp-date-{case_id}", format="DD/MM/YYYY", max_value=date.today(),
+                      value=date.fromisoformat(camp["date"]) if camp.get("date") else date.today())
+        st.button(t("camp.save"), key=f"camp-save-{case_id}", on_click=save_camp, args=(case_id,))
+        msg = st.session_state.pop(f"camp-msg-{case_id}", None)
+        if msg:
+            (st.success if msg[0] == "ok" else st.error)(msg[1])
+
+
+def case_tools(case_id: str, record: dict, file_open: bool = False, slip_open: bool = False):
+    slip_box(record, expanded=slip_open)
+    with st.expander(t("cf.title"), expanded=file_open):
+        case_file_view(case_id, record)
+    visit_form(case_id)
+    camp_form(case_id, record)
+
+
+def current_case_panel():
+    """On New case: the case in progress (number, code, slip, case file, visits)."""
+    case_id = st.session_state.get("case_id")
+    if not case_id:
+        return
+    record = tracker.load(case_id)
+    if record is None:
+        st.session_state.pop("case_id", None)
+        return
+    with st.container(border=True):
+        c1, c2 = st.columns([3, 1])
+        c1.markdown(f"**{t('ui.case_title', case_id=case_id)}** · {t('slip.code')} **{record['code']}** "
+                    f"&nbsp; {status_chip(tracker.status_of(case_id))}", unsafe_allow_html=True)
+        c2.button(t("cont.another"), key="case-another", on_click=clear_case)
+        if st.session_state.pop("slip_new", False):
+            st.success(t("slip.new", slip_code=record["code"]))
+            case_tools(case_id, record, slip_open=True)
+        else:
+            case_tools(case_id, record, file_open=bool(st.session_state.pop("case_opened", False)))
+
+
+STATUS_CHIPS = {tracker.INTAKE: ("intake", "ui.status.intake"), store.WAITING: ("waiting", "ui.status.waiting"),
+                store.SENT_BACK: ("sent-back", "ui.status.sent_back"), store.APPROVED: ("approved", "ui.status.approved"),
+                tracker.SUBMITTED: ("submitted", "ui.status.submitted"),
+                tracker.ACKNOWLEDGED: ("acknowledged", "ui.status.acknowledged")}
+
+
+def status_text(status: str) -> str:
+    return t(STATUS_CHIPS[status][1]).split(" ", 1)[-1]  # the words, without the emoji
+
+
+def status_chip(status: str) -> str:
+    return ui.chip(STATUS_CHIPS[status][0], status_text(status))
+
+
+def next_step_text(row: dict) -> str:
+    if row.get("step"):
+        return step_title(row["step"])
+    key = f"tr.next.{row['next_step']}"
+    return t(key) if key in lang.strings("en") else row["next_step"]
+
+
 # ---------- Home ----------
 
 def go(screen: str):
@@ -1620,6 +2144,7 @@ def go(screen: str):
 
 
 def start_case():
+    clear_case()  # the case in progress stays saved in the tracker
     go("New case")
     st.session_state["case_type"] = ANY_CASE
 
@@ -1656,6 +2181,7 @@ def home_screen():
             col.button(name, key=f"home-lang-{code_}", on_click=set_language, args=(code_,),
                        type="primary" if code() == code_ else "secondary", use_container_width=True)
         st.markdown(ui.helpline(t("home.helpline_danger"), t("home.helpline_aid")), unsafe_allow_html=True)
+        continue_box("home")
 
     st.markdown(ui.section("how-it-works", t("home.how_title"), t("home.how_sub"))
                 + ui.cards([(t(f"home.how{i}_t"), t(f"home.how{i}_p")) for i in range(1, 5)], "four", numbered=True)
@@ -1706,6 +2232,10 @@ SCREENS = {
 }
 
 st.session_state.setdefault("screen", START_SCREEN)
+if st.query_params.get("code"):  # opened from the QR code on a case slip
+    st.session_state["continue_code"] = st.query_params.get("code")
+    st.session_state["screen"] = "New case"
+    del st.query_params["code"]
 st.sidebar.title(t("app.name"))
 choice = st.sidebar.radio(t("ui.go_to"), list(SCREENS), format_func=option_text("screen."), key="screen")
 st.sidebar.markdown("---")
@@ -1713,6 +2243,9 @@ st.sidebar.markdown(f"**{t('ui.sidebar.danger')}**  \n{t('ui.sidebar.helpline')}
 top_bar(choice)
 if choice != "Home":  # Home shows the helplines under its story box
     st.markdown(ui.safety_bar(t("safety.bar112"), t("safety.bar15100")), unsafe_allow_html=True)
-SCREENS[choice]()
+if choice in ("Home", "Learn") or clinic_ok():
+    SCREENS[choice]()
+else:
+    clinic_gate()  # every other screen needs the clinic passcode (when one is set)
 st.markdown(ui.footer(t("app.name"), f"{t('app.tagline')}. {t('app.description')}.", t("home.footer")),
             unsafe_allow_html=True)

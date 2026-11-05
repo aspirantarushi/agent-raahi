@@ -6,19 +6,19 @@
 - A reviewer scores each finished session: required fields correct, material errors, major corrections
   needed, accepted yes/no.
 - Export raw counts to CSV. No averages are filled in in advance and no results are invented.
-Sessions are saved in evaluation/sessions/ (kept out of git).
+Sessions are saved through storage.py (evaluation/sessions, kept out of git).
 """
 
 import csv
 import io
 import json
-import os
 import secrets
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
 import privacy
+import storage
 
 HERE = Path(__file__).resolve().parent
 BY_HAND, WITH_AGENT = "by hand", "with the agent"
@@ -38,17 +38,8 @@ def case(case_id: str, base: Path = HERE) -> dict:
     raise ValueError("No such evaluation case.")
 
 
-def _folder(base: Path) -> Path:
-    return base / "evaluation" / "sessions"
-
-
 def _save(session: dict, base: Path) -> None:
-    folder = _folder(base)
-    folder.mkdir(parents=True, exist_ok=True)
-    path = folder / f"{session['session_id']}.json"
-    tmp = path.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(session, indent=2, ensure_ascii=False), encoding="utf-8")
-    os.replace(tmp, path)
+    storage.write_json("eval_sessions", session["session_id"], session, base)
 
 
 def now() -> str:
@@ -75,10 +66,12 @@ def start(case_id: str, method: str, volunteer: str, base: Path = HERE, started:
 
 
 def load(session_id: str, base: Path = HERE) -> dict:
-    path = _folder(base) / f"{session_id}.json"
-    if not path.exists() or "/" in session_id or ".." in session_id:
+    if "/" in session_id or ".." in session_id:
         raise ValueError("No such evaluation session.")
-    return json.loads(path.read_text(encoding="utf-8"))
+    session = storage.read_json("eval_sessions", session_id, base)
+    if session is None:
+        raise ValueError("No such evaluation session.")
+    return session
 
 
 def finish(session_id: str, submission: Dict[str, str], base: Path = HERE, finished: Optional[str] = None) -> dict:
@@ -100,8 +93,7 @@ def minutes(session: dict) -> Optional[float]:
 
 
 def sessions(base: Path = HERE, finished_only: bool = False) -> List[dict]:
-    folder = _folder(base)
-    found = [json.loads(p.read_text(encoding="utf-8")) for p in sorted(folder.glob("S-*.json"))] if folder.exists() else []
+    found = [s for s in storage.all_json("eval_sessions", base) if str(s.get("session_id", "")).startswith("S-")]
     return [s for s in found if s["finished"]] if finished_only else found
 
 

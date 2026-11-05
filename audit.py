@@ -1,4 +1,5 @@
-"""Audit records and the problems log. Plain files, kept out of git.
+"""Audit records and the problems log, through storage.py (local files kept out of git, or the
+clinic's Supabase table).
 
 - audit/<case number>.json  what happened to each case: when, which AI model (or none),
   the facts the AI extracted, which fields the volunteer changed, and each decision.
@@ -9,12 +10,12 @@ numbers (phone, Aadhaar, email are removed from any text before saving).
 """
 
 import json
-import os
 from datetime import date, datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
 import privacy
+import storage
 
 HERE = Path(__file__).resolve().parent
 NO_AI = "no AI"
@@ -50,15 +51,8 @@ def _plain(value):
     return privacy.redact(str(value))[0]
 
 
-def _write(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, path)
-
-
-def _path(case_id: str, base: Path) -> Path:
-    return base / "audit" / f"{case_id}.json"
+def _save(record: dict, base: Path) -> None:
+    storage.write_json("audit", record["case_id"], record, base)
 
 
 # ---------- audit records ----------
@@ -98,35 +92,29 @@ def start_record(case_id: str, final_facts: dict, ai: Optional[dict] = None, bas
         ) if ai else [],
         "events": [{"time": now(), "event": "sent to supervisor", "by": VOLUNTEER}],
     }
-    _write(_path(case_id, base), json.dumps(record, indent=2, ensure_ascii=False))
+    _save(record, base)
     return record
 
 
 def add_event(case_id: str, event: str, by: str, details: str = "", base: Path = HERE) -> None:
-    path = _path(case_id, base)
-    if not path.exists():  # a draft sent before audit records existed
+    record = storage.read_json("audit", case_id, base)
+    if record is None:  # a draft sent before audit records existed
         record = {"case_id": case_id, "created": now(), "model": "not recorded", "ai_extracted": {},
                   "ai_answers_not_accepted": [], "volunteer_changed": [], "entered_by_volunteer": [],
                   "events": []}
-    else:
-        record = json.loads(path.read_text(encoding="utf-8"))
     entry = {"time": now(), "event": event, "by": by}
     if details:
         entry["details"] = _plain(details)
     record["events"].append(entry)
-    _write(path, json.dumps(record, indent=2, ensure_ascii=False))
+    _save(record, base)
 
 
 def read_record(case_id: str, base: Path = HERE) -> Optional[dict]:
-    path = _path(case_id, base)
-    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+    return storage.read_json("audit", case_id, base)
 
 
 def list_records(base: Path = HERE) -> List[dict]:
-    folder = base / "audit"
-    if not folder.exists():
-        return []
-    return sorted((json.loads(p.read_text(encoding="utf-8")) for p in folder.glob("U-*.json")),
+    return sorted((r for r in storage.all_json("audit", base) if str(r.get("case_id", "")).startswith("U-")),
                   key=lambda r: r["created"], reverse=True)
 
 
@@ -172,19 +160,12 @@ def report_problem(text: str, case_id: Optional[str], where: str, base: Path = H
     entry = {"time": now(), "case_id": case_id or "no case number yet", "where": where, "text": clean}
     if removed:
         entry["removed"] = ", ".join(removed)
-    path = base / "problems" / "problems.jsonl"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "a", encoding="utf-8") as f:
-        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    storage.backend(base).log_append("problems", entry)
     return entry
 
 
 def list_problems(base: Path = HERE) -> List[dict]:
-    path = base / "problems" / "problems.jsonl"
-    if not path.exists():
-        return []
-    entries = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
-    return list(reversed(entries))  # newest first
+    return list(reversed(storage.backend(base).log_entries("problems")))  # newest first
 
 
 def replace_with_deletion(case_id: str, base: Path = HERE) -> None:
@@ -192,4 +173,4 @@ def replace_with_deletion(case_id: str, base: Path = HERE) -> None:
     record = {"case_id": case_id, "created": now(), "model": "deleted", "ai_extracted": {},
               "ai_answers_not_accepted": [], "volunteer_changed": [], "entered_by_volunteer": [],
               "events": [{"time": now(), "event": "case deleted", "by": SUPERVISOR}]}
-    _write(_path(case_id, base), json.dumps(record, indent=2, ensure_ascii=False))
+    _save(record, base)
