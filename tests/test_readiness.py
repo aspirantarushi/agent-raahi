@@ -119,7 +119,7 @@ def test_screen_checklist_and_send_label(monkeypatch, tmp_path):
         at.text_input(key=f"f-detail-{field}").set_value(value)
     at.run()
     assert at.button(key="send-f").label == "Send to supervisor — Ready for review"
-    assert "Saket Court, CNR DLST010012342024" in at.code[0].value
+    assert "Saket Court, CNR DLST010012342024" in at.session_state["shown_drafts"][0]
     at.button(key="send-f").click().run()
     [record] = store.list_pending(tmp_path)
     assert {r["status"] for r in record["readiness"]} == {"present"}
@@ -140,4 +140,4 @@ def test_screen_cannot_obtain(monkeypatch):
     at.checkbox(key="cant-f-cnr").check().run()
     at.text_input(key="cantr-f-cnr").set_value("Not yet on eCourts").run()
     assert at.button(key="send-f").label == "Send to supervisor — Ready for review"
-    assert "Could not be obtained (reason given by the volunteer):\n- CNR number: Not yet on eCourts" in at.code[0].value
+    assert "Could not be obtained (reason given by the volunteer):\n- CNR number: Not yet on eCourts" in at.session_state["shown_drafts"][0]

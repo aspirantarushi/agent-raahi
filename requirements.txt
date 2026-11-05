@@ -7,6 +7,9 @@ segno==1.6.6          # the QR code on the case slip
 zxing-cpp==2.3.0      # reading a QR code from a photo (Continue a case)
 pillow==11.3.0        # opening that photo
 certifi==2026.10.23   # HTTPS certificates for the AI and database calls
+python-docx==1.2.0    # Word (.docx) downloads of drafts
+fpdf2==2.8.4          # PDF downloads of drafts (A4)
+uharfbuzz==0.51.7     # joins Hindi letters correctly in the PDF
 pytest==8.4.2         # running the tests on your computer (harmless online)
 
 # Installed with the ones above (pinned so the online app gets the same versions)
@@ -50,3 +53,6 @@ typing_extensions==4.16.0
 tzdata==2026.6
 urllib3==2.6.3
 zipp==3.23.1
+defusedxml==0.7.1
+fonttools==4.60.2
+lxml==6.1.3

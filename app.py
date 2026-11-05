@@ -20,6 +20,7 @@ import streamlit.components.v1 as components
 import audit
 import casework
 import consistency
+import document
 import drafts
 import evaluation
 import impact
@@ -957,14 +958,52 @@ def drafts_panel(documents, status, uncovered):
                     st.button(t("ui.cancel"), key=f"doc-cancel-{i}",
                               on_click=lambda n=i: st.session_state.update({f"doc-editing-{n}": False}))
             else:
-                st.markdown(ui.letter_html(text), unsafe_allow_html=True)
-                with st.container(horizontal=True, gap="small"):
-                    st.button(t("cw.edit"), key=f"doc-edit-btn-{i}",
-                              icon=":material/edit:", on_click=lambda n=i: st.session_state.update({f"doc-editing-{n}": True}))
-                    st.download_button(t("cw.download"), text, file_name=f"draft-{i + 1}.txt", mime="text/plain",
-                                       key=f"doc-dl-{i}", icon=":material/download:")
-            with st.expander(t("cw.plain_text")):
-                st.code(text, language=None, wrap_lines=True)
+                document_view(text, f"doc-{i}", title, edit_key=f"doc-editing-{i}")
+
+
+@st.cache_data(show_spinner=False, max_entries=60)
+def docx_bytes(text: str, title: str) -> bytes:
+    return document.to_docx(text, title)
+
+
+@st.cache_data(show_spinner=False, max_entries=60)
+def pdf_bytes(text: str, title: str) -> bytes:
+    return document.to_pdf(text, title)
+
+
+def file_name(title: str, ext: str) -> str:
+    base = re.sub(r"[^A-Za-z0-9]+", "-", title).strip("-").lower() or "draft"
+    return f"{base[:40]}-{date.today():%Y-%m-%d}.{ext}"
+
+
+def copy_button(text: str, key: str):
+    """"Copy text": the draft's text onto the clipboard (works inside the app's frame on phones too)."""
+    label, done = html.escape(t("cw.copy")), html.escape(t("cw.copied"))
+    components.html(
+        f"""<button id="b" style="font:500 15px system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#13213B;
+        background:#fff;border:1px solid #DCD5C6;border-radius:999px;padding:8px 16px;cursor:pointer;min-height:40px">
+        {label}</button><textarea id="t" style="position:absolute;left:-9999px">{html.escape(text)}</textarea>
+        <script>
+        const b=document.getElementById('b'), x=document.getElementById('t');
+        b.onclick=async()=>{{try{{await navigator.clipboard.writeText(x.value);}}catch(e){{x.select();document.execCommand('copy');}}
+          b.textContent='{done}'; setTimeout(()=>b.textContent='{label}',2000);}};
+        </script>""", height=46)
+
+
+def document_view(text: str, key: str, title: str, edit_key: str = ""):
+    """A draft as a page preview, with Edit (when allowed), Copy text, Word and PDF."""
+    st.session_state.setdefault("shown_drafts", []).append(text)  # this run's drafts (read by the tests)
+    st.markdown(document.to_html(text), unsafe_allow_html=True)
+    with st.container(horizontal=True, gap="small", vertical_alignment="center", key=f"{key}-actions"):
+        if edit_key:
+            st.button(t("cw.edit"), key=f"{key}-edit", icon=":material/edit:",
+                      on_click=lambda: st.session_state.update({edit_key: True}))
+        st.download_button(t("cw.word"), docx_bytes(text, title), file_name=file_name(title, "docx"),
+                           mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                           key=f"{key}-docx", icon=":material/description:")
+        st.download_button(t("cw.pdf"), pdf_bytes(text, title), file_name=file_name(title, "pdf"),
+                           mime="application/pdf", key=f"{key}-pdf", icon=":material/picture_as_pdf:")
+    copy_button(text, key)
 
 
 def save_doc_edit(i: int):
@@ -1485,7 +1524,7 @@ def draft_section(known: dict, result: section479.Result):
         st.caption(t("ui.hindi_label_note"))
     col_draft, col_check = st.columns([3, 2])
     with col_draft:
-        st.code(text, language=None, wrap_lines=True)
+        document_view(text, "f-draft", t("ui.draft.title"))
     with col_check:
         checklist_box(items, "f")
     ai_state = st.session_state.get("ai")
@@ -1864,7 +1903,8 @@ def tracker_card(row: dict, approved_text: dict):
             approved = store.approved_draft(case_id)
             if approved:
                 with st.expander(t("ui.cases.approved_draft")):
-                    st.code(approved, language=None, wrap_lines=True)
+                    for n, part in enumerate(casework.split_bundle(approved)):
+                        document_view(part.strip(), f"appr-{case_id}-{n}", t("ui.cases.approved_draft"))
         if is_open:
             report_problem_box(f"case-{case_id}", "My cases", case_id)
 
@@ -2184,8 +2224,8 @@ def save_research_knowledge(research_id: str, point_id: str):
 
 def research_point_view(record: dict, p: dict):
     st.markdown(f"**{p['id']} · {research.KINDS[p['kind']]}** {status_chip_text(p['status'])}", unsafe_allow_html=True)
-    if p["kind"] == "letter":
-        st.code(p["text"], language=None, wrap_lines=True)
+    if p["kind"] == "letter":  # a draft letter from research: shown as a page, like every draft
+        st.markdown(document.to_html(p["text"]), unsafe_allow_html=True)
     else:
         st.markdown(html.escape(p["text"]))
     st.markdown("  \n".join(f":material/link: [{html.escape(s['title'])}]({s['url']})" for s in p["sources"]))
@@ -2374,11 +2414,9 @@ def review_one(record: dict):
         for h in record.get("history", []):
             st.caption(t("ui.sup.resent", when=h["resent"].replace("T", " "), reason=h["sent_back_reason"]))
         supervisor_case_cards(record)
-        for n, part in enumerate(casework.split_bundle(record["draft"])):  # each document as a readable page
+        for n, part in enumerate(casework.split_bundle(record["draft"])):  # the same page previews as the volunteer's
             with st.container(border=True, key=f"sup-draft-{case_id}-{n}"):
-                st.markdown(ui.letter_html(part.strip()), unsafe_allow_html=True)
-        with st.expander(t("cw.plain_text")):
-            st.code(record["draft"], language=None, wrap_lines=True)
+                document_view(part.strip(), f"sup-{case_id}-{n}", f"{case_id} draft {n + 1}")
         blocked = review_research_inside(case_id)
         if record.get("readiness"):
             with st.expander(t("ready.sup_title")):
@@ -3227,6 +3265,7 @@ if st.query_params.get("code"):  # opened from the QR code on a case slip
     st.session_state["screen"] = "New case"
     del st.query_params["code"]
 choice = st.session_state["screen"] if st.session_state["screen"] in SCREENS else "Home"
+st.session_state["shown_drafts"] = []
 top_bar(choice)
 if storage.records_will_be_lost():  # online without Supabase: nothing saved would survive a restart
     st.error(t("online.no_supabase"), icon=":material/cloud_off:")

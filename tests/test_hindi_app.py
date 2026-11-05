@@ -128,7 +128,7 @@ def test_hindi_practice_case_on_screen(monkeypatch, tmp_path):
     assert "15 जुलाई 2026" in shown and "पूरा हुआ" in shown and "15 सितंबर 2027" in shown
     assert at.radio(key="f_draft_lang").value == "hi"  # draft language follows the screen language
     next(b for b in at.button if b.label == "ड्राफ़्ट बनाएँ").click().run()
-    draft = at.code[0].value
+    draft = at.session_state["shown_drafts"][0]
     assert draft.startswith("DRAFT — to be checked by a lawyer\nड्राफ़्ट — वकील से जाँच करवाना ज़रूरी है\n"
                             "हिंदी अनुवाद की जाँच: नहीं (Hindi translation checked: no)")
     assert "तथ्य केस नोट्स से AI की मदद (gemini-3.5-flash-lite) से पढ़े गए" in draft
@@ -149,7 +149,7 @@ def test_english_draft_from_hindi_screen(monkeypatch):
     at.radio(key="f_lawyer").set_value("Legal aid lawyer").run()
     at.radio(key="f_draft_lang").set_value("en").run()
     next(b for b in at.button if b.label == "ड्राफ़्ट बनाएँ").click().run()
-    assert at.code[0].value.startswith("DRAFT — to be checked by a lawyer\n\nNOT READY FOR REVIEW")
+    assert at.session_state["shown_drafts"][0].startswith("DRAFT — to be checked by a lawyer\n\nNOT READY FOR REVIEW")
 
 
 def test_general_screen_in_hindi_shows_1930_and_no_names_box(monkeypatch, tmp_path):
@@ -166,7 +166,7 @@ def test_general_screen_in_hindi_shows_1930_and_no_names_box(monkeypatch, tmp_pa
     while any(b.label == "पता नहीं" for b in at.button):
         next(b for b in at.button if b.label == "पता नहीं").click().run()
     assert at.checkbox(key="g_checked").label == "मैंने यह सार नोट्स से मिलाकर जाँच लिया है, और इसमें किसी का नाम नहीं है"
-    summary = at.code[0].value
+    summary = at.session_state["shown_drafts"][0]
     assert "ऑनलाइन धोखाधड़ी" in summary and "(हिंदी अनुवाद की जाँच: नहीं)" in summary
     assert "Source: Ministry of Home Affairs" in summary  # Source lines stay in English
 

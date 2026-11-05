@@ -230,9 +230,9 @@ def test_research_on_screen(monkeypatch, fake_ai):
     assert fake_ai == [("Bihar", "electricity connection cut")]
     at.run()
     assert len(fake_ai) == 1                                       # not again on a page reload
-    assert "Not covered by our verified files yet" in at.code[0].value
-    assert "Write first to the Assistant Engineer" not in at.code[0].value  # not approved yet
-    assert len(at.code) == 2                                       # summary + free legal aid application (no letter yet)
+    assert "Not covered by our verified files yet" in at.session_state["shown_drafts"][0]
+    assert "Write first to the Assistant Engineer" not in at.session_state["shown_drafts"][0]  # not approved yet
+    assert len(at.session_state["shown_drafts"]) == 2                                       # summary + free legal aid application (no letter yet)
     at.button(key="rs-again-go").click().run()                     # "Research again" on request
     assert len(fake_ai) == 2
 

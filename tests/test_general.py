@@ -110,7 +110,7 @@ def test_undertrial_story():
     for heading in ["Rights on arrest", "Who to approach for an undertrial"]:
         e = knowledge.get("undertrial_bail.md", heading)
         assert f"“{heading}”" in text and e.source_line in text
-    assert "- IPC 380 = BNS 305: Theft in a dwelling house or vehicle or place of worship" in text
+    assert "IPC 380 = BNS 305: Theft in a dwelling house or vehicle or place of worship" in text
     assert "charged under [law reference removed: ask a lawyer]" in text  # the AI's own copy is removed
     assert "Qualifies for free legal aid whatever the income, as a person in custody." in text
     assert refs_not_from_knowledge(text, reading) == []
@@ -127,8 +127,8 @@ def test_upi_fraud_story():
     assert "Qualifies for free legal aid whatever the income, as a woman." in text
     assert "Bihar: Bihar residents only" in text      # the state note from income_limits.csv ...
     assert "Confirmed on BSLSA" not in text            # ... without our own working notes
-    assert "- The person has: bank SMS alerts; screenshot of the UPI request" in text
-    assert "the bank SMS and email alerts" not in text.split("Usually needed:")[1].split("\n")[0]
+    assert "- Has: bank SMS alerts; screenshot of the UPI request" in text
+    assert "the bank SMS and email alerts" not in documents_line(text)
     assert refs_not_from_knowledge(text, reading) == []
 
 
@@ -143,9 +143,9 @@ def test_unpaid_wages_story():
     assert reading.facts["annual_income"] == 120000
     assert ("Qualifies on income: about ₹120,000 a year is below Maharashtra's limit of ₹300,000."
             in text)
-    assert ("- Usually needed: Appointment letter or work ID card; Pay slips; "
+    assert ("- Still needed: Appointment letter or work ID card; Pay slips; "
             "Bank statements showing earlier payments; Messages with the employer or contractor; ID proof; "
-            "Income proof, or a self-declaration (for free legal aid)") in text
+            "Income proof, or a self-declaration (for free legal aid)") == documents_line(text)
     assert refs_not_from_knowledge(text, reading) == []
 
 
@@ -357,11 +357,11 @@ def test_screen_wages_questions_one_at_a_time_then_send(pretend_ai):
     at.text_input(key="gq-2").set_value("His three months' wages")
     button(at, "Next").click().run()
     # Eligible on income, so no eligibility questions: straight to the summary.
-    draft = at.code[0].value
+    draft = at.session_state["shown_drafts"][0]
     assert "— His three months' wages" in draft
-    assert "Answers from the volunteer\n- Does the worker have any messages from the contractor about wages? " \
+    assert "- Asked: Does the worker have any messages from the contractor about wages? " \
            "— Yes, on his phone" in draft
-    assert "Questions still to ask\n- Were other workers also not paid?" in draft
+    assert "- Still to ask the person: Were other workers also not paid?" in draft
     assert "Not covered by our verified files yet; ask NALSA's free helpline 15100." in draft
     assert next(b for b in at.button if b.label.startswith("Send to supervisor")).disabled  # until the volunteer confirms
     at.checkbox(key="g_checked").check().run()
@@ -392,7 +392,7 @@ def test_screen_eligibility_questions_when_needed(pretend_ai, monkeypatch):
     at.radio(key="ge-woman").set_value("Yes")
     button(at, "Next").click().run()
     ok(at)  # a woman qualifies whatever the income: no more questions
-    assert "Qualifies for free legal aid whatever the income, as a woman." in at.code[0].value
+    assert "Qualifies for free legal aid whatever the income, as a woman." in at.session_state["shown_drafts"][0]
 
 
 def test_screen_custody_offers_section_479_check(pretend_ai, monkeypatch):
@@ -415,7 +415,7 @@ def test_screen_without_ai(monkeypatch, tmp_path):
     ok(at)
     assert any("jail or police custody" in m.value for m in at.markdown)  # eligibility, one at a time
     button(at, "Skip the rest and see the summary").click().run()
-    draft = at.code[0].value
+    draft = at.session_state["shown_drafts"][0]
     assert "facts were entered by a volunteer" in draft and "The landlord locked the tenant out" in draft
 
 
@@ -441,7 +441,11 @@ def test_live_ai_three_stories(notes, urgent, words):
 # ---------- documents for problems our files don't cover ----------
 
 def documents_line(text):
-    return next(l for l in text.splitlines() if l.startswith("- Usually needed"))
+    """The documents still needed (one per line under "Still needed:" in the Documents section), joined."""
+    part = text.split("\nDocuments\n")[1].split("\n\n")[0].splitlines()
+    start = next(i for i, l in enumerate(part) if l.startswith("- Still needed:"))
+    items = [l[4:] for l in part[start + 1:] if l.startswith("  - ")]
+    return "- Still needed: " + "; ".join(items)
 
 
 def test_unpaid_wages_gets_no_fir_or_court_papers():
@@ -492,7 +496,7 @@ def test_first_does_not_mean_fir():
 
 def test_covered_issue_keeps_its_knowledge_list_and_source():
     _, _, text = summarise(UPI_ANSWER, UPI)
-    assert "- Usually needed:" in text
+    assert "- Still needed:" in text
     assert knowledge.get("cyber_fraud.md", "Evidence to keep").source_line in text
     assert "a plain list for this kind of problem" not in text
 
@@ -554,7 +558,7 @@ def test_questions_already_answered_are_dropped_and_missing_ones_added():
     r = general.check_general_answer(told, UPI)
     assert r.outcome == "to get her money back" and not any("want" in q for q in r.questions)
     facts = general.build_facts(r, [], r.questions, r.facts, TODAY)
-    assert "- What the person wants: to get her money back" in general.summary_body(facts)
+    assert "What the person wants\n- to get her money back" in general.summary_body(facts)
 
 
 def test_prompt_asks_for_outcome_years_and_age():

@@ -344,6 +344,18 @@ i18n/hi.json · cw.edit_label,"Edit the draft (keep the [blanks] for names, addr
 i18n/hi.json · cw.download,Download,डाउनलोड करें,draft,,
 i18n/hi.json · cw.plain_text,Plain text (to copy),सादा टेक्स्ट (कॉपी के लिए),draft,,
 i18n/hi.json · cw.edit,Edit,Edit करें,draft,,
+i18n/hi.json · sum.clinic_file,For the clinic file (not to be given out),क्लिनिक की फ़ाइल के लिए (किसी को देने के लिए नहीं),draft,,
+i18n/hi.json · sum.case_line,"Case summary, {date}. Prepared from the volunteer's notes; people are described by their role only.","केस का सार, {date}। स्वयंसेवक के नोट्स से बनाया गया; लोगों को सिर्फ़ उनकी भूमिका से बताया गया है।",draft,,
+i18n/hi.json · sum.sections_label,Sections written in the notes (as found in our sentence table):,नोट्स में लिखी धाराएँ (हमारी सज़ा की तालिका के अनुसार):,draft,,
+i18n/hi.json · sum.asked,Asked: {q} — {a},पूछा गया: {q} — {a},draft,,
+i18n/hi.json · sum.wants_none,Not stated yet: ask what the person hopes will happen.,अभी नहीं बताया: पूछें कि व्यक्ति क्या चाहता/चाहती है।,draft,,
+i18n/hi.json · sum.doc_has,Has:,पास है:,draft,,
+i18n/hi.json · sum.doc_needed,Still needed:,अभी चाहिए:,draft,,
+i18n/hi.json · sum.facts_used_line,Facts used: in custody {custody}; woman {woman}; under 18 {under18}; SC/ST {scst}; disability {disability}; state {state}; yearly income {income},इस्तेमाल हुए तथ्य: हिरासत में {custody}; महिला {woman}; 18 से कम {under18}; SC/ST {scst}; दिव्यांगता {disability}; राज्य {state}; सालाना आय {income},draft,,
+i18n/hi.json · sum.lawyer_questions,Questions for the lawyer,वकील के लिए सवाल,draft,,
+i18n/hi.json · sum.still_ask_person,Still to ask the person:,व्यक्ति से अभी पूछना है:,draft,,
+i18n/hi.json · cw.copy,Copy text,टेक्स्ट कॉपी करें,draft,,
+i18n/hi.json · cw.copied,Copied,कॉपी हो गया,draft,,
 templates_hi/complaint_letter.md · line 2 (Hindi DRAFT line),DRAFT — to be checked by a lawyer,ड्राफ़्ट — वकील से जाँच करवाना ज़रूरी है,draft,,
 templates_hi/complaint_letter.md · line 3,"To,","सेवा में,",draft,,
 templates_hi/complaint_letter.md · line 4,[Name and address of the office],[कार्यालय का नाम और पता],draft,,
@@ -1122,6 +1134,7 @@ i18n/hi.json · ui.general.names_warning_short,"**No names**, phone numbers, Aad
 i18n/hi.json · rs.warn_replaced,Replaced by the {new} on {date}: check before approving.,{date} को {new} ने इसकी जगह ले ली: मंज़ूर करने से पहले जाँचें।,screen text,,
 i18n/hi.json · rs.warn_mismatch,"The point names the {law}, but its source is “{title}”: check that the source matches the law.","यह बिंदु {law} का नाम लेता है, पर इसका स्रोत “{title}” है: जाँचें कि स्रोत उसी क़ानून का है।",screen text,,
 i18n/hi.json · rs.warn_other_state,"This source is a website of {other}, but the case is in {state}: check that the rule applies in {state}.","यह स्रोत {other} की वेबसाइट है, पर केस {state} का है: जाँचें कि नियम {state} में लागू होता है।",screen text,,
+i18n/hi.json · online.no_supabase,"Not ready for real cases: the online database (Supabase) is not set up, so anything saved here is lost when the app restarts. The supervisor adds SUPABASE_URL and SUPABASE_SECRET_KEY in the app's Secrets (see docs/GO_ONLINE.md).","असली केस के लिए तैयार नहीं: ऑनलाइन डेटाबेस (Supabase) सेट नहीं है, इसलिए यहाँ सहेजा गया सब कुछ ऐप दोबारा शुरू होने पर मिट जाएगा। Supervisor ऐप के Secrets में SUPABASE_URL और SUPABASE_SECRET_KEY जोड़ें (docs/GO_ONLINE.md देखें)।",screen text,,
 case_notes_hi.txt,(fake practice story; check that it reads naturally),"अभ्यास केस (कोई असली व्यक्ति नहीं)।
 बोलने वाली: एक विचाराधीन क़ैदी की बड़ी बहन।
 उसके भाई को 15 मार्च 2024 को गिरफ़्तार किया गया था। अपराध फ़रवरी 2024 में हुआ था।

@@ -225,8 +225,10 @@ def test_no_internal_notes_and_every_source_official_or_marked():
 
 def test_summary_has_the_new_sections():
     text = general.summary_body(ELECTRICITY)
-    for heading in ("AT A GLANCE", "- Problem: electricity connection cut", "- Going on for: about 5 weeks",
-                    "Urgent: the electricity is cut off now", "For the lawyer", "Next steps"):
+    for heading in ("For the clinic file (not to be given out)", "At a glance", "- Problem: electricity connection cut",
+                    "- Going on for: about 5 weeks", "Urgent: the electricity is cut off now", "What happened",
+                    "What the person wants", "Timeline", "Documents", "Free legal aid", "Questions for the lawyer",
+                    "Next steps"):
         assert heading in text, heading
 
 

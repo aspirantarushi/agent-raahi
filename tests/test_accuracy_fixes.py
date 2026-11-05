@@ -157,7 +157,7 @@ def test_documents_from_an_answer_reach_the_documents_list():
     g = general.apply_answers(facts(answers=[("Do you have any papers from the factory?",
                                               "Haan, factory gate pass aur ek salary slip")]))
     assert g.documents_held == ["factory gate pass", "salary slip"]
-    assert "The person has: factory gate pass; salary slip" in general.summary_body(g)
+    assert "- Has: factory gate pass; salary slip" in general.summary_body(g)
     no = general.apply_answers(facts(answers=[("Do you have any documents?", "No, nothing")]))
     assert no.documents_held == []
 
@@ -195,7 +195,7 @@ def test_notes_language_is_detected(text, found):
 def test_summary_says_each_thing_once():
     g = facts(outcome="his unpaid wages paid", facts={"state": "Punjab", "woman": True})
     text = general.summary_body(g)
-    assert text.count("his unpaid wages paid") == 1
+    assert text.count("his unpaid wages paid") == 1 and "What the person wants\n- his unpaid wages paid" in text
     assert text.count("Urgency") == 1 and "URGENT\n" not in text
     sources = [line.strip() for line in text.splitlines() if line.strip().startswith("Source:")]
     assert len(sources) == len(set(sources))

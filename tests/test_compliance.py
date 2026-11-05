@@ -232,4 +232,4 @@ def test_draft_made_after_ai_reading_names_the_model(monkeypatch):
     at.checkbox(key="f_checked").check().run()
     next(b for b in at.button if b.label == "Make draft").click().run()
     assert not at.exception
-    assert at.code[0].value.rstrip().endswith(AI_SENTENCE)
+    assert at.session_state["shown_drafts"][0].rstrip().endswith(AI_SENTENCE)

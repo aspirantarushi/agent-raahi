@@ -1007,5 +1007,19 @@
  "rs.warn_replaced": "{date} को {new} ने इसकी जगह ले ली: मंज़ूर करने से पहले जाँचें।",
  "rs.warn_mismatch": "यह बिंदु {law} का नाम लेता है, पर इसका स्रोत “{title}” है: जाँचें कि स्रोत उसी क़ानून का है।",
  "rs.warn_other_state": "यह स्रोत {other} की वेबसाइट है, पर केस {state} का है: जाँचें कि नियम {state} में लागू होता है।",
- "online.no_supabase": "असली केस के लिए तैयार नहीं: ऑनलाइन डेटाबेस (Supabase) सेट नहीं है, इसलिए यहाँ सहेजा गया सब कुछ ऐप दोबारा शुरू होने पर मिट जाएगा। Supervisor ऐप के Secrets में SUPABASE_URL और SUPABASE_SECRET_KEY जोड़ें (docs/GO_ONLINE.md देखें)।"
+ "online.no_supabase": "असली केस के लिए तैयार नहीं: ऑनलाइन डेटाबेस (Supabase) सेट नहीं है, इसलिए यहाँ सहेजा गया सब कुछ ऐप दोबारा शुरू होने पर मिट जाएगा। Supervisor ऐप के Secrets में SUPABASE_URL और SUPABASE_SECRET_KEY जोड़ें (docs/GO_ONLINE.md देखें)।",
+ "sum.clinic_file": "क्लिनिक की फ़ाइल के लिए (किसी को देने के लिए नहीं)",
+ "sum.case_line": "केस का सार, {date}। स्वयंसेवक के नोट्स से बनाया गया; लोगों को सिर्फ़ उनकी भूमिका से बताया गया है।",
+ "sum.sections_label": "नोट्स में लिखी धाराएँ (हमारी सज़ा की तालिका के अनुसार):",
+ "sum.asked": "पूछा गया: {q} — {a}",
+ "sum.wants_none": "अभी नहीं बताया: पूछें कि व्यक्ति क्या चाहता/चाहती है।",
+ "sum.doc_has": "पास है:",
+ "sum.doc_needed": "अभी चाहिए:",
+ "sum.facts_used_line": "इस्तेमाल हुए तथ्य: हिरासत में {custody}; महिला {woman}; 18 से कम {under18}; SC/ST {scst}; दिव्यांगता {disability}; राज्य {state}; सालाना आय {income}",
+ "sum.lawyer_questions": "वकील के लिए सवाल",
+ "sum.still_ask_person": "व्यक्ति से अभी पूछना है:",
+ "cw.copy": "टेक्स्ट कॉपी करें",
+ "cw.copied": "कॉपी हो गया",
+ "cw.word": "Word (.docx)",
+ "cw.pdf": "PDF"
 }

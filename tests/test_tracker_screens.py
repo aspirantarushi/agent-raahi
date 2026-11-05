@@ -107,8 +107,8 @@ def test_second_volunteer_continues_without_re_asking(pretend_ai):
     ok(at)
     facts = tracker.load(case_id)["facts"]
     assert facts["woman"]["by"] == "Volunteer B" and facts["state"]["by"] == "Volunteer A"
-    assert at.code, "eligible as a woman: the summary is shown with no more questions"
-    assert "The worker was not paid wages for three months." in at.code[0].value
+    assert at.session_state["shown_drafts"], "eligible as a woman: the summary is shown with no more questions"
+    assert "The worker was not paid wages for three months." in at.session_state["shown_drafts"][0]
 
 
 def test_a_contradiction_stops_the_summary_until_resolved(pretend_ai):
@@ -121,7 +121,7 @@ def test_a_contradiction_stops_the_summary_until_resolved(pretend_ai):
     ok(at)
     errors = " ".join(e.value for e in at.error)
     assert "Cannot conclude yet" in errors and "Bihar" in errors and "Uttar Pradesh" in errors
-    assert not at.code                                          # no summary or draft while it is open
+    assert not at.session_state["shown_drafts"]                                          # no summary or draft while it is open
     assert tracker.load(case_id)["facts"]["state"]["value"] == "Bihar"
     button(at, "Use the new value (Uttar Pradesh)").click().run()
     ok(at)

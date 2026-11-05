@@ -1007,5 +1007,19 @@
  "rs.warn_replaced": "Replaced by the {new} on {date}: check before approving.",
  "rs.warn_mismatch": "The point names the {law}, but its source is “{title}”: check that the source matches the law.",
  "rs.warn_other_state": "This source is a website of {other}, but the case is in {state}: check that the rule applies in {state}.",
- "online.no_supabase": "Not ready for real cases: the online database (Supabase) is not set up, so anything saved here is lost when the app restarts. The supervisor adds SUPABASE_URL and SUPABASE_SECRET_KEY in the app's Secrets (see docs/GO_ONLINE.md)."
+ "online.no_supabase": "Not ready for real cases: the online database (Supabase) is not set up, so anything saved here is lost when the app restarts. The supervisor adds SUPABASE_URL and SUPABASE_SECRET_KEY in the app's Secrets (see docs/GO_ONLINE.md).",
+ "sum.clinic_file": "For the clinic file (not to be given out)",
+ "sum.case_line": "Case summary, {date}. Prepared from the volunteer's notes; people are described by their role only.",
+ "sum.sections_label": "Sections written in the notes (as found in our sentence table):",
+ "sum.asked": "Asked: {q} — {a}",
+ "sum.wants_none": "Not stated yet: ask what the person hopes will happen.",
+ "sum.doc_has": "Has:",
+ "sum.doc_needed": "Still needed:",
+ "sum.facts_used_line": "Facts used: in custody {custody}; woman {woman}; under 18 {under18}; SC/ST {scst}; disability {disability}; state {state}; yearly income {income}",
+ "sum.lawyer_questions": "Questions for the lawyer",
+ "sum.still_ask_person": "Still to ask the person:",
+ "cw.copy": "Copy text",
+ "cw.copied": "Copied",
+ "cw.word": "Word (.docx)",
+ "cw.pdf": "PDF"
 }

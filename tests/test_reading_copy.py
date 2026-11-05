@@ -83,9 +83,9 @@ def test_reading_copy_button_on_a_draft(tamil_screen, monkeypatch):
     next(b for b in at.button if b.key is None and "Make draft" in b.label).click().run()
     at.button(key="rc-go-draft").click().run()
     assert not at.exception, at.exception[0].stack_trace
-    copy = at.code[1].value
+    copy = at.code[0].value
     assert copy.startswith("Machine translated, not checked. Rely on the English or Hindi version.")
-    assert at.code[0].value.startswith("DRAFT — to be checked by a lawyer\n\nNOT READY FOR REVIEW")  # the real draft: English
+    assert at.session_state["shown_drafts"][0].startswith("DRAFT — to be checked by a lawyer\n\nNOT READY FOR REVIEW")  # the real draft: English
 
 
 def test_no_reading_copy_in_english_or_hindi():
