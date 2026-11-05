@@ -95,7 +95,8 @@ def test_language_switch_changes_the_screen(monkeypatch):
     monkeypatch.setattr(llm, "available", lambda: True)
     at = open_app("hi")
     assert at.title[0].value == "नया केस"
-    assert "ख़तरे में हैं? अभी 112 पर कॉल करें।" in " ".join(m.value for m in at.sidebar.markdown)
+    assert 'href="tel:112"' in " ".join(m.value for m in at.markdown)  # the safety line under the header
+    assert lang.t("safety.bar112", "hi") in " ".join(m.value for m in at.markdown)
     warnings = " ".join(w.value for w in at.warning)
     assert "नाम न लिखें" in warnings  # the "no names" warning in Hindi
     assert "नाम, फ़ोन नंबर या आधार नंबर बोलकर न बताएँ।" in warnings  # before recording

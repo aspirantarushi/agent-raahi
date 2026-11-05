@@ -66,7 +66,7 @@ def test_supervisor_deletes_on_screen(monkeypatch, tmp_path):
     monkeypatch.setattr(store, "delete_case", functools.partial(store.delete_case, base=tmp_path))
     monkeypatch.setenv("SUPERVISOR_PASSWORD", "test-pass")
     at = AppTest.from_file("../app.py", default_timeout=20).run()
-    at.sidebar.radio[0].set_value("Supervisor").run()
+    at.button(key="nav-supervisor").click().run()
     at.text_input[0].set_value("test-pass")
     next(b for b in at.button if b.label == "Sign in").click().run()
     at.selectbox(key="del-case").set_value(case_id).run()

@@ -48,7 +48,7 @@ def test_logo_is_in_the_header():
     head = ui.header("Agent Raahi", "Lighting the way to legal aid", "An AI casework agent")
     assert "<svg" in head and EN_MARK in head and "#E8A33D" in head
     assert HI_MARK in ui.header("एजेंट राही", "क़ानूनी मदद तक, रोशन राह")
-    assert ui.logo_mark(32) in ui.brand("Agent Raahi")
+    assert ui.logo_mark(48) in ui.brand("Agent Raahi")  # the header logo, 1.5 times the old 32px
 
 
 def test_header_on_screen_in_both_languages():

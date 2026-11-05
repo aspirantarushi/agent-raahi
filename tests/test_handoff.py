@@ -83,7 +83,8 @@ def test_my_cases_handoff_forms(monkeypatch, tmp_path):
                          (timeline, "record_acknowledgement")]:
         monkeypatch.setattr(module, name, functools.partial(getattr(module, name), base=tmp_path))
     at = AppTest.from_file("../app.py", default_timeout=20).run()
-    at.sidebar.radio[0].set_value("My cases").run()
+    at.button(key="nav-tracker").click().run()
+    at.button(key=f"tr-open-{case_id}").click().run()  # "Open case" on the tracker card
     assert any("A draft is not a filing" in c.value for c in at.caption)
     at.text_input(key=f"ho-who-{case_id}").set_value("Volunteer A")
     at.radio(key=f"ho-how-{case_id}").set_value("portal").run()

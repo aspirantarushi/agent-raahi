@@ -102,7 +102,7 @@ def eval_folder(monkeypatch, tmp_path):
 
 def test_screen_by_hand(eval_folder):
     at = AppTest.from_file("../app.py", default_timeout=20).run()
-    at.sidebar.radio[0].set_value("Evaluation").run()
+    at.button(key="nav-evaluation").click().run()
     at.selectbox(key="ev-case").set_value("E2")
     at.radio(key="ev-method").set_value("by hand")
     at.text_input(key="ev-volunteer").set_value("Volunteer 1").run()
@@ -121,12 +121,12 @@ def test_screen_with_agent_stops_when_sent(eval_folder, monkeypatch, tmp_path):
     original = store.submit
     monkeypatch.setattr(store, "submit", lambda *a, **k: original(*a, base=tmp_path, **k))
     at = AppTest.from_file("../app.py", default_timeout=20).run()
-    at.sidebar.radio[0].set_value("Evaluation").run()
+    at.button(key="nav-evaluation").click().run()
     at.selectbox(key="ev-case").set_value("O2")
     at.radio(key="ev-method").set_value("with the agent")
     at.text_input(key="ev-volunteer").set_value("Volunteer 2").run()
     next(b for b in at.button if b.label.startswith("Start (records")).click().run()
-    at.sidebar.radio[0].set_value("New case").run()
+    at.button(key="nav-new").click().run()
     at.radio(key="case_type").set_value("Undertrial").run()
     at.text_input(key="f_section").set_value("305")
     at.selectbox(key="f_law").set_value("BNS")

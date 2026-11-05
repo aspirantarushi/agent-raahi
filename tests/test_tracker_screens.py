@@ -165,7 +165,9 @@ def test_home_and_learn_need_no_passcode(monkeypatch):
     at.session_state["screen"] = "Home"
     at.run()
     ok(at)
-    assert any(b.key == "cont-go-home" for b in at.button)            # "Continue a case" on Home too
+    assert any(b.key == "home-scan" for b in at.button)               # "Scan QR code" on Home
+    at.button(key="home-continue").click().run()                      # "Continue a case" opens the code box
+    assert any(b.key == "cont-go-home" for b in at.button)
 
 
 def test_qr_link_opens_the_case(pretend_ai):

@@ -207,7 +207,9 @@ def my_cases(monkeypatch, tmp_path):
 
 def open_my_cases():
     at = AppTest.from_file("../app.py", default_timeout=20).run()
-    at.sidebar.radio[0].set_value("My cases").run()
+    at.button(key="nav-tracker").click().run()
+    for b in [b for b in at.button if str(b.key).startswith("tr-open-")]:  # open each case card
+        at.button(key=b.key).click().run()
     assert not at.exception, at.exception[0].stack_trace
     return at
 

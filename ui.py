@@ -65,12 +65,12 @@ def safety_bar(danger: str, legal_aid: str) -> str:
 
 
 def stepper(steps: List[str], current: int) -> str:
-    """Step progress, for example 1 Tell the story -> 2 Questions -> ... (current is 1-based)."""
+    """Step progress, "1. Tell the story" -> "2. Questions" -> ... on one line each (current is 1-based)."""
     items = []
     for i, label in enumerate(steps, 1):
         state = "done" if i < current else "now" if i == current else ""
         aria = ' aria-current="step"' if i == current else ""
-        items.append(f'<li class="{state}"{aria}><b>{i}</b><span>{html.escape(label)}</span></li>')
+        items.append(f'<li class="{state}"{aria}>{i}. {html.escape(label)}</li>')
     return f'<ol class="stepper" aria-label="Progress">{"".join(items)}</ol>'
 
 
@@ -79,57 +79,85 @@ def chip(kind: str, text: str) -> str:
 
 
 # ---------- top bar and home page sections (plain HTML, styled by assets/app.css) ----------
+# Layout, spacing and type follow docs/design/home-reference.html.
 
-def brand(name: str, size: int = 32) -> str:
+def icon(name: str) -> str:
+    """A Material Symbols icon (the outlined icons Streamlit already ships; nothing extra to download)."""
+    return f'<span class="mi" aria-hidden="true">{html.escape(name)}</span>'
+
+
+def brand(name: str, size: int = 48) -> str:
     return f'<div class="brand">{logo_mark(size)}<div class="word">{wordmark(name)}</div></div>'
 
 
-def topnav(links) -> str:
-    """links: [(anchor id, label)] for in-page links on the home page."""
-    return '<nav class="topnav" aria-label="Sections">' + "".join(
-        f'<a href="#{html.escape(a)}">{html.escape(label)}</a>' for a, label in links) + "</nav>"
+def hero(badge: str, kicker: str, lead: str, sub: str) -> str:
+    """Badge, then "Listen. Ask. Refer." (small), then the tagline as the main heading."""
+    return (f'<section class="hero" id="top"><span class="badge">{html.escape(badge)}</span>'
+            f'<div class="kicker">{html.escape(kicker)}</div><h1>{html.escape(lead)}</h1>'
+            f'<p class="sub">{html.escape(sub)}</p></section>')
 
 
-def hero(kicker: str, lead: str, sub: str) -> str:
-    return (f'<section class="hero"><div class="kicker">{html.escape(kicker)}</div>'
-            f'<div class="lead">{html.escape(lead)}</div><p class="sub">{html.escape(sub)}</p></section>')
+def helpline(free: str, danger: str, aid: str) -> str:
+    return (f'<p class="helpline">{html.escape(free)} <a class="danger" href="tel:112">{html.escape(danger)}</a>. '
+            f'<a href="tel:15100">{html.escape(aid)}</a>.</p>')
 
 
-def helpline(danger: str, aid: str) -> str:
-    return (f'<p class="helpline"><a class="danger" href="tel:112">{html.escape(danger)}</a> &nbsp;·&nbsp; '
-            f'<a href="tel:15100">{html.escape(aid)}</a></p>')
+def eyebrow(text: str) -> str:
+    dev = " dev" if re.search("[\u0900-\u097F]", text) else ""
+    return f'<p class="eyebrow{dev}">{html.escape(text)}</p>'
 
 
-def section(anchor: str, title: str, sub: str = "") -> str:
-    return (f'<div id="{html.escape(anchor)}" class="section-title">{html.escape(title)}</div>'
-            + (f'<div class="section-sub">{html.escape(sub)}</div>' if sub else ""))
+def section(anchor: str, label: str, title: str, body: str, center: bool = True, extra: str = "") -> str:
+    return (f'<section id="{html.escape(anchor)}" class="sec{" center" if center else ""} {extra}">'
+            f'{eyebrow(label)}<h2>{html.escape(title)}</h2>{body}</section>')
 
 
-def cards(items, columns: str = "four", numbered: bool = False) -> str:
-    """items: [(title, text)]."""
-    out = []
-    for i, (title, text) in enumerate(items, 1):
-        num = f'<span class="num">{i}</span>' if numbered else ""
-        out.append(f'<div class="card">{num}<h3>{html.escape(title)}</h3><p>{html.escape(text)}</p></div>')
-    return f'<div class="grid {columns}">{"".join(out)}</div>'
+def how_cards(items) -> str:
+    """items: [(title, text)], numbered 01, 02, ..."""
+    return '<div class="grid how">' + "".join(
+        f'<div class="card"><span class="num">{i:02d}</span><h3>{html.escape(t)}</h3><p>{html.escape(p)}</p></div>'
+        for i, (t, p) in enumerate(items, 1)) + "</div>"
 
 
-def compare(today_title: str, today, raahi_title: str, raahi) -> str:
-    li = lambda xs: "".join(f"<li>{html.escape(x)}</li>" for x in xs)
-    return (f'<div class="grid two"><div class="card today"><h3>{html.escape(today_title)}</h3><ul>{li(today)}</ul></div>'
-            f'<div class="card raahi"><h3>{html.escape(raahi_title)}</h3><ul>{li(raahi)}</ul></div></div>')
+def safe_cards(items) -> str:
+    """items: [(icon name, title, text)]: an icon above each card's title."""
+    return '<div class="grid safe">' + "".join(
+        f'<div class="card">{icon(name)}<h3>{html.escape(t)}</h3><p>{html.escape(p)}</p></div>'
+        for name, t, p in items) + "</div>"
+
+
+def compare(today: dict, raahi: dict) -> str:
+    """Today (a case in many places) beside With Agent Raahi (one case file, shown as a practice example)."""
+    e = html.escape
+    chips = "".join(f"<span>{e(c)}</span>" for c in today["chips"])
+    return (f'<section class="sec" id="what-changes"><div class="compare">'
+            f'<div class="today">{eyebrow(today["eyebrow"])}<h3>{e(today["title"])}</h3>'
+            f'<div class="chips">{chips}</div><p>{e(today["text"])}</p></div>'
+            f'<div class="raahi">{eyebrow(raahi["eyebrow"])}<h3>{e(raahi["title"])}</h3>'
+            f'<div class="mini"><span class="ex">{e(raahi["example"])}</span>'
+            f'<div class="top"><span>{e(raahi["case"])}</span>{chip("sent-back", raahi["status"])}</div>'
+            f'<div class="bar"><i></i></div><span class="line">{e(raahi["check"])}</span>'
+            f'<span class="line">{e(raahi["next"])}</span></div></div></div></section>')
 
 
 def facts_band(title: str, facts) -> str:
-    """facts: [(sentence from knowledge/, its Source line)]."""
-    rows = "".join(f'<div class="fact"><p>{html.escape(text)}</p><small>{html.escape(source)}</small></div>'
+    """facts: [(sentence from knowledge/, its Source line)]. Full width navy band; sources in italics."""
+    rows = "".join(f'<div class="fact"><p>{html.escape(text)}</p><em>{html.escape(source)}</em></div>'
                    for text, source in facts)
-    return (f'<section class="facts" id="facts"><h2><span class="facts-mark">{logo_on_dark(36)}</span>'
-            f'{html.escape(title)}</h2>{rows}</section>')
+    return (f'<section class="facts-band" id="facts">'
+            + eyebrow(title).replace('">', f'"><span class="facts-mark">{logo_on_dark(28)}</span>', 1)
+            + f'<div class="grid">{rows}</div></section>')
 
 
-def footer(name: str, tagline: str, text: str) -> str:
-    return (f'<footer class="footer"><b>{wordmark(name)}</b> · {html.escape(tagline)}<br>{html.escape(text)}</footer>')
+def footer(name: str, tagline: str, text: str, tagline_hi: str = "") -> str:
+    second = f' · <span lang="hi">{html.escape(tagline_hi)}</span>' if tagline_hi and tagline_hi != tagline else ""
+    return (f'<footer class="footer"><span><b>{wordmark(name)}</b> · {html.escape(tagline)}{second}</span>'
+            f'<span>{html.escape(text)}</span></footer>')
+
+
+def tag(text: str) -> str:
+    """A small label with a light tinted background, like "added 2026-11-05 by Volunteer A"."""
+    return f'<span class="tag">{html.escape(text)}</span>'
 
 
 # ---------- the shared case tracker ----------

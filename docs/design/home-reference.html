@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Raahi: home page design reference</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&amp;family=Noto+Sans+Devanagari:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#FBFAF7}
+a{color:#0E7A6B}a:hover{color:#0A5C51}
+</style>
+
+</head><body>
+<!-- Design reference for the Home page (from the Agent Raahi design canvas). Match its layout, spacing, type and flow; facts in [brackets] are placeholders to fill only from knowledge/ or measured results. -->
+
+
+<div style="background: #FBFAF7; color: #13213B; font-family: 'Noto Sans', 'Noto Sans Devanagari', system-ui, sans-serif; overflow: hidden">
+
+<header style="max-width: 1120px; margin: 0 auto; padding: 20px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap">
+<a href="#top" style="display: flex; align-items: center; gap: 10px; text-decoration: none; color: #13213B">
+<svg viewBox="0 0 64 64" width="32" height="32" role="img" aria-label="Agent Raahi"><path d="M16 56 V12 H32 C40 12 45 17 45 24 C45 31 40 36 32 36 H16" fill="none" stroke="#13213B" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="M30 36 C38 42 44 50 54 56" fill="none" stroke="#0E7A6B" stroke-width="8" stroke-linecap="round"/><circle cx="54" cy="10" r="5.5" fill="#E8A33D"/></svg>
+<span style="font-size: 19px; font-weight: 600"><span style="font-weight: 500; color: #5B6475">Agent</span> Raahi</span>
+</a>
+<nav style="display: flex; gap: 28px; flex-wrap: wrap; font-size: 15px">
+<a href="#how" style="color: #13213B; text-decoration: none">How it works</a>
+<a href="#safe" style="color: #13213B; text-decoration: none">Safety</a>
+<a href="#learn" style="color: #13213B; text-decoration: none">Learn</a>
+</nav>
+<div style="display: flex; align-items: center; gap: 10px">
+<button type="button" style="border: 1px solid #E2DDD2; background: #FFFFFF; border-radius: 999px; padding: 10px 16px; min-height: 44px; font-family: 'Noto Sans Devanagari', 'Noto Sans', sans-serif; font-size: 14px; color: #13213B">EN · हिंदी</button>
+<a href="#start" style="background: #13213B; color: #FFFFFF; border-radius: 999px; padding: 12px 20px; min-height: 44px; box-sizing: border-box; display: inline-flex; align-items: center; font-size: 15px; font-weight: 600; text-decoration: none">Start a case</a>
+</div>
+</header>
+
+<section id="top" style="position: relative; padding: 72px 24px 88px">
+<div aria-hidden="true" style="position: absolute; left: 50%; top: -120px; width: 900px; height: 520px; margin-left: -450px; border-radius: 50%; background: radial-gradient(closest-side, rgba(242,181,80,0.30), rgba(242,181,80,0) 70%)"></div>
+<div aria-hidden="true" style="position: absolute; left: 8%; top: 120px; width: 560px; height: 420px; border-radius: 50%; background: radial-gradient(closest-side, rgba(14,122,107,0.14), rgba(14,122,107,0) 70%)"></div>
+<div style="position: relative; max-width: 860px; margin: 0 auto; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 24px">
+<span style="display: inline-block; border: 1px solid #E2DDD2; background: rgba(255,255,255,0.7); border-radius: 999px; padding: 6px 14px; font-size: 13px; font-weight: 500; color: #5B6475">For legal aid clinics, para-legal volunteers and NGOs</span>
+<h1 style="margin: 0; font-size: 64px; line-height: 1.08; font-weight: 600; letter-spacing: -0.025em">Listen. <span style="color: #B8B2A6">Ask.</span> <span style="color: #B8B2A6">Refer.</span><br>Lighting the way to legal aid.</h1>
+<p style="margin: 0; max-width: 640px; font-size: 19px; line-height: 1.55; color: #4A5468">Turn a person's story into a review-ready referral, with a source behind every legal point and a lawyer's approval before anything leaves the clinic.</p>
+<div style="width: 100%; max-width: 680px; background: #FFFFFF; border: 1px solid #E2DDD2; border-radius: 20px; box-shadow: 0 12px 32px rgba(19,33,59,0.08); padding: 14px 14px 14px 22px; box-sizing: border-box; display: flex; align-items: center; gap: 12px">
+<label for="story" style="position: absolute; left: -9999px">The person's story</label>
+<input id="story" type="text" placeholder="Paste or speak the story (no names, phone or Aadhaar numbers)" style="flex: 1 1 auto; min-width: 0; border: 0; outline: none; font: inherit; font-size: 16px; color: #13213B; background: transparent">
+<button type="button" aria-label="Speak the story" style="width: 44px; height: 44px; border-radius: 999px; border: 1px solid #E2DDD2; background: #FBFAF7; display: flex; align-items: center; justify-content: center"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="#13213B" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+<button type="button" aria-label="Read the story" style="width: 44px; height: 44px; border-radius: 999px; border: 0; background: #0E7A6B; display: flex; align-items: center; justify-content: center"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+</div>
+<div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; font-size: 14px; color: #5B6475">
+<span style="padding: 4px 10px; border-radius: 999px; background: #E6F2EF; color: #0A5C51; font-weight: 600">English</span>
+<span style="padding: 4px 10px; border-radius: 999px; background: #E6F2EF; color: #0A5C51; font-weight: 600; font-family: 'Noto Sans Devanagari', sans-serif">हिंदी</span>
+<span style="padding: 4px 10px">More Indian languages through Bhashini, coming soon</span>
+</div>
+<p style="margin: 0; font-size: 14px; color: #5B6475">Free and open source. In danger? <a href="tel:112" style="font-weight: 600">Call 112</a>. Free legal aid helpline: <a href="tel:15100" style="font-weight: 600">15100</a>.</p>
+</div>
+</section>
+
+<section id="how" style="max-width: 1120px; margin: 0 auto; padding: 24px 24px 88px">
+<p style="margin: 0 0 8px; text-align: center; font-size: 13px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: #5B6475">How a case moves</p>
+<h2 style="margin: 0 0 40px; text-align: center; font-size: 40px; font-weight: 600; letter-spacing: -0.02em">From a story to the right door</h2>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 20px">
+<div style="background: #FFFFFF; border: 1px solid #ECE7DC; border-radius: 20px; padding: 24px; display: flex; flex-direction: column; gap: 10px">
+<span style="font-size: 13px; font-weight: 700; color: #0E7A6B">01</span>
+<h3 style="margin: 0; font-size: 19px; font-weight: 600">Tell the story</h3>
+<p style="margin: 0; font-size: 15px; line-height: 1.55; color: #4A5468">Type, paste or speak it, in English or Hindi. Phone and Aadhaar numbers are removed first.</p>
+</div>
+<div style="background: #FFFFFF; border: 1px solid #ECE7DC; border-radius: 20px; padding: 24px; display: flex; flex-direction: column; gap: 10px">
+<span style="font-size: 13px; font-weight: 700; color: #0E7A6B">02</span>
+<h3 style="margin: 0; font-size: 19px; font-weight: 600">Answer a few questions</h3>
+<p style="margin: 0; font-size: 15px; line-height: 1.55; color: #4A5468">Only what is missing, one at a time. "Don't know" is always fine; nothing is guessed.</p>
+</div>
+<div style="background: #FFFFFF; border: 1px solid #ECE7DC; border-radius: 20px; padding: 24px; display: flex; flex-direction: column; gap: 10px">
+<span style="font-size: 13px; font-weight: 700; color: #0E7A6B">03</span>
+<h3 style="margin: 0; font-size: 19px; font-weight: 600">Check the summary</h3>
+<p style="margin: 0; font-size: 15px; line-height: 1.55; color: #4A5468">What happened, urgency, free legal aid, documents and next steps, with a ready-for-review checklist.</p>
+</div>
+<div style="background: #FFFFFF; border: 1px solid #ECE7DC; border-radius: 20px; padding: 24px; display: flex; flex-direction: column; gap: 10px">
+<span style="font-size: 13px; font-weight: 700; color: #0E7A6B">04</span>
+<h3 style="margin: 0; font-size: 19px; font-weight: 600">A lawyer approves</h3>
+<p style="margin: 0; font-size: 15px; line-height: 1.55; color: #4A5468">The supervisor approves or sends it back. Then it is submitted, acknowledged and followed up.</p>
+</div>
+</div>
+</section>
+
+<section style="max-width: 1120px; margin: 0 auto; padding: 0 24px 88px">
+<div style="display: flex; flex-wrap: wrap; gap: 20px">
+<div style="flex: 1 1 420px; background: #F3F0E9; border-radius: 24px; padding: 32px; display: flex; flex-direction: column; gap: 18px">
+<p style="margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: #5B6475">Today</p>
+<h3 style="margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.01em">A case in five places. Facts get lost on the way.</h3>
+<div style="display: flex; flex-wrap: wrap; gap: 10px">
+<span style="padding: 10px 14px; border-radius: 12px; background: #FFFFFF; border: 1px solid #E2DDD2; font-size: 15px">Notebook</span>
+<span style="padding: 10px 14px; border-radius: 12px; background: #FFFFFF; border: 1px solid #E2DDD2; font-size: 15px">WhatsApp photos</span>
+<span style="padding: 10px 14px; border-radius: 12px; background: #FFFFFF; border: 1px solid #E2DDD2; font-size: 15px">Word file</span>
+<span style="padding: 10px 14px; border-radius: 12px; background: #FFFFFF; border: 1px solid #E2DDD2; font-size: 15px">Phone call to the DLSA</span>
+<span style="padding: 10px 14px; border-radius: 12px; background: #FFFFFF; border: 1px solid #E2DDD2; font-size: 15px">Lawyer's memory</span>
+</div>
+<p style="margin: 0; font-size: 15px; line-height: 1.55; color: #4A5468">Missing dates, missing documents, and no record of what was sent or when.</p>
+</div>
+<div style="flex: 1 1 420px; background: #FFFFFF; border: 2px solid #0E7A6B; border-radius: 24px; padding: 32px; display: flex; flex-direction: column; gap: 18px">
+<p style="margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: #0A5C51">With Agent Raahi</p>
+<h3 style="margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.01em">One case file, from first story to follow-up.</h3>
+<div style="border: 1px solid #ECE7DC; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 12px; background: #FBFAF7">
+<div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap">
+<span style="font-size: 15px; font-weight: 600">Case U-20261104 · Unpaid wages</span>
+<span style="padding: 4px 10px; border-radius: 999px; background: #FDF0D9; color: #7A4B00; font-size: 13px; font-weight: 600">Waiting for review</span>
+</div>
+<div style="height: 8px; border-radius: 4px; background: #ECE7DC; overflow: hidden"><div style="width: 80%; height: 8px; background: #0E7A6B"></div></div>
+<span style="font-size: 14px; color: #4A5468">Checklist: 4 of 5 ready · 1 marked "cannot obtain"</span>
+<span style="font-size: 14px; color: #4A5468">Next step: DLSA application · suggested follow-up in 7 days</span>
+</div>
+</div>
+</div>
+</section>
+
+<section id="safe" style="max-width: 1120px; margin: 0 auto; padding: 0 24px 88px">
+<p style="margin: 0 0 8px; text-align: center; font-size: 13px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: #5B6475">Built to be safe</p>
+<h2 style="margin: 0 0 40px; text-align: center; font-size: 40px; font-weight: 600; letter-spacing: -0.02em">It helps the volunteer. It never replaces the lawyer.</h2>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px">
+<div style="border: 1px solid #ECE7DC; background: #FFFFFF; border-radius: 20px; padding: 24px; display: flex; flex-direction: column; gap: 8px"><h3 style="margin: 0; font-size: 18px; font-weight: 600">A lawyer approves every draft</h3><p style="margin: 0; font-size: 15px; line-height: 1.55; color: #4A5468">Nothing is saved or sent until a supervisor approves, and no one approves their own work.</p></div>
+<div style="border: 1px solid #ECE7DC; background: #FFFFFF; border-radius: 20px; padding: 24px; display: flex; flex-direction: column; gap: 8px"><h3 style="margin: 0; font-size: 18px; font-weight: 600">A source behind every legal point</h3><p style="margin: 0; font-size: 15px; line-height: 1.55; color: #4A5468">Law comes only from checked files, each with its source. Anything else says "ask a lawyer".</p></div>
+<div style="border: 1px solid #ECE7DC; background: #FFFFFF; border-radius: 20px; padding: 24px; display: flex; flex-direction: column; gap: 8px"><h3 style="margin: 0; font-size: 18px; font-weight: 600">No names or Aadhaar stored</h3><p style="margin: 0; font-size: 15px; line-height: 1.55; color: #4A5468">Personal numbers are removed before the AI sees anything, and notes are never saved.</p></div>
+<div style="border: 1px solid #ECE7DC; background: #FFFFFF; border-radius: 20px; padding: 24px; display: flex; flex-direction: column; gap: 8px"><h3 style="margin: 0; font-size: 18px; font-weight: 600">Says "cannot conclude yet"</h3><p style="margin: 0; font-size: 15px; line-height: 1.55; color: #4A5468">When facts contradict or are missing, it stops and asks instead of guessing.</p></div>
+<div style="border: 1px solid #ECE7DC; background: #FFFFFF; border-radius: 20px; padding: 24px; display: flex; flex-direction: column; gap: 8px"><h3 style="margin: 0; font-size: 18px; font-weight: 600">Never predicts outcomes</h3><p style="margin: 0; font-size: 15px; line-height: 1.55; color: #4A5468">No bail chances, risk scores or promises. Release is never automatic.</p></div>
+<div style="border: 1px solid #ECE7DC; background: #FFFFFF; border-radius: 20px; padding: 24px; display: flex; flex-direction: column; gap: 8px"><h3 style="margin: 0; font-size: 18px; font-weight: 600">Works without AI too</h3><p style="margin: 0; font-size: 15px; line-height: 1.55; color: #4A5468">Dates and eligibility are plain, tested rules. If the AI is down, the form still works.</p></div>
+</div>
+</section>
+
+<section style="background: #13213B; color: #F8F6F1; padding: 64px 24px">
+<div style="max-width: 1120px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 28px">
+<div style="display: flex; flex-direction: column; gap: 6px"><span style="font-size: 44px; font-weight: 600; letter-spacing: -0.02em">[73%]</span><span style="font-size: 15px; line-height: 1.5; color: #C9CFDA">of prisoners in India are undertrials [verify: Prison Statistics India 2024]</span></div>
+<div style="display: flex; flex-direction: column; gap: 6px"><span style="font-size: 44px; font-weight: 600; letter-spacing: -0.02em">15100</span><span style="font-size: 15px; line-height: 1.5; color: #C9CFDA">NALSA's free legal aid helpline</span></div>
+<div style="display: flex; flex-direction: column; gap: 6px"><span style="font-size: 44px; font-weight: 600; letter-spacing: -0.02em">7 days</span><span style="font-size: 15px; line-height: 1.5; color: #C9CFDA">for a legal services authority to decide on an application (NALSA Regulations, Reg. 7)</span></div>
+<div style="display: flex; flex-direction: column; gap: 6px"><span style="font-size: 44px; font-weight: 600; letter-spacing: -0.02em">[pilot]</span><span style="font-size: 15px; line-height: 1.5; color: #C9CFDA">[packets reviewed and accepted, from our measured pilot]</span></div>
+</div>
+</section>
+
+<section id="learn" style="max-width: 1120px; margin: 0 auto; padding: 88px 24px">
+<p style="margin: 0 0 8px; font-size: 13px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: #5B6475">Learn the basics</p>
+<h2 style="margin: 0 0 28px; font-size: 32px; font-weight: 600; letter-spacing: -0.02em">Short guides for volunteers</h2>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px">
+<a href="#learn" style="border: 1px solid #ECE7DC; background: #FFFFFF; border-radius: 16px; padding: 18px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; text-decoration: none; color: #13213B; font-size: 16px; font-weight: 500">Who qualifies for free legal aid<span aria-hidden="true" style="color: #5B6475">→</span></a>
+<a href="#learn" style="border: 1px solid #ECE7DC; background: #FFFFFF; border-radius: 16px; padding: 18px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; text-decoration: none; color: #13213B; font-size: 16px; font-weight: 500">Rights on arrest<span aria-hidden="true" style="color: #5B6475">→</span></a>
+<a href="#learn" style="border: 1px solid #ECE7DC; background: #FFFFFF; border-radius: 16px; padding: 18px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; text-decoration: none; color: #13213B; font-size: 16px; font-weight: 500">Section 479: release after part of the sentence<span aria-hidden="true" style="color: #5B6475">→</span></a>
+<a href="#learn" style="border: 1px solid #ECE7DC; background: #FFFFFF; border-radius: 16px; padding: 18px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; text-decoration: none; color: #13213B; font-size: 16px; font-weight: 500">The first hours after online fraud<span aria-hidden="true" style="color: #5B6475">→</span></a>
+<a href="#learn" style="border: 1px solid #ECE7DC; background: #FFFFFF; border-radius: 16px; padding: 18px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; text-decoration: none; color: #13213B; font-size: 16px; font-weight: 500">Bail granted but still in jail<span aria-hidden="true" style="color: #5B6475">→</span></a>
+<a href="#learn" style="border: 1px solid #ECE7DC; background: #FFFFFF; border-radius: 16px; padding: 18px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; text-decoration: none; color: #13213B; font-size: 16px; font-weight: 500">How to apply to the DLSA<span aria-hidden="true" style="color: #5B6475">→</span></a>
+</div>
+</section>
+
+<footer style="border-top: 1px solid #ECE7DC; padding: 32px 24px">
+<div style="max-width: 1120px; margin: 0 auto; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; font-size: 14px; color: #5B6475">
+<span><span style="font-weight: 600; color: #13213B">Agent Raahi</span> · Lighting the way to legal aid · <span style="font-family: 'Noto Sans Devanagari', sans-serif">क़ानूनी मदद तक, रोशन राह</span></span>
+<span>Not a lawyer. Every draft is checked by one. · Open source (MIT) · Built in AgentFoundry</span>
+</div>
+</footer>
+
+</div>
+
+</body></html>

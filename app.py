@@ -8,6 +8,7 @@ is translated.
 """
 
 import hmac
+import html
 import json
 import os
 import re
@@ -80,10 +81,10 @@ def keep_choices():
 
 def language_switch():
     """English / हिंदी at the top of every screen, remembered for the session."""
-    st.radio(LANGUAGE_LABEL, list(lang.LANGUAGES), format_func=lang.LANGUAGES.get, horizontal=True,
-             key="ui_lang", on_change=keep_choices, label_visibility="collapsed")
+    st.radio(LANGUAGE_LABEL, list(lang.LANGUAGES), format_func=lambda c: "EN" if c == "en" else lang.LANGUAGES[c],
+             horizontal=True, key="ui_lang", on_change=keep_choices, label_visibility="collapsed")
     if lang.is_machine_translated(code()):
-        st.caption("\u2139\ufe0f " + t("ui.machine_note"))
+        st.caption(":material/info: " + t("ui.machine_note"))
 
 
 def option_text(prefix: str):
@@ -425,7 +426,11 @@ def general_step(gen) -> int:
 
 
 def flow_title(n: int):
-    st.markdown(f'<div class="step-title">{n} \u00b7 {t(GENERAL_FLOW[n - 1])}</div>', unsafe_allow_html=True)
+    """Step 1 (above the story box): the heading alone, centred. Later steps: "2. Questions"."""
+    if n == 1:
+        st.markdown(f'<div class="step-title center">{t(GENERAL_FLOW[0])}</div>', unsafe_allow_html=True)
+    else:
+        st.markdown(f'<div class="step-title">{n}. {t(GENERAL_FLOW[n - 1])}</div>', unsafe_allow_html=True)
 
 
 def back_to_story():
@@ -453,7 +458,7 @@ def general_screen():
     st.markdown(ui.stepper([t(k) for k in GENERAL_FLOW], step), unsafe_allow_html=True)
     if gen:  # urgent actions always at the top
         for action in general.urgent_actions(gen["facts"], gen["reading"].unconfirmed_yes):
-            st.error(f"## \U0001F6A8 {t(URGENT_KEYS[action])}")
+            st.error(f"## {t(URGENT_KEYS[action])}", icon=":material/emergency:")
     blocked = conflicts_block(st.session_state.get("case_id")) if gen else False
 
     if gen is None or st.session_state.get("g_story_open"):
@@ -471,7 +476,7 @@ def general_screen():
             if gen:
                 col2.button(t("ui.general.clear"), on_click=clear_general)
                 if st.session_state.get("g_story_open"):
-                    st.button(t("ui.next") + " \u2192", key="g-story-continue", on_click=close_story)
+                    st.button(t("ui.next"), key="g-story-continue", on_click=close_story, icon=":material/arrow_forward:")
         else:
             st.info(t("ui.general.no_ai"))
         if not llm.available() or st.session_state.get("gen_error"):
@@ -992,8 +997,8 @@ def cannot_marks(prefix: str) -> dict:
 
 def checklist_box(items, prefix: str):
     st.markdown(f"**{t('ready.title')}**")
-    icons = {readiness.PRESENT: "\u2705", readiness.MISSING: "\u274c", readiness.UNCERTAIN: "\u2753",
-             readiness.CANNOT: "\u26d4"}
+    icons = {readiness.PRESENT: ":material/check_circle:", readiness.MISSING: ":material/cancel:",
+             readiness.UNCERTAIN: ":material/help:", readiness.CANNOT: ":material/block:"}
     for item in items:
         st.markdown(f"{icons[item.status]} {item.label(code())}: {t('ready.status.' + item.status)}"
                     + (f" \u2014 {item.note}" if item.note else ""))
@@ -1002,8 +1007,9 @@ def checklist_box(items, prefix: str):
                 st.text_input(t("ready.reason"), max_chars=120, key=f"cantr-{prefix}-{item.key}")
 
 
-LEDGER_ICONS = {ledger.TOLD: "\U0001F5E3\ufe0f", ledger.AI_CHECKED: "\U0001F916\u2705", ledger.CALCULATED: "\U0001F9EE",
-                ledger.VERIFIED: "\U0001F4D7", ledger.UNRESOLVED: "\u2753", ledger.PRECAUTION: "\u26a0\ufe0f"}
+LEDGER_ICONS = {ledger.TOLD: ":material/record_voice_over:", ledger.AI_CHECKED: ":material/fact_check:",
+                ledger.CALCULATED: ":material/calculate:", ledger.VERIFIED: ":material/menu_book:",
+                ledger.UNRESOLVED: ":material/help:", ledger.PRECAUTION: ":material/warning:"}
 
 
 def ledger_box(entries, expanded=False):
@@ -1158,7 +1164,8 @@ def show_result(result: section479.Result):
 
 STATUS_KEYS = {store.WAITING: "ui.status.waiting", store.APPROVED: "ui.status.approved",
                store.SENT_BACK: "ui.status.sent_back"}
-STEP_ICONS = {timeline.TO_DO: "⬜", timeline.DONE: "✅", timeline.NOT_NEEDED: "➖"}
+STEP_ICONS = {timeline.TO_DO: ":material/check_box_outline_blank:", timeline.DONE: ":material/check_box:",
+              timeline.NOT_NEEDED: ":material/remove:"}
 
 
 def step_title(s: timeline.Step) -> str:
@@ -1305,7 +1312,8 @@ def handoff_box(case_id: str):
     current = timeline.stage(record)
     order = ["ready", timeline.APPROVED_STAGE, timeline.SUBMITTED_STAGE, timeline.ACKNOWLEDGED_STAGE]
     reached = order.index(current)
-    st.markdown(" \u2192 ".join(("\u2705 " if i <= reached else "\u25cb ") + t(f"handoff.stage.{s}")
+    st.markdown(" \u2192 ".join((":material/check_circle: " if i <= reached else ":material/radio_button_unchecked: ")
+                                 + t(f"handoff.stage.{s}")
                                   for i, s in enumerate(order)))
     st.caption(t("handoff.not_filing"))
     handoff = record.get("handoff", {})
@@ -1392,31 +1400,62 @@ def my_cases_screen():
     due_this_week_box()
     approved_text = {c["id"]: c.get("text", "") for c in store.list_cases() if c["status"] == store.APPROVED}
     for row in shown:
-        case_id = row["id"]
-        record = tracker.load(case_id)
-        with st.container(border=True):
-            title = f"**{t('ui.case_title', case_id=case_id)}**"
-            if row["case_type"]:
-                title += f" · {case_type_label(row['case_type'])}"
-            if row["code"]:
-                title += f" · {t('slip.code')} {row['code']}"
-            st.markdown(f"{title} &nbsp; {status_chip(row['status'])}", unsafe_allow_html=True)
-            if row["status"] == tracker.INTAKE:
-                st.button(t("tr.continue"), key=f"tr-cont-{case_id}", on_click=continue_from_tracker, args=(case_id,))
-            if row["status"] == store.SENT_BACK:
-                st.warning(t("ui.cases.reason", reason=store.get_pending(case_id).get("reason", "")))
-                fix_and_resend(case_id)
+        tracker_card(row, approved_text)
+
+
+def toggle_open(case_id: str):
+    toggle(f"open-{case_id}")
+    if not st.session_state.get(f"open-{case_id}"):
+        st.session_state[f"editing-{case_id}"] = False
+
+
+def tracker_card(row: dict, approved_text: dict):
+    """One case on the tracker: number, type, code and status; the next step; Open case / Edit case."""
+    e = html.escape
+    case_id = row["id"]
+    record = tracker.load(case_id)
+    is_open = bool(st.session_state.get(f"open-{case_id}"))
+    with st.container(key=f"case-card-{case_id}"):
+        head = f"<b>{e(t('ui.case_title', case_id=case_id))}</b>"
+        if row["case_type"]:
+            head += f" · {e(case_type_label(row['case_type']))}"
+        if row["code"]:
+            head += f" · {e(t('slip.code'))} {e(row['code'])}"
+        sub = e(next_step_text(row)) if row["next_step"] else ""
+        if row["due"]:
+            due = e(show_date(date.fromisoformat(row["due"])))
+            sub += (f' · <span class="overdue">{e(t("tr.overdue"))} · {due}</span>' if row["overdue"]
+                    else f" · {e(t('cf.due', due=due))}")
+        st.markdown(f'<div class="case-head">{head} {status_chip(row["status"])}</div>'
+                    + (f'<div class="case-sub">{sub}</div>' if sub else ""), unsafe_allow_html=True)
+        with st.container(horizontal=True, gap="small"):
+            st.button(t("tr.close") if is_open else t("tr.open"), key=f"tr-open-{case_id}",
+                      icon=":material/close:" if is_open else ":material/folder_open:",
+                      type="secondary" if is_open else "primary", on_click=toggle_open, args=(case_id,))
             if record:
-                case_tools(case_id, record)
-            if case_id in approved_text:
-                handoff_box(case_id)
-                timeline_box(case_id)
-                with st.expander(t("ui.cases.case_file")):
-                    st.markdown(approved_text[case_id])
-                approved = store.approved_draft(case_id)
-                if approved:
-                    with st.expander(t("ui.cases.approved_draft")):
-                        st.code(approved, language=None, wrap_lines=True)
+                st.button(t("tr.edit"), key=f"tr-edit-{case_id}", icon=":material/edit:", on_click=start_edit,
+                          args=(case_id,))
+            if row["status"] == tracker.INTAKE:
+                st.button(t("tr.continue"), key=f"tr-cont-{case_id}", icon=":material/arrow_forward:",
+                          on_click=continue_from_tracker, args=(case_id,))
+        if row["status"] == store.SENT_BACK:
+            st.warning(t("ui.cases.reason", reason=store.get_pending(case_id).get("reason", "")))
+            fix_and_resend(case_id)
+        if record and (is_open or st.session_state.get(f"editing-{case_id}")):
+            case_file_or_edit(case_id, record, edit_button=False)  # "Edit case" is already on the card
+            slip_box(record)
+            visit_form(case_id)
+            camp_form(case_id, record)
+        if is_open and case_id in approved_text:
+            handoff_box(case_id)
+            timeline_box(case_id)
+            with st.expander(t("ui.cases.case_file")):
+                st.markdown(approved_text[case_id])
+            approved = store.approved_draft(case_id)
+            if approved:
+                with st.expander(t("ui.cases.approved_draft")):
+                    st.code(approved, language=None, wrap_lines=True)
+        if is_open:
             report_problem_box(f"case-{case_id}", "My cases", case_id)
 
 
@@ -1604,12 +1643,8 @@ def learn_screen():
 def supervisor_password() -> str:
     """Read the supervisor password from an environment variable or Streamlit secrets.
     It is never written in the code."""
-    if os.environ.get("SUPERVISOR_PASSWORD"):
-        return os.environ["SUPERVISOR_PASSWORD"]
-    try:
-        return st.secrets.get("SUPERVISOR_PASSWORD", "")
-    except Exception:  # no secrets file
-        return ""
+    # storage.setting: the environment, .env or the host's secret settings (never the real secrets in tests)
+    return storage.setting("SUPERVISOR_PASSWORD")
 
 
 def supervisor_screen():
@@ -1629,7 +1664,7 @@ def supervisor_screen():
         return
     top1, top2 = st.columns([3, 1])
     top1.success(t("ui.sup.signed_in"))
-    if top2.button(t("ui.sup.sign_out")):
+    if top2.button(t("ui.sup.sign_out"), type="primary", icon=":material/logout:"):
         st.session_state["supervisor_ok"] = False
         st.rerun()
 
@@ -1645,6 +1680,7 @@ def supervisor_screen():
         for record in waiting:
             review_one(record)
 
+    changed_after_approval_box()
     delete_case_box()
     evaluation_scoring_box()
     impact_box()
@@ -1664,6 +1700,30 @@ def supervisor_screen():
     for r in records:
         with st.expander(t("ui.sup.audit_row", case_id=r["case_id"], model=r["model"], last=r["events"][-1]["event"])):
             st.markdown(audit.describe(r))
+
+
+def mark_reviewed(case_id: str):
+    try:
+        tracker.mark_reviewed(case_id)
+    except (tracker.TrackerError, storage.StorageError) as err:
+        st.session_state["supervisor_flash"] = str(err)
+        return
+    st.session_state["supervisor_flash"] = t("sup.reviewed", case_id=case_id)
+
+
+def changed_after_approval_box():
+    """Approved cases a volunteer changed: the changes, then "Mark changes as reviewed"."""
+    records = tracker.needs_review()
+    if not records:
+        return
+    st.subheader(t("sup.changed_title", n=len(records)))
+    for record in records:
+        r = record["review_needed"]
+        with st.expander(t("sup.changed_row", case_id=record["id"], v=r["version"], by=r["by"], on=r["since"][:10]),
+                         expanded=True, icon=":material/history:"):
+            case_file_view(record["id"], record, editable=False)
+            st.button(t("sup.mark_reviewed"), key=f"reviewed-{record['id']}", type="primary",
+                      icon=":material/task_alt:", on_click=mark_reviewed, args=(record["id"],))
 
 
 def delete_selected_case():
@@ -1792,7 +1852,7 @@ def volunteer_line():
     if clinic_passcode():
         c1, c2 = st.columns([4, 1])
         c1.caption(t("gate.signed_in", name=who()))
-        if c2.button(t("gate.sign_out"), key="gate-out", type="tertiary"):
+        if c2.button(t("gate.sign_out"), key="gate-out", type="primary", icon=":material/logout:"):
             for key in ("clinic_ok", "volunteer", "case_id"):
                 st.session_state.pop(key, None)
             st.rerun()
@@ -1883,10 +1943,17 @@ def open_by_code():
 
 
 def continue_box(where: str):
-    with st.expander(t("cont.title"), expanded=where == "new" and not st.session_state.get("case_id")):
+    """Type the code from the case slip, or scan its QR code with the camera."""
+    with st.expander(t("cont.title"), icon=":material/folder_open:",
+                     expanded=(where == "new" and not st.session_state.get("case_id"))
+                     or bool(st.session_state.get(f"scan-open-{where}"))):
         st.text_input(t("cont.code"), key=f"cont-code-{where}", max_chars=12, placeholder="K7M2QX")
-        st.button(t("cont.open"), key=f"cont-go-{where}", on_click=continue_case, args=(where,))
-        st.caption(t("cont.qr_hint"))
+        with st.container(horizontal=True, gap="small"):
+            st.button(t("cont.open"), key=f"cont-go-{where}", type="primary", on_click=continue_case, args=(where,))
+            st.button(t("home.scan"), key=f"scan-{where}", icon=":material/qr_code_scanner:", on_click=toggle,
+                      args=(f"scan-open-{where}",))
+        if st.session_state.get(f"scan-open-{where}"):
+            scan_box(where)
 
 
 def merge_into_case(case_id: str, facts: dict, source: str):
@@ -1912,6 +1979,7 @@ def resolve_conflict(case_id: str, fact: str, keep: str):
 
 
 def any_fact_label(fact: str) -> str:
+    fact = {"section_typed": "section", "law_typed": "law"}.get(fact, fact)  # as typed on the form
     for key in (f"fact.{fact}", f"tfact.{fact}"):
         if key in lang.strings("en"):
             return t(key)
@@ -1975,57 +2043,202 @@ def still_missing(record: dict) -> list:
     return [t(f"elig.q.{m}") for m in general.check_eligibility(values).missing]
 
 
-def case_file_view(case_id: str, record: dict):
+def next_step_words(step: str, tl_step) -> str:
+    if tl_step:
+        return step_title(tl_step)
+    return lang.strings(code()).get(f"next:{step}", t(f"tr.next.{step}") if f"tr.next.{step}" in lang.strings("en") else step)
+
+
+def show_change_value(field: str, value) -> str:
+    if value in (None, ""):
+        return t("ed.empty")
+    if field == "next step date" and isinstance(value, str):
+        return show_fact_value("custody_began", value)  # a date
+    if field in ("note", "next step"):
+        return str(value)
+    return show_fact_value(field, value)
+
+
+def change_field_label(field: str) -> str:
+    return {"note": t("cf.notes"), "next step": t("ed.next"), "next step date": t("ed.next_due")}.get(
+        field, any_fact_label(field))
+
+
+def case_file_view(case_id: str, record: dict, editable: bool = True):
+    """The case file: summary, facts known (with who added them), still missing, documents, next step,
+    notes, visits and every change made. "Edit / make changes" opens the edit form."""
+    e = html.escape
     status = tracker.status_of(case_id)
-    st.markdown(f"**{t('cf.summary')}**")
-    if record.get("summary"):
-        st.markdown("\n".join(f"- {line}" for line in record["summary"]))
-    else:
-        st.caption(t("cf.no_summary"))
-    st.markdown(f"**{t('cf.facts')}**")
+    if editable:
+        st.button(t("cf.edit"), key=f"cf-edit-{case_id}", icon=":material/edit:", on_click=start_edit, args=(case_id,))
+    if record.get("review_needed"):
+        old = max((v["version"] for v in record.get("versions", [])), default=1)
+        st.markdown(f'<div class="review-flag">{e(t("ed.review_banner", v=record["review_needed"]["version"], old=old))}'
+                    f'</div>', unsafe_allow_html=True)
+    out = [f'<h4>{e(t("cf.summary"))}</h4>']
+    out.append("<ul>" + "".join(f"<li>{e(x)}</li>" for x in record["summary"]) + "</ul>" if record.get("summary")
+               else f'<p class="case-sub">{e(t("cf.no_summary"))}</p>')
+    out.append(f'<h4>{e(t("cf.facts"))}</h4>')
     facts = record.get("facts", {})
-    if facts:
-        st.markdown("\n".join(f"- {any_fact_label(f)}: {show_fact_value(f, e['value'])} "
-                              f"<small>· {t('cf.added', on=e['on'][:10], by=e['by'])}</small>"
-                              for f, e in facts.items()), unsafe_allow_html=True)
-    else:
-        st.caption(t("cf.no_facts"))
-    for c in tracker.open_conflicts(record):
-        st.warning(t("cf.conflict", fact=any_fact_label(c["fact"])))
+    out.append("<ul>" + "".join(
+        f"<li>{e(any_fact_label(f))}: <b>{e(show_fact_value(f, x['value']))}</b> "
+        f"{ui.tag(t('cf.added', on=x['on'][:10], by=x['by']))}</li>" for f, x in facts.items()) + "</ul>"
+        if facts else f'<p class="case-sub">{e(t("cf.no_facts"))}</p>')
     missing = still_missing(record)
-    st.markdown(f"**{t('cf.missing')}**")
-    st.markdown("\n".join(f"- {m}" for m in missing) if missing else t("cf.nothing_missing"))
-    st.markdown(f"**{t('cf.documents')}**")
+    out.append(f'<h4>{e(t("cf.missing"))}</h4>')
+    out.append("<ul>" + "".join(f"<li>{e(m)}</li>" for m in missing) + "</ul>" if missing
+               else f'<p>{e(t("cf.nothing_missing"))}</p>')
+    out.append(f'<h4>{e(t("cf.documents"))}</h4>')
     held = record.get("documents_held", [])
     if held:
-        st.markdown(t("cf.held") + " " + ", ".join(held))
+        out.append(f'<p>{e(t("cf.held"))} {e(", ".join(held))}</p>')
     categories = [i[0] for i in record.get("issues", [])] or (
         ["arrest_or_custody"] if record.get("case_type") == "Undertrial" else ["other"])
     for _, items, source in general.document_lists(categories, held, record.get("summary", [])):
         if items:
-            st.markdown(t("cf.to_collect") + " " + ", ".join(lang.strings(code()).get(f"doc:{x}", x) for x in items))
+            out.append(f'<p>{e(t("cf.to_collect"))} '
+                       f'{e(", ".join(lang.strings(code()).get(f"doc:{x}", x) for x in items))}</p>')
             if source:
-                st.caption(source)
+                out.append(f'<p class="case-sub"><em>{e(source)}</em></p>')
     step, due, tl_step = tracker.next_step(record, status, case_id)
-    st.markdown(f"**{t('cf.next')}** " + (step_title(tl_step) if tl_step else lang.strings(code()).get(
-        f"next:{step}", t(f"tr.next.{step}") if f"tr.next.{step}" in lang.strings("en") else step))
-                + (f" · {t('cf.due', due=show_date(date.fromisoformat(due)))}" if due else ""))
-    st.markdown(f"**{t('cf.visits')}**")
+    out.append(f'<h4>{e(t("ed.next"))}</h4><p>{e(next_step_words(step, tl_step))}'
+               + (f" · {e(t('cf.due', due=show_date(date.fromisoformat(due))))}" if due else "") + "</p>")
+    if record.get("next") and status == tracker.CHANGED:
+        n = record["next"]
+        out.append(f'<p class="case-sub">{e(n["step"])}'
+                   + (f" · {e(t('cf.due', due=show_date(date.fromisoformat(n['due']))))}" if n.get("due") else "")
+                   + f' {ui.tag(t("cf.added", on=n["on"][:10], by=n["by"]))}</p>')
+    if record.get("notes"):
+        out.append(f'<h4>{e(t("cf.notes"))}</h4><ul>' + "".join(
+            f"<li>{e(n['text'])} {ui.tag(t('cf.added', on=n['on'][:10], by=n['by']))}</li>"
+            for n in reversed(record["notes"])) + "</ul>")
+    out.append(f'<h4>{e(t("cf.visits"))}</h4>')
     visits = record.get("visits", [])
     if not visits:
-        st.caption(t("cf.no_visits"))
-    for v in reversed(visits):
-        parts = [f"**{show_date(date.fromisoformat(v['on']))}** · {t('visit.how.' + v['how'])} · {v['by']}"]
-        for key in ("learned", "done"):
-            if v.get(key):
-                parts.append(f"{t('visit.' + key)}: {v[key]}")
-        if v.get("next_step"):
-            parts.append(f"{t('visit.next')}: {v['next_step']}"
-                         + (f" ({show_date(date.fromisoformat(v['next_due']))})" if v.get("next_due") else ""))
-        st.markdown("- " + "  \n  ".join(parts))
+        out.append(f'<p class="case-sub">{e(t("cf.no_visits"))}</p>')
+    else:
+        items = []
+        for v in reversed(visits):
+            parts = [f"<b>{e(show_date(date.fromisoformat(v['on'])))}</b> · {e(t('visit.how.' + v['how']))} "
+                     f"{ui.tag(v['by'])}"]
+            for key in ("learned", "done"):
+                if v.get(key):
+                    parts.append(f"{e(t('visit.' + key))}: {e(v[key])}")
+            if v.get("next_step"):
+                parts.append(f"{e(t('visit.next'))}: {e(v['next_step'])}"
+                             + (f" ({e(show_date(date.fromisoformat(v['next_due'])))})" if v.get("next_due") else ""))
+            items.append("<li>" + "<br>".join(parts) + "</li>")
+        out.append("<ul>" + "".join(items) + "</ul>")
+    if record.get("edits"):
+        out.append(f'<h4>{e(t("ed.history"))}</h4><ul>' + "".join(
+            f"<li>{e(change_field_label(c['field']))}: {e(show_change_value(c['field'], c['old']))} → "
+            f"<b>{e(show_change_value(c['field'], c['new']))}</b> "
+            f"{ui.tag(ed['time'].replace('T', ' ') + ' · ' + ed['by'] + ' · ' + t('cf.version', v=ed.get('version', 1)))}</li>"
+            for ed in reversed(record["edits"]) for c in ed["changes"]) + "</ul>")
+    tags = []
     if record.get("camp"):
-        st.caption(t("camp.tagged", camp=tracker.camp_label(record["camp"])))
-    st.caption(t("cf.last", by=record.get("last_by", ""), at=(record.get("last_at") or "").replace("T", " ")))
+        tags.append(ui.tag(t("camp.tagged", camp=tracker.camp_label(record["camp"]))))
+    tags.append(ui.tag(t("cf.last", by=record.get("last_by", ""), at=(record.get("last_at") or "").replace("T", " "))))
+    out.append(f'<p style="margin-top:14px">{" ".join(tags)}</p>')
+    st.markdown('<div class="cf">' + "".join(out) + "</div>", unsafe_allow_html=True)
+    for c in tracker.open_conflicts(record):
+        st.warning(t("cf.conflict", fact=any_fact_label(c["fact"])))
+
+
+# ----- editing a case: "Edit / make changes" -> "Save changes" or "Cancel" -----
+
+def start_edit(case_id: str):
+    for key in [k for k in st.session_state.keys() if isinstance(k, str) and k.startswith(f"ed-{case_id}-")]:
+        del st.session_state[key]
+    st.session_state[f"editing-{case_id}"] = True
+    st.session_state[f"open-{case_id}"] = True
+
+
+def cancel_edit(case_id: str):
+    st.session_state[f"editing-{case_id}"] = False
+
+
+def save_edit(case_id: str):
+    get = st.session_state.get
+    record = tracker.load(case_id) or {}
+    facts = {f: get(f"ed-{case_id}-{f}") for f in record.get("facts", {})}
+    step = (get(f"ed-{case_id}-next") or "").strip()
+    due = get(f"ed-{case_id}-due")
+    step_changed = step != get(f"ed-{case_id}-next-shown", "") or due != get(f"ed-{case_id}-due-shown")
+    try:
+        changes = tracker.edit_case(case_id, who(), facts=facts, note=get(f"ed-{case_id}-note") or "",
+                                    next_step=step if step_changed else None, next_due=due if step_changed else None)
+    except (tracker.TrackerError, storage.StorageError) as err:
+        st.session_state[f"ed-msg-{case_id}"] = ("error", str(err))
+        return
+    record = tracker.load(case_id)
+    st.session_state[f"editing-{case_id}"] = False
+    st.session_state[f"saved-msg-{case_id}"] = (
+        t("ed.saved_review", v=record["version"]) if record.get("review_needed") else t("ed.saved", n=len(changes)))
+
+
+def fact_input(case_id: str, fact: str, value):
+    key, label = f"ed-{case_id}-{fact}", any_fact_label(fact)
+    if fact in tracker.DATE_FACTS:
+        try:
+            shown = date.fromisoformat(value) if isinstance(value, str) else value
+        except ValueError:
+            shown = None
+        st.date_input(label, value=shown, key=key, format="DD/MM/YYYY", min_value=date(1950, 1, 1),
+                      max_value=date.today())
+    elif isinstance(value, bool):
+        st.radio(label, [True, False], index=0 if value else 1, horizontal=True, key=key,
+                 format_func=lambda v: t("ed.yes") if v else t("ed.no"))
+    elif isinstance(value, int):
+        st.number_input(label, value=value, step=1, key=key)
+    elif isinstance(value, float):
+        st.number_input(label, value=value, key=key)
+    else:
+        st.text_input(label, value="" if value is None else str(value), key=key, max_chars=300)
+
+
+def edit_form(case_id: str, record: dict):
+    status = tracker.status_of(case_id)
+    with st.container(border=True, key=f"edit-box-{case_id}"):
+        st.markdown(f'<div class="step-title" style="margin-top:0">{html.escape(t("ed.title", case_id=case_id))}</div>',
+                    unsafe_allow_html=True)
+        st.caption(t("ed.caption"))
+        if status in tracker.APPROVED_STATUSES:
+            st.warning(t("ed.approved_note"), icon=":material/history:")
+        st.markdown(f"**{t('ed.facts')}**")
+        facts = record.get("facts", {})
+        if not facts:
+            st.caption(t("ed.no_facts"))
+        cols = st.columns(2)
+        for i, (fact, entry) in enumerate(facts.items()):
+            with cols[i % 2]:
+                fact_input(case_id, fact, entry["value"])
+        step, due, tl_step = tracker.next_step(record, status, case_id)
+        shown = next_step_words(step, tl_step) if step else ""
+        st.session_state[f"ed-{case_id}-next-shown"] = shown
+        st.session_state[f"ed-{case_id}-due-shown"] = date.fromisoformat(due) if due else None
+        c1, c2 = st.columns([2, 1])
+        c1.text_input(t("ed.next"), value=shown, key=f"ed-{case_id}-next", max_chars=200)
+        c2.date_input(t("ed.next_due"), value=date.fromisoformat(due) if due else None, key=f"ed-{case_id}-due",
+                      format="DD/MM/YYYY", min_value=date.today() - timedelta(days=365))
+        st.text_area(t("ed.note"), key=f"ed-{case_id}-note", max_chars=300, height=90)
+        with st.container(horizontal=True, gap="small"):
+            st.button(t("ed.save"), key=f"ed-save-{case_id}", type="primary", icon=":material/save:",
+                      on_click=save_edit, args=(case_id,))
+            st.button(t("ui.cancel"), key=f"ed-cancel-{case_id}", on_click=cancel_edit, args=(case_id,))
+        msg = st.session_state.pop(f"ed-msg-{case_id}", None)
+        if msg:
+            st.error(msg[1])
+
+
+def case_file_or_edit(case_id: str, record: dict, edit_button: bool = True):
+    saved = st.session_state.pop(f"saved-msg-{case_id}", None)
+    if saved:
+        st.success(saved, icon=":material/check_circle:")
+    if st.session_state.get(f"editing-{case_id}"):
+        edit_form(case_id, record)
+    else:
+        case_file_view(case_id, record, editable=edit_button)
 
 
 def save_visit(case_id: str):
@@ -2089,8 +2302,9 @@ def camp_form(case_id: str, record: dict):
 
 def case_tools(case_id: str, record: dict, file_open: bool = False, slip_open: bool = False):
     slip_box(record, expanded=slip_open)
-    with st.expander(t("cf.title"), expanded=file_open):
-        case_file_view(case_id, record)
+    with st.expander(t("cf.title"), expanded=file_open or bool(st.session_state.get(f"editing-{case_id}")),
+                     icon=":material/folder_open:"):
+        case_file_or_edit(case_id, record)
     visit_form(case_id)
     camp_form(case_id, record)
 
@@ -2118,12 +2332,12 @@ def current_case_panel():
 
 STATUS_CHIPS = {tracker.INTAKE: ("intake", "ui.status.intake"), store.WAITING: ("waiting", "ui.status.waiting"),
                 store.SENT_BACK: ("sent-back", "ui.status.sent_back"), store.APPROVED: ("approved", "ui.status.approved"),
-                tracker.SUBMITTED: ("submitted", "ui.status.submitted"),
+                tracker.SUBMITTED: ("submitted", "ui.status.submitted"), tracker.CHANGED: ("changed", "ui.status.changed"),
                 tracker.ACKNOWLEDGED: ("acknowledged", "ui.status.acknowledged")}
 
 
 def status_text(status: str) -> str:
-    return t(STATUS_CHIPS[status][1]).split(" ", 1)[-1]  # the words, without the emoji
+    return t(STATUS_CHIPS[status][1])
 
 
 def status_chip(status: str) -> str:
@@ -2161,63 +2375,97 @@ def home_to_case(speak: bool):
         st.session_state["g_audio-open"] = True
 
 
-def set_language(code_: str):
-    st.session_state["ui_lang"] = code_
-    keep_choices()
+def toggle(flag: str, other: str = ""):
+    st.session_state[flag] = not st.session_state.get(flag)
+    if other:
+        st.session_state[other] = False
+
+
+def scan_box(where: str):
+    """Scan the QR code on a case slip with the camera; the case opens by itself."""
+    st.caption(t("scan.caption"))
+    n = st.session_state.get(f"scan-n-{where}", 0)
+    photo = st.camera_input(t("scan.camera"), key=f"scan-cam-{where}-{n}")
+    if photo is None:
+        return
+    st.session_state[f"scan-n-{where}"] = n + 1  # a fresh camera next time
+    try:
+        found = tracker.read_qr(photo.getvalue())
+    except tracker.TrackerError as err:
+        st.error(str(err))
+        return
+    st.session_state["continue_code"] = found
+    st.session_state[f"scan-open-{where}"] = False
+    go("New case")
+    st.rerun()
 
 
 def home_screen():
-    st.markdown(ui.hero(t("home.kicker"), t("home.lead"), t("app.description") + ". " + t("home.sub")),
+    st.markdown(ui.hero(t("home.badge"), t("home.kicker"), t("home.lead"), t("app.description") + ". " + t("home.sub")),
                 unsafe_allow_html=True)
-    _, middle, _ = st.columns([1, 5, 1])
-    with middle:
-        st.text_area(t("home.story_label"), key="home_story", height=110, placeholder=t("home.story_placeholder"))
-        b1, b2 = st.columns(2)
-        b1.button(t("home.mic"), key="home-mic", on_click=home_to_case, args=(True,), use_container_width=True)
-        b2.button(t("home.go"), key="home-go", type="primary", on_click=home_to_case, args=(False,),
-                  use_container_width=True)
-        chips = st.columns(len(lang.LANGUAGES))
-        for col, (code_, name) in zip(chips, lang.LANGUAGES.items()):
-            col.button(name, key=f"home-lang-{code_}", on_click=set_language, args=(code_,),
-                       type="primary" if code() == code_ else "secondary", use_container_width=True)
-        st.markdown(ui.helpline(t("home.helpline_danger"), t("home.helpline_aid")), unsafe_allow_html=True)
-        continue_box("home")
+    with st.container(key="storybox", horizontal=True, vertical_alignment="center", gap="small"):
+        st.text_area(t("home.story_label"), key="home_story", height=68, placeholder=t("home.story_placeholder"),
+                     label_visibility="collapsed")
+        st.button(t("home.mic"), key="home-mic", icon=":material/mic:", on_click=home_to_case, args=(True,),
+                  help=t("home.mic"))
+        st.button(t("home.go"), key="home-go", icon=":material/arrow_forward:", on_click=home_to_case, args=(False,),
+                  help=t("home.go"))
+    with st.container(key="heroactions", horizontal=True, gap="small"):
+        st.button(t("home.start"), key="home-start", type="primary", on_click=start_case)
+        st.button(t("home.continue"), key="home-continue", icon=":material/folder_open:",
+                  on_click=toggle, args=("cont-open-home", "scan-open-home"))
+        st.button(t("home.scan"), key="home-scan", icon=":material/qr_code_scanner:",
+                  on_click=toggle, args=("scan-open-home", "cont-open-home"))
+    if st.session_state.get("cont-open-home"):
+        with st.container(key="continuebox", border=True):
+            st.text_input(t("cont.code"), key="cont-code-home", max_chars=12, placeholder="K7M2QX")
+            st.button(t("cont.open"), key="cont-go-home", type="primary", on_click=continue_case, args=("home",))
+    if st.session_state.get("scan-open-home"):
+        with st.container(key="scanbox", border=True):
+            scan_box("home")
+    st.markdown(ui.helpline(t("home.free"), t("home.helpline_danger"), t("home.helpline_aid")), unsafe_allow_html=True)
 
-    st.markdown(ui.section("how-it-works", t("home.how_title"), t("home.how_sub"))
-                + ui.cards([(t(f"home.how{i}_t"), t(f"home.how{i}_p")) for i in range(1, 5)], "four", numbered=True)
-                + ui.section("what-changes", t("home.compare_title"))
-                + ui.compare(t("home.today_t"), [t(f"home.today_{i}") for i in range(1, 5)],
-                             t("home.raahi_t"), [t(f"home.raahi_{i}") for i in range(1, 5)])
-                + ui.section("safety", t("home.safe_title"))
-                + ui.cards([(t(f"home.safe{i}_t"), t(f"home.safe{i}_p")) for i in range(1, 7)], "three")
-                + ui.facts_band(t("home.facts_title"), home.facts(code()))
-                + ui.section("learn-basics", t("home.learn_title"))
-                + ui.cards([(t(f"home.learn{i}"), "") for i in range(1, 4)], "three"),
+    st.markdown(ui.section("how-it-works", t("home.how_title"), t("home.how_h2"),
+                           ui.how_cards([(t(f"home.how{i}_t"), t(f"home.how{i}_p")) for i in range(1, 5)])),
                 unsafe_allow_html=True)
-    st.button(t("home.learn_go"), key="home-learn", on_click=go, args=("Learn",))
+    st.markdown(ui.compare(
+        {"eyebrow": t("home.today_t"), "title": t("home.today_h"), "chips": [t(f"home.today_c{i}") for i in range(1, 6)],
+         "text": t("home.today_p")},
+        {"eyebrow": t("home.raahi_t"), "title": t("home.raahi_h"), "example": t("home.ex_label"),
+         "case": t("home.ex_case"), "status": t("home.ex_status"), "check": t("home.ex_check"),
+         "next": t("home.ex_next")}), unsafe_allow_html=True)
+    st.markdown(ui.section("safety", t("home.safe_title"), t("home.safe_h2"), ui.safe_cards(
+        [(SAFE_ICONS[i - 1], t(f"home.safe{i}_t"), t(f"home.safe{i}_p")) for i in range(1, 7)])),
+        unsafe_allow_html=True)
+    st.markdown(ui.facts_band(t("home.facts_title"), home.facts(code())), unsafe_allow_html=True)
+    st.markdown(ui.section("learn-basics", t("home.learn_title"), t("home.learn_h2"), "", center=False,
+                           extra="learn"), unsafe_allow_html=True)
+    with st.container(key="learnlinks"):
+        cols = st.columns(3, gap="small")
+        for i, col in enumerate(cols, 1):
+            col.button(t(f"home.learn{i}"), key=f"home-learn-{i}", icon=":material/arrow_forward:", on_click=go,
+                       args=("Learn",), use_container_width=True)
+
+
+SAFE_ICONS = ["verified_user", "menu_book", "lock", "help", "balance", "rule"]
+# The top navigation: (screen, key). Evaluation (practice only) is reached from the footer.
+NAV = [("Home", "home"), ("New case", "new"), ("My cases", "tracker"), ("Learn", "learn"), ("Supervisor", "supervisor")]
 
 
 def top_bar(current: str):
-    """Logo, section links (Home) or Home / Learn, the language pill, "Start a case" and a menu."""
-    c1, c2, c3, c4 = st.columns([1.9, 2.7, 2.2, 3.2], vertical_alignment="center")
-    c1.markdown(ui.brand(t("app.name")), unsafe_allow_html=True)
-    with c2:
-        if current == "Home":
-            st.markdown(ui.topnav([("how-it-works", t("nav.how")), ("safety", t("nav.safety")),
-                                   ("learn-basics", t("nav.learn"))]), unsafe_allow_html=True)
-        else:
-            n1, n2 = st.columns(2)
-            n1.button(t("nav.home"), type="tertiary", key="nav-home", on_click=go, args=("Home",))
-            n2.button(t("nav.learn"), type="tertiary", key="nav-learn", on_click=go, args=("Learn",))
-    with c3:
-        language_switch()
-    with c4:
-        s1, s2 = st.columns([1, 1.1], gap="small")
-        s1.button(t("nav.start"), type="primary", key="nav-start", on_click=start_case, use_container_width=True)
-        # A drop-down that closes as soon as a screen is chosen (a pop-up menu stayed open over the page).
-        st.session_state["menu_screen"] = current
-        s2.selectbox(t("nav.menu"), list(SCREENS), key="menu_screen", label_visibility="collapsed",
-                     format_func=option_text("screen."), on_change=lambda: go(st.session_state["menu_screen"]))
+    """Logo, the top navigation, one small EN · हिंदी switch and "Start a case". The same on every screen."""
+    with st.container(key="topbar", horizontal=True, vertical_alignment="center", gap="medium"):
+        st.markdown(ui.brand(t("app.name")), unsafe_allow_html=True)
+        with st.container(key="topnav", horizontal=True, vertical_alignment="center", gap=None):
+            for screen, key in NAV:
+                st.button(t(f"screen.{screen}"), key=f"nav-{key}", type="tertiary", on_click=go, args=(screen,))
+        with st.container(key="topactions", horizontal=True, vertical_alignment="center", gap="small"):
+            language_switch()
+            st.button(t("nav.start"), type="primary", key="nav-start", on_click=start_case)
+    here = dict(NAV).get(current)
+    if here:  # the current screen is underlined in the navigation
+        st.markdown(f"<style>.st-key-nav-{here} button {{ background: var(--sand) !important; }}"
+                    f".st-key-nav-{here} button p {{ font-weight: 700 !important; }}</style>", unsafe_allow_html=True)
 
 
 # ---------- navigation ----------
@@ -2236,10 +2484,7 @@ if st.query_params.get("code"):  # opened from the QR code on a case slip
     st.session_state["continue_code"] = st.query_params.get("code")
     st.session_state["screen"] = "New case"
     del st.query_params["code"]
-st.sidebar.title(t("app.name"))
-choice = st.sidebar.radio(t("ui.go_to"), list(SCREENS), format_func=option_text("screen."), key="screen")
-st.sidebar.markdown("---")
-st.sidebar.markdown(f"**{t('ui.sidebar.danger')}**  \n{t('ui.sidebar.helpline')}")
+choice = st.session_state["screen"] if st.session_state["screen"] in SCREENS else "Home"
 top_bar(choice)
 if choice != "Home":  # Home shows the helplines under its story box
     st.markdown(ui.safety_bar(t("safety.bar112"), t("safety.bar15100")), unsafe_allow_html=True)
@@ -2247,5 +2492,7 @@ if choice in ("Home", "Learn") or clinic_ok():
     SCREENS[choice]()
 else:
     clinic_gate()  # every other screen needs the clinic passcode (when one is set)
-st.markdown(ui.footer(t("app.name"), f"{t('app.tagline')}. {t('app.description')}.", t("home.footer")),
-            unsafe_allow_html=True)
+with st.container(key="footlinks", horizontal=True, gap="small"):
+    st.button(t("screen.Evaluation"), key="nav-evaluation", type="tertiary", on_click=go, args=("Evaluation",))
+st.markdown(ui.footer(t("app.name"), f"{t('app.tagline')}. {t('app.description')}.", t("home.footer"),
+                      lang.t("app.tagline", "hi") if code() == "en" else ""), unsafe_allow_html=True)

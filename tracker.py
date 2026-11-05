@@ -15,9 +15,10 @@ Never stored: names of people seeking help, pasted notes, phone / Aadhaar / emai
 from any text before saving). Volunteers are recorded by the name or initials they type.
 """
 
+import copy
 import re
 import secrets
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -35,7 +36,12 @@ CODE_LENGTH = 6
 
 INTAKE = "intake not finished"
 SUBMITTED, ACKNOWLEDGED = "submitted", "acknowledged"
-STATUSES = [INTAKE, store.WAITING, store.SENT_BACK, store.APPROVED, SUBMITTED, ACKNOWLEDGED]
+# A case edited after the supervisor approved it: the approved version is kept, and the new one waits
+# for the supervisor to look at the changes.
+CHANGED = "changed after approval"
+REVIEW_AGAIN = "Changed after approval: needs supervisor review again"
+APPROVED_STATUSES = (store.APPROVED, SUBMITTED, ACKNOWLEDGED)
+STATUSES = [INTAKE, store.WAITING, store.SENT_BACK, store.APPROVED, CHANGED, SUBMITTED, ACKNOWLEDGED]
 VISIT_WAYS = ["camp visit", "phone call", "clinic meeting", "jail visit", "other"]
 
 # Facts that are dates (saved as YYYY-MM-DD), and facts never merged: today's date changes at every visit.
@@ -348,14 +354,20 @@ def _status(case_id: str, listed: Optional[dict], base: Path) -> str:
     return {timeline.SUBMITTED_STAGE: SUBMITTED, timeline.ACKNOWLEDGED_STAGE: ACKNOWLEDGED}.get(stage, store.APPROVED)
 
 
+def _with_review(status: str, record: Optional[dict]) -> str:
+    return CHANGED if status in APPROVED_STATUSES and (record or {}).get("review_needed") else status
+
+
 def status_of(case_id: str, base: Path = HERE) -> str:
-    """intake not finished -> waiting / sent back -> approved -> submitted -> acknowledged."""
+    """intake not finished -> waiting / sent back -> approved (or changed after approval) -> submitted ->
+    acknowledged."""
     listed = next((c for c in _here(store.list_cases, base=base) if c["id"] == case_id), None)
-    return _status(case_id, listed, base)
+    return _with_review(_status(case_id, listed, base), load(case_id, base))
 
 
 NEXT_REVIEW, NEXT_FIX, NEXT_INTAKE = "Supervisor to review the draft", "Fix the draft and resend it", \
     "Finish the intake and send the draft to the supervisor"
+NEXT_RECHECK = "Supervisor to review the changes"
 
 
 def next_step(record: Optional[dict], status: str, case_id: str, base: Path = HERE,
@@ -365,7 +377,13 @@ def next_step(record: Optional[dict], status: str, case_id: str, base: Path = HE
         return NEXT_REVIEW, None, None
     if status == store.SENT_BACK:
         return NEXT_FIX, None, None
-    if status in (store.APPROVED, SUBMITTED, ACKNOWLEDGED):
+    if status == CHANGED:
+        return NEXT_RECHECK, None, None
+    chosen = (record or {}).get("next")  # set with "Edit case"; newer than any visit's next step
+    if chosen and chosen.get("step") and not any(v.get("next_step") and v.get("added", "") > chosen["on"]
+                                                 for v in (record or {}).get("visits", [])):
+        return chosen["step"], chosen.get("due"), None
+    if status in APPROVED_STATUSES:
         tl = _here(timeline.load, case_id, base=base)
         if tl:
             step = timeline.next_due(timeline.steps_of(tl), today or date.today())
@@ -376,6 +394,9 @@ def next_step(record: Optional[dict], status: str, case_id: str, base: Path = HE
         if visit.get("next_step"):
             return visit["next_step"], visit.get("next_due"), None
     return NEXT_INTAKE, None, None
+
+
+next_step_of = next_step
 
 
 def volunteers(record: Optional[dict]) -> List[str]:
@@ -394,7 +415,7 @@ def rows(base: Path = HERE, today: Optional[date] = None) -> List[dict]:
     out = []
     for case_id in sorted(set(records) | set(listed), reverse=True):
         record = records.get(case_id)
-        status = _status(case_id, listed.get(case_id), base)
+        status = _with_review(_status(case_id, listed.get(case_id), base), record)
         step, due, tl_step = next_step(record, status, case_id, base, today)
         # Eligibility dates are not deadlines, so they are never overdue (timeline.next_due leaves out
         # the ones already reached).
@@ -416,6 +437,101 @@ def filter_rows(all_rows: List[dict], status: Optional[str] = None, camp: Option
             and not (hide_intake and r["status"] == INTAKE)]
 
 
+# ---------- editing a case: every change audited, approved versions kept ----------
+
+def _show(value) -> str:
+    return "(empty)" if value in (None, "") else str(value)
+
+
+def edit_case(case_id: str, by: str, facts: Optional[Dict[str, object]] = None, note: str = "",
+              next_step: Optional[str] = None, next_due: Optional[date] = None, base: Path = HERE,
+              today: Optional[date] = None) -> List[dict]:
+    """Change facts, add a note, or change the next step and its date. Returns the changes, each
+    {"field", "old", "new"}. Every change goes into the case's edit list and the audit record (who,
+    when, old -> new). If the case was already approved, the approved version is kept as it was and
+    the edited case becomes a new version marked "Changed after approval: needs supervisor review
+    again". Nothing changed: an error."""
+    by = clean_name(by)
+    today = today or date.today()
+    record = _must_load(case_id, base)
+    status = status_of(case_id, base)
+    changes = []
+    for fact, value in (facts or {}).items():
+        if fact in NOT_MERGED or fact.startswith("_") or value is None or value == "":
+            continue
+        value = plain(value)
+        before = record.get("facts", {}).get(fact)
+        if before is None or not _same(before["value"], value):
+            changes.append({"field": fact, "old": before["value"] if before else None, "new": value})
+    note = clean_text(note)
+    if note:
+        changes.append({"field": "note", "old": None, "new": note})
+    if next_step is not None or next_due is not None:
+        step = clean_text(next_step or "", 200)
+        if next_due and not step:
+            raise TrackerError("Write the next step for the due date.")
+        due = next_due.isoformat() if next_due else None
+        if due and next_due < today - timedelta(days=365):
+            raise TrackerError("The due date is more than a year ago. Check it.")
+        old_step, old_due, _ = next_step_of(record, status, case_id, base, today)
+        if step and step != old_step:
+            changes.append({"field": "next step", "old": old_step or None, "new": step})
+        if step and due != old_due:
+            changes.append({"field": "next step date", "old": old_due, "new": due})
+    if not changes:
+        raise TrackerError("Nothing was changed.")
+
+    after_approval = status in APPROVED_STATUSES or status == CHANGED
+    if after_approval and not record.get("review_needed"):
+        # Keep the approved version exactly as it was (the approved draft and case file are not touched).
+        record.setdefault("versions", []).append({
+            "version": record.get("version", 1), "approved": True, "kept_on": now(),
+            "facts": copy.deepcopy(record.get("facts", {})), "next": copy.deepcopy(record.get("next")),
+            "notes": copy.deepcopy(record.get("notes", []))})
+        record["version"] = record.get("version", 1) + 1
+        record["review_needed"] = {"since": now(), "by": by, "version": record["version"]}
+
+    stamp = now()
+    for c in changes:
+        if c["field"] == "note":
+            record.setdefault("notes", []).append({"on": stamp, "by": by, "text": c["new"]})
+        elif c["field"] not in ("next step", "next step date"):
+            record.setdefault("facts", {})[c["field"]] = {"value": c["new"], "on": stamp, "by": by,
+                                                          "source": "edited by a volunteer", "previous": c["old"]}
+            for conflict in open_conflicts(record):  # an edit settles an open contradiction on this fact
+                if conflict["fact"] == c["field"]:
+                    conflict["resolved"] = {"keep": "edited", "by": by, "on": stamp}
+    if any(c["field"] in ("next step", "next step date") for c in changes):
+        record["next"] = {"step": clean_text(next_step or "", 200),
+                          "due": next_due.isoformat() if next_due else None, "on": stamp, "by": by}
+    record.setdefault("edits", []).append({"time": stamp, "by": by, "version": record.get("version", 1),
+                                           "after_approval": after_approval, "changes": changes})
+    said = "; ".join(f"{c['field']}: {_show(c['old'])} -> {_show(c['new'])}" for c in changes)
+    _note(record, by, "case edited: " + said)
+    _save(record, base)
+    event = "case edited" + (f" ({REVIEW_AGAIN}, version {record['version']})" if after_approval else "")
+    audit.add_event(case_id, event, audit.VOLUNTEER, f"by {by}: {said}", base=base, changes=changes)
+    return changes
+
+
+def mark_reviewed(case_id: str, base: Path = HERE) -> None:
+    """The supervisor has looked at the changes made after approval."""
+    record = _must_load(case_id, base)
+    pending = record.get("review_needed")
+    if not pending:
+        raise TrackerError("This case has no changes waiting for review.")
+    record.setdefault("reviews", []).append({"version": pending["version"], "on": now(), "by": audit.SUPERVISOR})
+    record["review_needed"] = None
+    _note(record, "supervisor", f"changes after approval reviewed (version {pending['version']})")
+    _save(record, base)
+    audit.add_event(case_id, "changes after approval reviewed", audit.SUPERVISOR,
+                    f"version {pending['version']}", base=base)
+
+
+def needs_review(base: Path = HERE) -> List[dict]:
+    return [r for r in all_records(base) if r.get("review_needed")]
+
+
 # ---------- the case slip ----------
 
 SLIP_EN, SLIP_HI = "Bring this next time", "अगली बार यह साथ लाएँ"
@@ -424,6 +540,33 @@ SLIP_EN, SLIP_HI = "Bring this next time", "अगली बार यह सा
 def continue_link(app_url: str, code: str) -> str:
     """The QR code's link: the app with the code, so a phone camera opens the case (after the passcode)."""
     return f"{app_url.rstrip('/')}/?code={code}" if app_url else code
+
+
+def code_from_qr_text(text: str) -> str:
+    """The case code inside a slip's QR code: the link "https://.../?code=K7M2QX", or the code alone
+    (no app address set). Raises TrackerError if it is not a case slip."""
+    text = (text or "").strip()
+    found = re.search(r"[?&]code=([^&#\s]+)", text)
+    try:
+        return normalise_code(found.group(1) if found else text)
+    except TrackerError:
+        raise TrackerError("This QR code is not from a case slip. Type the code instead.")
+
+
+def read_qr(image_bytes: bytes) -> str:
+    """The case code from a photo of the slip (zxing-cpp, a small QR reader). Raises TrackerError."""
+    import io
+
+    import zxingcpp
+    from PIL import Image
+    try:
+        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    except Exception:
+        raise TrackerError("Could not read the photo. Try again, or type the code.")
+    results = zxingcpp.read_barcodes(image)
+    if not results:
+        raise TrackerError("No QR code found in the photo. Hold the slip flat and close, or type the code.")
+    return code_from_qr_text(results[0].text)
 
 
 def qr_png_data_uri(app_url: str, code: str) -> str:

@@ -23,6 +23,8 @@ LABELS = {
            "Evaluation": "मूल्यांकन (अभ्यास)", "Supervisor": "सुपरवाइज़र", "undertrial": "धारा 479 सहायक (विचाराधीन क़ैदी)",
            "sign_in": "साइन इन करें"},
 }
+NAV_KEYS = {"New case": "nav-new", "My cases": "nav-tracker", "Learn": "nav-learn", "Evaluation": "nav-evaluation",
+            "Supervisor": "nav-supervisor"}
 TALL = {"laptop": 3600, "phone": 6400}  # Streamlit scrolls inside its own frame: use a tall window
 SCREENS = ["Home", "New case", "Undertrial", "My cases", "Learn", "Evaluation", "Supervisor"]
 
@@ -37,10 +39,8 @@ def password() -> str:
 def open_screen(page, screen, code):
     labels = LABELS[code]
     target = "New case" if screen == "Undertrial" else screen
-    if target != "Home":
-        page.locator(".st-key-menu_screen").click()
-        page.wait_for_timeout(500)
-        page.get_by_role("option", name=labels[target], exact=True).click()
+    if target != "Home":  # the top navigation buttons
+        page.locator(f".st-key-{NAV_KEYS[target]} button").first.click()
         wait_for_app(page)
     if screen == "Undertrial":
         page.get_by_text(labels["undertrial"]).first.click()
@@ -64,7 +64,7 @@ def main():
                     page.goto(URL)
                     wait_for_app(page)
                     if code == "hi":
-                        page.get_by_text("हिंदी").first.click()
+                        page.locator(".st-key-ui_lang label").filter(has_text="हिंदी").first.click()
                         wait_for_app(page)
                     open_screen(page, screen, code)
                     path = OUT / f"{screen.lower().replace(' ', '-')}-{code}-{label}.png"

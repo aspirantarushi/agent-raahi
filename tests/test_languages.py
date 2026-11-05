@@ -103,7 +103,7 @@ def test_app_in_a_machine_translated_language(monkeypatch):
     assert not at.exception, at.exception[0].stack_trace
     assert at.title[0].value == "«ta:New case»"
     assert any("machine translated" in c.value for c in at.caption)
-    assert "112" in " ".join(m.value for m in at.sidebar.markdown)
+    assert 'href="tel:112"' in " ".join(m.value for m in at.markdown)
 
 
 def test_drafts_offered_only_in_english_and_hindi(monkeypatch):

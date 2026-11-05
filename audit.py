@@ -96,7 +96,9 @@ def start_record(case_id: str, final_facts: dict, ai: Optional[dict] = None, bas
     return record
 
 
-def add_event(case_id: str, event: str, by: str, details: str = "", base: Path = HERE) -> None:
+def add_event(case_id: str, event: str, by: str, details: str = "", base: Path = HERE,
+              changes: Optional[List[dict]] = None) -> None:
+    """changes: [{"field", "old", "new"}] for an edit, saved with the event (old -> new)."""
     record = storage.read_json("audit", case_id, base)
     if record is None:  # a draft sent before audit records existed
         record = {"case_id": case_id, "created": now(), "model": "not recorded", "ai_extracted": {},
@@ -105,6 +107,9 @@ def add_event(case_id: str, event: str, by: str, details: str = "", base: Path =
     entry = {"time": now(), "event": event, "by": by}
     if details:
         entry["details"] = _plain(details)
+    if changes:
+        entry["changes"] = [{"field": _plain(c["field"]), "old": _plain(c["old"]), "new": _plain(c["new"])}
+                            for c in changes]
     record["events"].append(entry)
     _save(record, base)
 
