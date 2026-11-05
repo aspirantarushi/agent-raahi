@@ -104,16 +104,21 @@ def test_groq_only_when_asked_research_and_voice_stay_on_gemini(services):
     assert services["groq"] == []
 
 
-def test_stories_go_to_groq_but_research_does_not(services, monkeypatch):
+def test_groq_reads_stories_and_writes_research_text_but_never_searches(services, monkeypatch):
+    """Groq may read stories, split a research brief, and write a brief from Tavily's results; the
+    Google Search step (llm.research_issue) is Gemini only."""
     seen = []
     original = llm._generate_json
     monkeypatch.setattr(llm, "_generate_json", lambda p, s, extra_parts=None, groq=False: (
         seen.append(groq) or original(p, s, extra_parts, groq)))
     llm.read_general_notes(STORY)  # only the route matters here
     llm.read_undertrial_notes(STORY)
-    with pytest.raises(llm.AIUnavailable):
+    with pytest.raises(llm.AIUnavailable):  # the pretend AI's answer isn't a list of points
         llm.split_brief("brief")
-    assert seen == [True, True, False]
+    assert seen == [True, True, True]
+    source = (ROOT / "llm.py").read_text(encoding="utf-8")  # (tests/conftest.py replaces the function itself)
+    google = source[source.index("def research_issue("):source.index("def split_brief(")]
+    assert '"tools": [{"google_search": {}}]' in google and "groq" not in google
 
 
 def test_numbers_are_removed_before_groq_sees_anything(services):

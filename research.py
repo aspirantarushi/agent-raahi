@@ -179,11 +179,26 @@ def run(case_id: str, state: str, issue: str, by: str, base: Path = HERE,
     Raises ResearchFailed (with the 15100 suggestion) if it can't be done."""
     store._check_id(case_id)
     by = tracker.clean_name(by)
+    search = llm.GOOGLE_LABEL
     try:
         raw = llm.research_issue(state, issue)
+    except llm.AIUnavailable as google_err:
+        if not llm.tavily_key():
+            audit.add_event(case_id, "research failed", audit.VOLUNTEER, f"{search}: {google_err} (by {by})", base=base)
+            raise ResearchFailed(FAILED) from None
+        # Backup: Tavily on the official-site list, then a brief written only from those results
+        search = llm.TAVILY_LABEL
+        audit.log_research_search(case_id, search, f"{llm.GOOGLE_LABEL} did not work: {google_err}", base=base)
+        try:
+            raw = llm.research_issue_tavily(state, issue)
+        except llm.AIUnavailable as err:
+            audit.add_event(case_id, "research failed", audit.VOLUNTEER,
+                            f"{llm.GOOGLE_LABEL}: {google_err}; {search}: {err} (by {by})", base=base)
+            raise ResearchFailed(FAILED) from None
+    try:
         points, split_model = llm.split_brief(raw.brief)
     except llm.AIUnavailable as err:
-        audit.add_event(case_id, "research failed", audit.VOLUNTEER, f"{err} (by {by})", base=base)
+        audit.add_event(case_id, "research failed", audit.VOLUNTEER, f"{search}: {err} (by {by})", base=base)
         raise ResearchFailed(FAILED) from None
     kept, dropped, sources = check_points(raw, points, resolve or resolve_link)
     if not kept:
@@ -193,12 +208,13 @@ def run(case_id: str, state: str, issue: str, by: str, base: Path = HERE,
     record = {"id": _new_id(case_id, base), "case_id": case_id, "label": LABEL, "status": WAITING,
               "state": privacy.redact(state)[0][:60], "issue": privacy.redact(issue)[0][:300], "sent": raw.sent,
               "asked_by": by, "asked_at": tracker.now(), "model": raw.model, "split_model": split_model,
+              "search": search,
               "queries": [privacy.redact(q)[0][:200] for q in raw.queries][:10],
               "sources_found": len(sources), "sources_official": sum(1 for s in sources if s["allowed"]),
               "points": kept, "dropped": dropped}
     storage.write_json("research", record["id"], record, base)
     audit.add_event(case_id, "research asked", audit.VOLUNTEER,
-                    f"{LABEL}; model {raw.model}; {len(sources)} search results, "
+                    f"{LABEL}; search: {search}; model {raw.model}; {len(sources)} search results, "
                     f"{record['sources_official']} official; {len(kept)} points kept, {len(dropped)} dropped "
                     f"(by {by})", base=base)
     return record

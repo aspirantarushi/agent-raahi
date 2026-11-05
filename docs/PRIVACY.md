@@ -67,6 +67,11 @@ note name the model, and Groq models are named "groq:..." (for example groq:open
 | Voice recordings | yes | never |
 | "Research this issue": state and issue in plain words | yes (with Google Search) | never |
 | Drafts, names, phone or Aadhaar numbers | never | never |
+
+- **Tavily** (the research backup, only when Gemini's Google Search fails or its daily limit is reached):
+  only the state and the problem in plain words (numbers removed), searched on the official-site list.
+  The brief is then written by Gemini (or Groq if Gemini is busy) only from those results. Which search
+  was used is in the audit record and the problems log.
 - **Bhashini** (MeitY): not used in the pilot (languages are frozen at English and Hindi).
 
 ## For how long

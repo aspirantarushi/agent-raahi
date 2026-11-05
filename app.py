@@ -471,7 +471,22 @@ def back_to_questions():
     gen["q_index"], gen["done"] = 0, False
 
 
+def restore_held_story():
+    """A story typed on Home goes back into the story box after the clinic sign-in, with its language.
+    It is set again in the same run that draws the box: a value set several runs earlier (before the
+    sign-in screen) does not reach a box drawn for the first time. Kept only in this browser session."""
+    held = st.session_state.pop("held_story", None)
+    if not held:
+        return
+    current = (st.session_state.get("g_notes") or "").strip()
+    if not current or current == held["text"].strip():
+        st.session_state["g_notes"] = held["text"]
+    if held.get("lang"):
+        st.session_state["g_notes_lang"] = held["lang"]
+
+
 def general_screen():
+    restore_held_story()
     gen = st.session_state.get("gen")
     step = general_step(gen)
     st.markdown(ui.stepper([t(k) for k in GENERAL_FLOW], step), unsafe_allow_html=True)
@@ -674,7 +689,8 @@ def general_summary(gen):
     uncovered = general.uncovered_issues(facts)
     record = tracker.load(case_id) if case_id else None
     again = st.session_state.pop("rs-again", None)
-    if uncovered and state and llm.gemini_available() and (again or not (record or {}).get("research_runs")):
+    if uncovered and state and (llm.gemini_available() or llm.tavily_key()) \
+            and (again or not (record or {}).get("research_runs")):
         case_id = case_id or ensure_case(general.CASE_TYPE)
         auto_research(case_id, again[1] if again else uncovered[0], state)
         record = tracker.load(case_id)
@@ -871,9 +887,20 @@ def research_panel(g, uncovered, status, case_id, state):
                "not started": "rs.need_state" if not state else "rs.status_not_started"}.get(status)
         if msg:
             (st.error if status == "failed" else st.info)(t(msg), icon=":material/travel_explore:")
-        if uncovered and state and case_id:
-            st.button(t("rs.again"), key="rs-again-go", icon=":material/refresh:", disabled=not llm.gemini_available(),
-                      on_click=research_again, args=(case_id, uncovered[0], state))
+        with st.container(horizontal=True, gap="small", key="research-actions"):
+            if uncovered and state and case_id:
+                st.button(t("rs.again"), key="rs-again-go", icon=":material/refresh:",
+                          disabled=not (llm.gemini_available() or llm.tavily_key()),
+                          on_click=research_again, args=(case_id, uncovered[0], state))
+            if status != "approved":  # research failed or the problem isn't covered: two free helplines
+                nyaya_setu_button()
+
+
+NYAYA_SETU_URL = "https://wa.me/917217711814"  # opens WhatsApp only; the story is never pre-filled
+
+
+def nyaya_setu_button():
+    st.link_button(t("rs.nyaya_setu"), NYAYA_SETU_URL, icon=":material/chat:")
 
 
 def drafts_panel(documents, status, uncovered):
@@ -2958,6 +2985,10 @@ def home_to_case(speak: bool):
         for key in ("gen", "gen_error", "g_checked", "gen_sent"):
             st.session_state.pop(key, None)
         st.session_state["g_notes"] = story
+        # Also held apart (in this browser session only, never saved), because the clinic sign-in may
+        # come in between and the story box is not drawn while it shows.
+        st.session_state["held_story"] = {"text": story, "lang": st.session_state.get("g_notes_lang")
+                                          or (code() if code() in multilingual.note_languages() else "en")}
     if speak:
         st.session_state["g_audio-open"] = True
 

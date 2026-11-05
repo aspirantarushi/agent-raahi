@@ -185,6 +185,16 @@ def log_ai_failure(attempts: List[dict], outcome: str, base: Path = HERE) -> dic
     return entry
 
 
+def log_research_search(case_id: str, search: str, reason: str, base: Path = HERE) -> dict:
+    """Which search a research brief used, when the backup was needed (problems log and audit record).
+    Never the story or the key."""
+    entry = {"time": now(), "case_id": case_id, "where": AI_SERVICE,
+             "text": _plain(f"Research search: {search} used. Reason: {reason}"), "research_search": search}
+    storage.backend(base).log_append("problems", entry)
+    add_event(case_id, "research search", VOLUNTEER, f"{search} used; reason: {reason}", base=base)
+    return entry
+
+
 def list_problems(base: Path = HERE) -> List[dict]:
     return list(reversed(storage.backend(base).log_entries("problems")))  # newest first
 

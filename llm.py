@@ -745,9 +745,92 @@ def research_issue(state: str, issue: str) -> ResearchRaw:
 
 
 def split_brief(brief: str) -> Tuple[list, str]:
-    """The brief as separate points [{"kind", "text", "quote"}] (no new facts, no links)."""
-    answer, model = _generate_json(SPLIT_PROMPT.format(brief=brief), SPLIT_SCHEMA)
+    """The brief as separate points [{"kind", "text", "quote"}] (no new facts, no links).
+    Groq may do this when Gemini is busy: it only splits text that is already there."""
+    answer, model = _generate_json(SPLIT_PROMPT.format(brief=brief), SPLIT_SCHEMA, groq=True)
     points = answer.get("points") if isinstance(answer, dict) else None
     if not isinstance(points, list):
         raise AIUnavailable("Research failed: the answer could not be read.")
     return points, model
+
+
+# ---------- research backup: Tavily search on official sites, then a brief from those results only ----------
+# Used when Gemini with Google Search fails or its daily limit is reached. Tavily searches only the
+# official-site list (official.py); Gemini (or Groq if Gemini is busy) then writes the brief ONLY from
+# those numbered results, naming the result numbers for every sentence. research.py then applies the
+# same checks as before: links only from these results, official sites only, every point cited.
+
+TAVILY_URL = "https://api.tavily.com/search"
+TAVILY_LABEL = "Tavily search (official sites only)"
+GOOGLE_LABEL = "Gemini with Google Search"
+
+
+def tavily_key() -> Optional[str]:
+    _load_dotenv()
+    key = os.environ.get("TAVILY_API_KEY", "").strip()
+    return key or None
+
+
+def tavily_search(query: str, domains: list, max_results: int = 8) -> list:
+    """[{"url", "title", "content"}] from Tavily, limited to these domains. The key goes only in the header."""
+    key = tavily_key()
+    if not key:
+        raise AIUnavailable("Tavily is not set up (no TAVILY_API_KEY).")
+    body = {"query": query, "max_results": max_results, "search_depth": "advanced", "include_domains": list(domains),
+            "include_answer": False}
+    data = _post(TAVILY_URL, {"Authorization": f"Bearer {key}"}, body, "tavily")
+    return [{"url": str(r.get("url", "")), "title": str(r.get("title", ""))[:200], "content": str(r.get("content", ""))[:3000]}
+            for r in (data.get("results") or []) if isinstance(r, dict)]
+
+
+BRIEF_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {"sentences": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {
+        "text": {"type": "STRING"}, "sources": {"type": "ARRAY", "items": {"type": "INTEGER"}}},
+        "required": ["text", "sources"]}}},
+    "required": ["sentences"],
+}
+
+BRIEF_FROM_RESULTS_PROMPT = """You help a free legal aid clinic in India. Write a short research brief for this state and
+problem using ONLY the numbered official search results below. Do not use anything else you know.
+
+State: {state}
+Problem, in plain words: {issue}
+
+Cover, if the results say it: 1. Routes: who the person can complain or apply to, in order. 2. Documents usually
+needed. 3. Time limits. 4. Where and how to file. 5. A short draft letter to the first office, with blanks in square
+brackets for every personal detail: [Name], [Address], [Phone], [Consumer or account number], [Date], [Signature].
+Return the brief as sentences. For every sentence give "sources": the numbers of the results it comes from. A
+sentence that no result supports must not be written. Never predict outcomes or chances, never promise anything,
+and never give an opinion about anyone. Write "Not found in official sources." (with no sources) for a heading
+the results don't cover.
+
+Search results:
+{results}"""
+
+
+def research_issue_tavily(state: str, issue: str) -> "ResearchRaw":
+    """The research backup. Only the state and the issue in plain words are sent (numbers removed)."""
+    import official
+    state, _ = privacy.redact((state or "").strip()[:60])
+    issue, _ = privacy.redact((issue or "").strip()[:300])
+    if not issue.strip() or not state.strip():
+        raise AIUnavailable("Research needs the state and the problem in plain words.")
+    domains = list(official.ALLOWED_SUFFIXES) + list(official.ALLOWED_HOSTS)
+    results = [r for r in tavily_search(f"{issue} {state} complaint procedure official", domains)
+               if official.allowed_link(r["url"])]
+    if not results:
+        raise AIUnavailable("Research failed: no official search results came back.")
+    listed = "\n\n".join(f"[{n}] {r['title']} ({r['url']})\n{r['content']}" for n, r in enumerate(results, 1))
+    answer, model = _generate_json(BRIEF_FROM_RESULTS_PROMPT.format(state=state, issue=issue, results=listed),
+                                   BRIEF_SCHEMA, groq=True)
+    sentences = [s for s in (answer.get("sentences") if isinstance(answer, dict) else []) or []
+                 if isinstance(s, dict) and str(s.get("text", "")).strip()]
+    if not sentences:
+        raise AIUnavailable("Research failed: the answer could not be read.")
+    brief = "\n".join(str(s["text"]).strip() for s in sentences)
+    supports = [{"text": str(s["text"]).strip(),
+                 "sources": [n - 1 for n in s.get("sources", []) if isinstance(n, int) and 1 <= n <= len(results)]}
+                for s in sentences]
+    return ResearchRaw(brief, [{"uri": r["url"], "title": r["title"]} for r in results], supports, [], 
+                       f"{TAVILY_LABEL}; brief by {model}", f"State: {state}. Problem: {issue}")

@@ -19,6 +19,7 @@ os.environ.pop("CLINIC_PASSCODE", None)
 # Never call the real Groq service from tests: an empty value stops llm._load_dotenv reading the real
 # key from .env. The one live Groq test reads the key itself (tests/test_groq.py).
 os.environ["GROQ_API_KEY"] = ""
+os.environ["TAVILY_API_KEY"] = ""  # never the real Tavily search either (tests use fake search results)
 
 
 import pytest  # noqa: E402
@@ -33,3 +34,4 @@ def no_real_research(monkeypatch):
     def not_in_tests(*a, **k):
         raise llm.AIUnavailable("Research is not run in tests.")
     monkeypatch.setattr(llm, "research_issue", not_in_tests)
+    monkeypatch.setattr(llm, "tavily_search", not_in_tests)
