@@ -203,6 +203,7 @@ def test_research_on_screen(monkeypatch, fake_ai):
                  issues=[{"category": "other", "name": "electricity connection cut"}],
                  state={"value": "Bihar", "quote": "lives in Bihar"}, woman=yn("yes", "The person seeking help"))
     monkeypatch.setattr(llm, "available", lambda: True)
+    monkeypatch.setattr(llm, "gemini_available", lambda: True)
     monkeypatch.setattr(llm, "read_general_notes",
                         lambda notes, output_lang="en", known=None: llm.NotesReading(raw, notes, {}, MODEL))
     monkeypatch.setattr(research, "resolve_link", resolve)

@@ -67,6 +67,7 @@ def test_case2_another_case_mentioned_later(monkeypatch):
     assert reasons(consistency.undertrial_problems(FORM, notes=NOTES_ANOTHER_CASE)) == ["other_cases"]
     assert consistency.undertrial_problems(dict(FORM, other_cases_pending=True), notes=NOTES_ANOTHER_CASE) == []
     monkeypatch.setattr(llm, "available", lambda: True)
+    monkeypatch.setattr(llm, "gemini_available", lambda: True)
     answer = practice_answer(
         custody_began=field("2024-03-15", "Her brother was arrested on 15 March 2024."),
         other_cases_pending=field("no", "No other cases are pending against him."),
@@ -92,6 +93,7 @@ def test_case3_ai_and_volunteer_disagree(monkeypatch):
                                                ai_read={"custody_began": date(2024, 3, 15)})
     assert reasons(problems) == ["ai_vs_volunteer"] and problems[0].confirm_fact == "custody_began"
     monkeypatch.setattr(llm, "available", lambda: True)
+    monkeypatch.setattr(llm, "gemini_available", lambda: True)
     monkeypatch.setattr(llm, "read_undertrial_notes", lambda notes: llm.NotesReading(practice_answer(), notes, {}, "m"))
     at = open_form()
     at.text_area(key="f_notes").set_value(NOTES)

@@ -220,6 +220,7 @@ def test_report_problem_on_new_case(monkeypatch, tmp_path):
 
 def test_draft_made_after_ai_reading_names_the_model(monkeypatch):
     monkeypatch.setattr(llm, "available", lambda: True)
+    monkeypatch.setattr(llm, "gemini_available", lambda: True)
     monkeypatch.setattr(llm, "read_undertrial_notes",
                         lambda notes: llm.NotesReading(practice_answer(), notes, {}, MODEL))
     at = AppTest.from_file("../app.py", default_timeout=20).run()

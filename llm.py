@@ -4,6 +4,9 @@ Provider: Google Gemini API (free tier). Model gemini-3.5-flash-lite (fast). If 
 busy (503, 500, 504), a per-minute limit is reached (429) or it is too slow, the request is tried
 again after 2, 4 and 8 seconds, then once with the backup model gemini-3.8-flash. A DAILY limit
 (429 with a per-day quota) is not retried: waiting seconds can't help, so the backup is tried at once.
+For READING STORIES only (undertrial notes and any-case stories), Groq is a third, free backup after
+both Gemini models (GROQ_API_KEY; model openai/gpt-oss-120b, changeable with GROQ_MODEL). Voice and
+"Research this issue" stay on Gemini (research needs Google Search). The same filter runs first.
 If it still fails, the app says "The AI is busy; continue with the form" and the form opens.
 Every failure is written to the problems log: time, error type and model (never case text).
 The key is read from the environment variable GEMINI_API_KEY, or from a .env file
@@ -94,7 +97,51 @@ def models_to_try() -> list:
 
 
 def available() -> bool:
+    """Reading stories works with either key (Gemini, or Groq as the backup)."""
+    return api_key() is not None or groq_key() is not None
+
+
+def gemini_available() -> bool:
+    """Voice and research need Gemini itself."""
     return api_key() is not None
+
+
+# ---------- Groq: the free backup for reading stories ----------
+
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_DEFAULT_MODEL = "openai/gpt-oss-120b"  # production model, strict JSON schema, free tier (Groq docs, Nov 2026)
+GROQ_PREFIX = "groq:"                       # how the model is named in drafts and audit records
+STRICT_SCHEMA_MODELS = ("openai/gpt-oss", "qwen/")
+
+
+def groq_key() -> Optional[str]:
+    _load_dotenv()
+    key = os.environ.get("GROQ_API_KEY", "").strip()
+    return key or None
+
+
+def groq_model() -> str:
+    return os.environ.get("GROQ_MODEL", "").strip() or GROQ_DEFAULT_MODEL
+
+
+def json_schema(schema: dict) -> dict:
+    """A Gemini response schema as a strict JSON Schema (for Groq): lower-case types, nullable as
+    [type, "null"], every property required, no extra properties."""
+    kind = str(schema.get("type", "string")).lower()
+    if kind == "object":
+        props = {k: json_schema(v) for k, v in schema.get("properties", {}).items()}
+        out = {"type": "object", "properties": props, "required": list(props), "additionalProperties": False}
+    elif kind == "array":
+        out = {"type": "array", "items": json_schema(schema.get("items", {"type": "STRING"}))}
+    else:
+        out = {"type": kind}
+        if "enum" in schema:
+            out["enum"] = list(schema["enum"])
+    if schema.get("nullable"):
+        out["type"] = [out["type"], "null"]
+        if "enum" in out:
+            out["enum"] = out["enum"] + [None]
+    return out
 
 
 def _ssl_context() -> ssl.SSLContext:
@@ -133,10 +180,34 @@ def _is_daily(error: dict) -> bool:
 
 
 def _call_model(model: str, key: str, body: dict) -> dict:
+    return _post(API_URL.format(model=model), {"x-goog-api-key": key}, body, model)
+
+
+def _call_groq(model: str, key: str, prompt: str, schema: dict) -> dict:
+    """One Groq request. Returns the parsed JSON answer."""
+    body = {"model": model, "temperature": 0,
+            "messages": [{"role": "system", "content": "Answer only with JSON that matches the given schema."},
+                         {"role": "user", "content": prompt}]}
+    if model.startswith(STRICT_SCHEMA_MODELS):
+        body["response_format"] = {"type": "json_schema",
+                                   "json_schema": {"name": "answer", "strict": True, "schema": json_schema(schema)}}
+    else:  # other models: JSON mode, with the schema written into the request
+        body["response_format"] = {"type": "json_object"}
+        body["messages"][1]["content"] += "\n\nReply with JSON matching this schema:\n" + json.dumps(json_schema(schema))
+    if model.startswith("openai/gpt-oss"):
+        body["reasoning_effort"] = "low"  # faster; the checks in plain code do the rest
+    data = _post(GROQ_URL, {"Authorization": f"Bearer {key}"}, body, model)
+    try:
+        return json.loads(data["choices"][0]["message"]["content"])
+    except (KeyError, IndexError, TypeError, ValueError):
+        raise _Failed("AI reading failed: the answer could not be read.", UNREADABLE) from None
+
+
+def _post(url: str, auth: dict, body: dict, model: str) -> dict:
     request = urllib.request.Request(
-        API_URL.format(model=model),
+        url,
         data=json.dumps(body).encode("utf-8"),
-        headers={"Content-Type": "application/json", "x-goog-api-key": key},
+        headers={"Content-Type": "application/json", "User-Agent": "AgentRaahi/1.0", **auth},
         method="POST",
     )
     slow = "AI reading failed: the AI service took too long to answer; try again in a few minutes."
@@ -195,8 +266,10 @@ def _plan():
     return tries + [(m, 0) for m in models[1:]]
 
 
-def _generate_json(prompt: str, schema: dict, extra_parts: Optional[list] = None) -> Tuple[dict, str]:
-    """Returns (the JSON answer, the model that gave it). extra_parts: e.g. an audio recording."""
+def _generate_json(prompt: str, schema: dict, extra_parts: Optional[list] = None,
+                   groq: bool = False) -> Tuple[dict, str]:
+    """Returns (the JSON answer, the model that gave it). extra_parts: e.g. an audio recording.
+    groq: also try Groq after both Gemini models (only for reading stories; never with a recording)."""
     body = {
         "contents": [{"role": "user", "parts": (extra_parts or []) + [{"text": prompt}]}],
         "generationConfig": {
@@ -205,7 +278,15 @@ def _generate_json(prompt: str, schema: dict, extra_parts: Optional[list] = None
             "responseSchema": schema,
         },
     }
-    data, used = _generate(body)
+    fallback = None
+    if groq and not extra_parts and groq_key():
+        model = groq_model()
+        fallback = (GROQ_PREFIX + model, lambda: _call_groq(model, groq_key(), prompt, schema))
+    data, used = _generate(body, fallback)
+    if used.startswith(GROQ_PREFIX):
+        if not isinstance(data, dict):
+            raise AIUnavailable("AI reading failed: the answer could not be read.")
+        return data, used
     try:
         parts = data["candidates"][0]["content"]["parts"]
         text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
@@ -215,14 +296,15 @@ def _generate_json(prompt: str, schema: dict, extra_parts: Optional[list] = None
         raise AIUnavailable("AI reading failed: the answer could not be read.") from None
 
 
-def _generate(body: dict) -> Tuple[dict, str]:
-    """Send a request with the retries (2, 4, 8 s, then the backup model). Returns (raw answer, model)."""
+def _generate(body: dict, fallback=None) -> Tuple[dict, str]:
+    """Send a request with the retries (2, 4, 8 s, then the backup model), then the fallback if given
+    (("groq:<model>", call) for reading stories). Returns (answer, model)."""
     key = api_key()
-    if not key:
+    if not key and not fallback:
         raise AIUnavailable("AI reading is not set up yet (no GEMINI_API_KEY).")
-    attempts, used, data = [], None, None
+    attempts, used, data, failed_hard = [], None, None, None
     skip_model = None  # a model whose daily limit is used up: no more tries of it
-    for model, wait in _plan():
+    for model, wait in (_plan() if key else []):
         if model == skip_model:
             continue
         if wait:
@@ -237,9 +319,22 @@ def _generate(body: dict) -> Tuple[dict, str]:
                 skip_model = model
         except _Failed as failed:
             attempts.append({"model": model, "error": failed.kind, "code": failed.code})
-            record_failures(attempts, "gave up: the form opened instead")
-            raise
+            failed_hard = failed
+            break  # a bad key or no internet: more Gemini tries won't help
+    if used is None and fallback:
+        name, call = fallback
+        try:
+            data, used = call(), name
+            failed_hard = None
+        except _Busy as busy:
+            attempts.append({"model": name, "error": busy.kind, "code": busy.code})
+        except _Failed as failed:
+            attempts.append({"model": name, "error": failed.kind, "code": failed.code})
+            failed_hard = failed_hard or failed
     if used is None:
+        if failed_hard is not None and not fallback:
+            record_failures(attempts, "gave up: the form opened instead")
+            raise failed_hard
         record_failures(attempts, "gave up after every try: the form opened instead")
         raise AIUnavailable(BUSY_MESSAGE, busy=True)
     record_failures(attempts, f"answered by {used} after {len(attempts)} failed tries")
@@ -335,7 +430,7 @@ def read_undertrial_notes(notes: str) -> NotesReading:
     clean, removed = privacy.redact(notes)
     if not clean.strip():
         raise AIUnavailable("There are no case notes to read.")
-    answer, model = _generate_json(UNDERTRIAL_PROMPT.format(notes=clean), UNDERTRIAL_SCHEMA)
+    answer, model = _generate_json(UNDERTRIAL_PROMPT.format(notes=clean), UNDERTRIAL_SCHEMA, groq=True)
     if not isinstance(answer, dict):
         raise AIUnavailable("AI reading failed: the answer could not be read.")
     return NotesReading(answer=answer, notes_sent=clean, removed=removed, model=model)
@@ -476,7 +571,7 @@ def read_general_notes(notes: str, output_lang: str = "en", known: Optional[Dict
     if known:
         listed = "\n".join(f"- {fact}: {value}" for fact, value in known.items())
         prompt += KNOWN_FACTS_NOTE.format(known=privacy.redact(listed)[0])
-    answer, model = _generate_json(prompt, GENERAL_SCHEMA)
+    answer, model = _generate_json(prompt, GENERAL_SCHEMA, groq=True)
     if not isinstance(answer, dict):
         raise AIUnavailable("AI reading failed: the answer could not be read.")
     return NotesReading(answer=answer, notes_sent=clean, removed=removed, model=model)

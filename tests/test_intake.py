@@ -180,7 +180,7 @@ def test_redact_keeps_case_facts():
 def test_notes_are_redacted_before_they_reach_the_ai(monkeypatch):
     sent = {}
 
-    def fake_generate(prompt, schema):
+    def fake_generate(prompt, schema, **kwargs):
         sent["prompt"] = prompt
         return practice_answer(), "pretend-model"
 
@@ -361,7 +361,7 @@ def test_prompt_forbids_judging_bail_risk_guilt_or_credibility():
 def test_prompt_sent_to_the_ai_includes_the_rule(monkeypatch):
     sent = {}
 
-    def fake_generate(prompt, schema):
+    def fake_generate(prompt, schema, **kwargs):
         sent["prompt"] = prompt
         return {}, "pretend-model"
 

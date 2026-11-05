@@ -45,6 +45,7 @@ def texts(at):
 def pretend_ai(monkeypatch):
     answers = {STORY_A: ANSWER_A, STORY_B: ANSWER_B}
     monkeypatch.setattr(llm, "available", lambda: True)
+    monkeypatch.setattr(llm, "gemini_available", lambda: True)
     monkeypatch.setattr(llm, "read_general_notes",
                         lambda notes, output_lang="en", known=None: llm.NotesReading(answers[notes], notes, {}, MODEL))
 

@@ -324,6 +324,7 @@ def button(at, label):
 def pretend_ai(monkeypatch, tmp_path):
     answers = {UNDERTRIAL: UNDERTRIAL_ANSWER, UPI: UPI_ANSWER, WAGES: WAGES_ANSWER}
     monkeypatch.setattr(llm, "available", lambda: True)
+    monkeypatch.setattr(llm, "gemini_available", lambda: True)
     monkeypatch.setattr(llm, "read_general_notes", lambda notes, output_lang="en": llm.NotesReading(answers[notes], notes, {}, MODEL))
     original_submit = store.submit
     monkeypatch.setattr(store, "submit", lambda *a, **k: original_submit(*a, base=tmp_path, **k))

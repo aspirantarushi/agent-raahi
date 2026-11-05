@@ -215,7 +215,7 @@ def transcribe_recording(audio_key: str, target_key: str):
 def voice_box(audio_key: str, target_key: str):
     with st.expander(t("ui.voice.title"), expanded=bool(st.session_state.pop(f"{audio_key}-open", False))):
         st.warning(t("ui.voice.warning"))
-        if not llm.available():
+        if not llm.gemini_available():  # voice needs Gemini (Groq is only for reading stories)
             st.info(t("ui.voice.no_ai"))
             return
         st.audio_input(t("ui.voice.record"), key=audio_key)
@@ -678,7 +678,7 @@ def research_box(uncovered: list, state):
         c1.text_input(t("rs.issue"), key="rs-issue", max_chars=300)
         c2.selectbox(t("rs.state"), general.state_names(), index=None, key="rs-state")
         st.button(t("rs.button"), key="rs-go", type="primary", icon=":material/travel_explore:",
-                  on_click=run_research, args=(uncovered,), disabled=not llm.available())
+                  on_click=run_research, args=(uncovered,), disabled=not llm.gemini_available())  # research needs Google Search (Gemini)
         msg = st.session_state.pop("rs-msg", None)
         if msg:
             (st.success if msg[0] == "ok" else st.error)(msg[1])

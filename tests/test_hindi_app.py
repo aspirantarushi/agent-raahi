@@ -93,6 +93,7 @@ def open_app(language="hi"):
 
 def test_language_switch_changes_the_screen(monkeypatch):
     monkeypatch.setattr(llm, "available", lambda: True)
+    monkeypatch.setattr(llm, "gemini_available", lambda: True)
     at = open_app("hi")
     assert at.title[0].value == "नया केस"
     assert 'href="tel:112"' in " ".join(m.value for m in at.markdown)  # the safety line under the header
@@ -106,6 +107,7 @@ def test_language_switch_changes_the_screen(monkeypatch):
 
 def test_hindi_practice_case_on_screen(monkeypatch, tmp_path):
     monkeypatch.setattr(llm, "available", lambda: True)
+    monkeypatch.setattr(llm, "gemini_available", lambda: True)
     monkeypatch.setattr(llm, "read_undertrial_notes",
                         lambda notes: llm.NotesReading(HINDI_ANSWER, notes, {}, MODEL))
     original_submit = store.submit
@@ -151,6 +153,7 @@ def test_english_draft_from_hindi_screen(monkeypatch):
 def test_general_screen_in_hindi_shows_1930_and_no_names_box(monkeypatch, tmp_path):
     from test_general import UPI_ANSWER
     monkeypatch.setattr(llm, "available", lambda: True)
+    monkeypatch.setattr(llm, "gemini_available", lambda: True)
     monkeypatch.setattr(llm, "read_general_notes",
                         lambda notes, output_lang="en": llm.NotesReading(
                             general_answer_for_hinglish(), notes, {}, MODEL))

@@ -70,6 +70,7 @@ def test_note_languages_list_all_scheduled_languages():
 
 def test_tamil_notes_on_screen(monkeypatch, pretend_bhashini):
     monkeypatch.setattr(llm, "available", lambda: True)
+    monkeypatch.setattr(llm, "gemini_available", lambda: True)
     seen = {}
 
     def read(notes):
@@ -90,6 +91,7 @@ def test_tamil_notes_on_screen(monkeypatch, pretend_bhashini):
 
 def test_bhashini_down_on_screen(monkeypatch):
     monkeypatch.setattr(llm, "available", lambda: True)
+    monkeypatch.setattr(llm, "gemini_available", lambda: True)
 
     def down(*a, **k):
         raise bhashini.BhashiniUnavailable("Could not reach Bhashini (check the internet).")

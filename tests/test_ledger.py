@@ -83,6 +83,7 @@ def test_ledger_saved_with_case_and_shown(monkeypatch, tmp_path):
     original_submit = store.submit
     monkeypatch.setattr(store, "submit", lambda *a, **k: original_submit(*a, base=tmp_path, **k))
     monkeypatch.setattr(llm, "available", lambda: True)
+    monkeypatch.setattr(llm, "gemini_available", lambda: True)
     monkeypatch.setattr(llm, "read_undertrial_notes", lambda notes: llm.NotesReading(practice_answer(), notes, {}, "m"))
     at = AppTest.from_file("../app.py", default_timeout=20).run()
     at.radio(key="case_type").set_value("Undertrial").run()

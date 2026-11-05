@@ -132,6 +132,7 @@ def test_the_log_entry_has_no_case_text(tmp_path):
 
 def test_any_case_form_opens_when_the_ai_is_busy(monkeypatch):
     monkeypatch.setattr(llm, "available", lambda: True)
+    monkeypatch.setattr(llm, "gemini_available", lambda: True)
 
     def busy_ai(*a, **k):
         raise llm.AIUnavailable(llm.BUSY_MESSAGE, busy=True)

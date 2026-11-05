@@ -36,6 +36,7 @@ def pretend_ai(monkeypatch):
         return llm.NotesReading(practice_answer(), notes, {}, "pretend-model")
 
     monkeypatch.setattr(llm, "available", lambda: True)
+    monkeypatch.setattr(llm, "gemini_available", lambda: True)
     monkeypatch.setattr(llm, "read_undertrial_notes", fake_read)
     return calls
 
@@ -100,6 +101,7 @@ def test_ai_failure_shows_message_and_form_works(monkeypatch):
         raise llm.AIUnavailable("AI reading failed: the free-tier limit was reached; try again later (error 429).")
 
     monkeypatch.setattr(llm, "available", lambda: True)
+    monkeypatch.setattr(llm, "gemini_available", lambda: True)
     monkeypatch.setattr(llm, "read_undertrial_notes", fail)
     at = open_app()
     at.text_area(key="f_notes").set_value(NOTES)
@@ -116,6 +118,7 @@ def test_ai_failure_shows_message_and_form_works(monkeypatch):
 
 def test_empty_reading_asks_every_fact_in_intake_order(monkeypatch):
     monkeypatch.setattr(llm, "available", lambda: True)
+    monkeypatch.setattr(llm, "gemini_available", lambda: True)
     monkeypatch.setattr(llm, "read_undertrial_notes", lambda notes: llm.NotesReading({}, notes, {}, "pretend-model"))
     at = open_app()
     at.text_area(key="f_notes").set_value("Nothing useful here.")
@@ -159,6 +162,7 @@ def test_empty_reading_asks_every_fact_in_intake_order(monkeypatch):
 
 def test_next_without_an_answer_stays_on_the_question(monkeypatch):
     monkeypatch.setattr(llm, "available", lambda: True)
+    monkeypatch.setattr(llm, "gemini_available", lambda: True)
     monkeypatch.setattr(llm, "read_undertrial_notes", lambda notes: llm.NotesReading({}, notes, {}, "pretend-model"))
     at = open_app()
     at.text_area(key="f_notes").set_value("Nothing useful here.")

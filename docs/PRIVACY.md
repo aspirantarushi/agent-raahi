@@ -26,10 +26,10 @@ Volunteers are recorded by the name or initials they type when they sign in.
 | Case files | `cases/` | facts known, facts missing, next steps |
 | Timelines | `timelines/` | next steps, the handoff (who submitted it, when, how; acknowledgement and reference) |
 | Audit records | `audit/` | when, the AI model used, the facts the AI read, what changed and who did it, who approved or sent it back |
-| Problem reports | `problems/` | short reports with a case number and date |
+| Problem reports | `problems/` | short reports with a case number and date; AI failures (time, error type, provider and model, outcome; never case text or keys) |
 | Evaluation sessions | `evaluation/sessions/` | practice evaluation only (fictional cases) |
 | Impact log | `impact/` | only for real cases a partner has given permission for (see the README) |
-| Keys and passwords | `.env`, `.streamlit/secrets.toml` / host secret settings | Gemini key, clinic passcode, supervisor password, Supabase secret key; never uploaded to git |
+| Keys and passwords | `.env`, `.streamlit/secrets.toml` / host secret settings | Gemini key, Groq key, clinic passcode, supervisor password, Supabase secret key; never uploaded to git |
 
 All these folders, `.env` and the secrets file are kept out of git (a few practice files from early
 testing are in the repository).
@@ -44,10 +44,27 @@ clinic passcode.
 ## Sent outside the computer
 - **Supabase** (when set up): the records above, in the clinic's own project (region Mumbai), used
   only by the app's server with the secret key. Row level security is on with no public access.
-- **Google Gemini** (the AI): the filtered notes, to read facts (and, when continuing a case, the facts
-  already known, so it does not ask for them again); recordings, to turn them into text. On Gemini's
+- **Google Gemini** (the main AI): the filtered notes, to read facts (and, when continuing a case, the
+  facts already known, so it does not ask for them again); recordings, to turn them into text; and for
+  "Research this issue", only the state and the issue in plain words (with Google Search). On Gemini's
   free tier, Google may use what is sent to improve its products. Decide with the supervising lawyer
   whether this is acceptable for real cases, or use a paid tier.
+- **Groq** (the free third backup, only when both Gemini models fail): the same filtered notes, to read
+  facts, and the facts already known when continuing a case. Nothing else: never recordings, never
+  research questions, never drafts. The same filter runs first (phone, Aadhaar and email numbers
+  removed in every script; names cannot be removed automatically, so volunteers must not type them).
+  Read Groq's terms and data policy with the supervising lawyer before real cases.
+
+Which provider saw a case is recorded: the audit record and the draft's "how this draft was prepared"
+note name the model, and Groq models are named "groq:..." (for example groq:openai/gpt-oss-120b).
+
+| What is sent | Gemini | Groq |
+| --- | --- | --- |
+| Story / case notes, after the number filter | yes | only if both Gemini models fail |
+| Facts already known (continuing a case) | yes | only if both Gemini models fail |
+| Voice recordings | yes | never |
+| "Research this issue": state and issue in plain words | yes (with Google Search) | never |
+| Drafts, names, phone or Aadhaar numbers | never | never |
 - **Bhashini** (MeitY): not used in the pilot (languages are frozen at English and Hindi).
 
 ## For how long
