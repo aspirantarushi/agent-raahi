@@ -42,11 +42,30 @@ KINDS = {"route": "Route", "documents": "Documents usually needed", "time_limit"
 ALLOWED_SUFFIXES = ("gov.in", "nic.in")  # central and state government, India Code, NALSA, SLSAs, most courts
 ALLOWED_HOSTS = (
     "indiacode.nic.in", "nalsa.gov.in", "sci.gov.in", "ecourts.gov.in",
-    # state regulators and courts whose official sites are not under gov.in / nic.in
-    "berc.co.in",             # Bihar Electricity Regulatory Commission
-    "uperc.org",              # Uttar Pradesh Electricity Regulatory Commission
     "allahabadhighcourt.in",  # Allahabad High Court
     "patnahighcourt.gov.in",
+    # Electricity regulators and state power companies whose sites are not under gov.in / nic.in.
+    # Each address was confirmed on 5 November 2026 on a government page, or on the state-owned
+    # holding company's page that a government page links to (where shown):
+    # Bihar
+    "berc.co.in",     # Bihar Electricity Regulatory Commission (also its Ombudsman and CGRF pages):
+                      #   state.bihar.gov.in and cercind.gov.in/serc_hin.html
+    "bsphcl.co.in",   # Bihar State Power (Holding) Company Ltd: state.bihar.gov.in
+    "nbpdcl.co.in",   # North Bihar Power Distribution Company Ltd: bsphcl.co.in/main.htm
+    "sbpdcl.co.in",   # South Bihar Power Distribution Company Ltd: bsphcl.co.in/main.htm
+    "bsptcl.in",      # Bihar State Power Transmission Company Ltd: bsphcl.co.in/main.htm
+    "bspgcl.co.in",   # Bihar State Power Generation Company Ltd: bsphcl.co.in/main.htm
+    # Uttar Pradesh
+    "uperc.org",      # UP Electricity Regulatory Commission (also the Electricity Ombudsman page):
+                      #   cercind.gov.in/serc_hin.html
+    "uppcl.org",      # UP Power Corporation Ltd: cercind.gov.in/sebs.html
+    "pvvnl.org",      # Paschimanchal Vidyut Vitran Nigam Ltd: cercind.gov.in/sebs.html and uppcl.org
+    "mvvnl.in",       # Madhyanchal Vidyut Vitran Nigam Ltd: cercind.gov.in/sebs.html and uppcl.org
+    "dvvnl.org",      # Dakshinanchal Vidyut Vitran Nigam Ltd: cercind.gov.in/sebs.html and uppcl.org
+    "kesco.org.in",   # Kanpur Electricity Supply Company (current address): uppcl.org
+    "kesco.co.in",    # Kanpur Electricity Supply Company (older address, still live): cercind.gov.in/sebs.html
+    "upptcl.org",     # UP Power Transmission Corporation Ltd: uppcl.org
+    # Purvanchal Vidyut Vitran Nigam is puvvnl.up.nic.in (cercind.gov.in/sebs.html): already allowed (nic.in).
 )
 REDIRECT_HOSTS = ("vertexaisearch.cloud.google.com",)  # Google's grounding links point here first
 PREDICTION = re.compile(r"\b(chances?|likely|unlikely|guarantee[sd]?|surely|certainly|definitely|assured|"

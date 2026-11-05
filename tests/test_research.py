@@ -133,6 +133,13 @@ def bihar_research(tmp_path, fake_ai):
     ("https://nalsa.gov.in/", True), ("https://berc.co.in/cgrf", True), ("https://uperc.org/", True),
     ("https://bslsa.bih.nic.in/", True), ("https://www.lawrato.com/x", False), ("https://gov.in.evil.com/", False),
     ("https://notgov.in/", False), ("ftp://energy.bihar.gov.in/", False), ("", False),
+    # Bihar and UP power companies and regulators (confirmed on government pages, see research.py)
+    ("https://www.bsphcl.co.in/main.htm", True), ("https://nbpdcl.co.in/frmContactUs.aspx", True),
+    ("https://www.sbpdcl.co.in/", True), ("http://www.bsptcl.in/", True), ("https://bspgcl.co.in/", True),
+    ("https://www.uppcl.org/uppcl/en/", True), ("https://pvvnl.org/", True), ("http://mvvnl.in/en/", True),
+    ("https://www.dvvnl.org/", True), ("https://kesco.org.in/Default", True), ("http://kesco.co.in/", True),
+    ("https://upptcl.org/", True), ("https://puvvnl.up.nic.in/", True), ("https://www.uperc.org/Default2.aspx", True),
+    ("https://nbpdcl.co.in.example.com/", False), ("https://fake-nbpdcl.co.in/", False),
 ])
 def test_allowed_links(url, ok):
     assert research.allowed_link(url) is ok
