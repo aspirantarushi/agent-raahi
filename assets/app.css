@@ -446,3 +446,43 @@ div[class*="st-key-learn-card-"] .stButton > button p { white-space: nowrap; }
   h1 { font-size: 1.9rem !important; }
   div[class*="st-key-case-card-"] { padding: 16px; }
 }
+
+/* ---------- phones, New case: the story box on the first screen (laptop unchanged) ---------- */
+@media (max-width: 640px) {
+  /* Signed in, Sign out, Start today's camp, Continue a case: one row of small icon buttons */
+  .st-key-worker-bar { flex-direction: row !important; flex-wrap: wrap !important; align-items: center !important;
+    gap: 6px !important; margin-bottom: 4px; }
+  .st-key-worker-bar > div { width: auto !important; flex: 0 0 auto; }
+  .st-key-worker-bar > div:has(.who) { flex: 1 1 auto; min-width: 0; }
+  .st-key-worker-bar .who { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .st-key-worker-bar .stButton, .st-key-worker-bar .stButton > button,
+  .st-key-worker-bar [data-testid="stExpander"]:not(:has(details[open])) { width: auto !important; }
+  .st-key-worker-bar .stButton > button, .st-key-worker-bar [data-testid="stExpander"]:not(:has(details[open])) summary {
+    min-height: 38px !important; height: 38px; min-width: 42px; padding: 0 10px !important; justify-content: center !important; }
+  /* the words stay for screen readers, hidden on screen */
+  .st-key-worker-bar .stButton > button [data-testid="stMarkdownContainer"],
+  .st-key-worker-bar [data-testid="stExpander"]:not(:has(details[open])) summary [data-testid="stMarkdownContainer"] {
+    position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .st-key-worker-bar [data-testid="stExpander"]:not(:has(details[open])) summary svg { display: none; }
+  .st-key-worker-bar > div:has(details[open]), .st-key-worker-bar > div:has(.st-key-camp-form),
+  .st-key-worker-bar > div:has(.st-key-camp-row) { flex: 1 1 100% !important; }
+  /* headings: smaller, the icon beside the words */
+  .step-title.center { flex-direction: row; justify-content: center; gap: 8px; margin: .35rem 0 .3rem 0 !important;
+    font-size: 1.05rem; }
+  .step-title .step-icon { width: 28px; height: 28px; font-size: 17px; border-radius: 9px; }
+  /* shorter gaps above the story box */
+  h1 { font-size: 1.45rem !important; padding: 0 !important; margin: 0 0 2px 0 !important; }
+  .safety-bar { padding: 6px 12px !important; margin: 0 0 6px 0 !important; font-size: 14px; gap: 0 1rem; }
+  .st-key-case_type label[data-baseweb="radio"] { padding: 8px 10px !important; }
+  .stepper { margin: .1rem 0 .2rem 0 !important; }
+  .stepper li { padding-top: .3rem; border-top-width: 4px; }
+  [data-testid="stMainBlockContainer"] [data-testid="stVerticalBlock"] { row-gap: .55rem; }
+  [data-testid="stExpander"] summary { padding-top: 8px !important; padding-bottom: 8px !important; }
+  .st-key-names-warning-short [data-testid="stAlertContainer"] { padding: 6px 10px !important; }
+  .st-key-names-warning-short p { font-size: 13px !important; line-height: 1.4; }
+}
+@media (max-width: 400px) {
+  .st-key-topmenu-btn button [data-testid="stMarkdownContainer"] { position: absolute !important; width: 1px; height: 1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .st-key-topmenu-btn button { padding: 0 10px !important; min-width: 44px; }
+}
