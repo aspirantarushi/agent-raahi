@@ -3228,6 +3228,8 @@ if st.query_params.get("code"):  # opened from the QR code on a case slip
     del st.query_params["code"]
 choice = st.session_state["screen"] if st.session_state["screen"] in SCREENS else "Home"
 top_bar(choice)
+if storage.records_will_be_lost():  # online without Supabase: nothing saved would survive a restart
+    st.error(t("online.no_supabase"), icon=":material/cloud_off:")
 if choice != "Home":  # Home shows the helplines under its story box
     st.markdown(ui.safety_bar(t("safety.bar112"), t("safety.bar15100")), unsafe_allow_html=True)
 if choice in ("Home", "Learn") or clinic_ok():

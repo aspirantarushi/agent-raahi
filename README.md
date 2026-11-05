@@ -89,6 +89,12 @@ Set up for one institution (details and setup steps: docs/ONLINE_ROLLOUT_STATUS.
    values; choose one.
 5. Log a visit, tag a camp, then see both on "Case tracker".
 
+### Going online
+Deployed on Streamlit Community Cloud (Python 3.12, pinned `requirements.txt`). The step-by-step clicks,
+the names of the secrets to paste (never the values) and what behaves differently online are in
+**docs/GO_ONLINE.md**. Online, records are saved only in Supabase; without it the app shows a red
+"Not ready for real cases" notice. Dates are India time on any server.
+
 ## Measuring impact honestly
 - **Evaluation mode (practice)**: 10 fictional cases in `evaluation/cases/` with answer keys. Each can
   be done "by hand" (a plain form, no AI) or "with the agent"; the app records the time. A reviewer

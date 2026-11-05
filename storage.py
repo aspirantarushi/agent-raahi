@@ -27,6 +27,12 @@ from typing import Callable, Dict, List, Optional, Tuple
 HERE = Path(__file__).resolve().parent
 TIMEOUT_SECONDS = 30
 
+# Dates and times are India time everywhere, also on a server that runs on UTC (Streamlit Community
+# Cloud): otherwise "today" would still be yesterday between midnight and 5:30 am IST.
+if os.environ.get("TZ") != "Asia/Kolkata" and hasattr(__import__("time"), "tzset"):
+    os.environ["TZ"] = "Asia/Kolkata"
+    __import__("time").tzset()
+
 # kind -> (folder, file extension) for records saved one per file
 FILES: Dict[str, Tuple[str, str]] = {
     "pending": ("pending", ".json"),
@@ -236,6 +242,20 @@ def online() -> bool:
         return False
     url, key = supabase_settings()
     return bool(url and key)
+
+
+def on_streamlit_cloud() -> bool:
+    """Streamlit Community Cloud runs apps from /mount/src/<repo>. Its disk is wiped on every restart,
+    so records must go to Supabase there."""
+    return str(HERE).startswith("/mount/src/") or os.environ.get("RAAHI_FORCE_CLOUD") == "1"
+
+
+def records_will_be_lost() -> bool:
+    """True online without Supabase: saved cases would disappear at the next restart."""
+    try:
+        return on_streamlit_cloud() and not online()
+    except StorageError:
+        return on_streamlit_cloud()
 
 
 def data_dir() -> Path:

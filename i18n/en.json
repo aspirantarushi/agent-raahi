@@ -1006,5 +1006,6 @@
  "ui.general.names_warning_short": "**No names**, phone numbers, Aadhaar, addresses or prisoner IDs: describe people by role (\"the employer\"). The story is never saved.",
  "rs.warn_replaced": "Replaced by the {new} on {date}: check before approving.",
  "rs.warn_mismatch": "The point names the {law}, but its source is “{title}”: check that the source matches the law.",
- "rs.warn_other_state": "This source is a website of {other}, but the case is in {state}: check that the rule applies in {state}."
+ "rs.warn_other_state": "This source is a website of {other}, but the case is in {state}: check that the rule applies in {state}.",
+ "online.no_supabase": "Not ready for real cases: the online database (Supabase) is not set up, so anything saved here is lost when the app restarts. The supervisor adds SUPABASE_URL and SUPABASE_SECRET_KEY in the app's Secrets (see docs/GO_ONLINE.md)."
 }
