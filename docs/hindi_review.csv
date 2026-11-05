@@ -58,8 +58,8 @@ i18n/hi.json · elig.q.disability,Does the person needing help have a disability
 i18n/hi.json · elig.q_en:Does the person needing help have a disability?,Does the person needing help have a disability?,क्या मदद चाहने वाले व्यक्ति को कोई दिव्यांगता है?,legal content,,
 i18n/hi.json · elig.q.state,Which state or union territory does the person live in?,व्यक्ति किस राज्य या केंद्र शासित प्रदेश में रहता है?,legal content,,
 i18n/hi.json · elig.q_en:Which state or union territory does the person live in?,Which state or union territory does the person live in?,व्यक्ति किस राज्य या केंद्र शासित प्रदेश में रहता है?,legal content,,
-i18n/hi.json · elig.q.annual_income,What is the family's income? (per month or per year),परिवार की आय कितनी है? (महीने की या साल की),legal content,,
-i18n/hi.json · elig.q_en:What is the family's income? (per month or per year),What is the family's income? (per month or per year),परिवार की आय कितनी है? (महीने की या साल की),legal content,,
+i18n/hi.json · elig.q.annual_income,"What does the person earn now? (current income per month or per year, not wages they are owed)","व्यक्ति अभी कितना कमाता/कमाती है? (अभी की आय, महीने की या साल की; बकाया मज़दूरी नहीं)",legal content,,
+"i18n/hi.json · elig.q_en:What does the person earn now? (current income per month or per year, not wages they are owed)","What does the person earn now? (current income per month or per year, not wages they are owed)","व्यक्ति अभी कितना कमाता/कमाती है? (अभी की आय, महीने की या साल की; बकाया मज़दूरी नहीं)",legal content,,
 i18n/hi.json · next:Someone is in danger: call 112 now.,Someone is in danger: call 112 now.,कोई ख़तरे में है: अभी 112 पर कॉल करें।,legal content,,
 "i18n/hi.json · next:Money was lost online: call 1930 now, or report on cybercrime.gov.in.","Money was lost online: call 1930 now, or report on cybercrime.gov.in.","ऑनलाइन पैसे गए हैं: अभी 1930 पर कॉल करें, या cybercrime.gov.in पर शिकायत करें।",legal content,,
 "i18n/hi.json · next:Someone is in custody: open the Section 479 check, and contact the jail legal aid clinic or the District Legal Services Authority (DLSA).","Someone is in custody: open the Section 479 check, and contact the jail legal aid clinic or the District Legal Services Authority (DLSA).","कोई हिरासत में है: धारा 479 की जाँच खोलें, और जेल की क़ानूनी सहायता क्लिनिक या ज़िला विधिक सेवा प्राधिकरण (DLSA) से संपर्क करें।",legal content,,
@@ -300,7 +300,7 @@ i18n/hi.json · cw.step_eligibility,Finish the free legal aid check (the facts s
 i18n/hi.json · cw.step_documents,Collect the documents still needed.,बाक़ी ज़रूरी काग़ज़ जुटाएँ।,draft,,
 i18n/hi.json · cw.step_supervisor,The supervisor checks everything before anyone relies on it.,किसी के भरोसा करने से पहले Supervisor सब कुछ जाँचते हैं।,draft,,
 i18n/hi.json · cw.by_date,by {date},{date} तक,draft,,
-i18n/hi.json · cw.by_date_suggested,"by {date} (suggested follow-up, not a legal deadline)","{date} तक (सुझाया गया फ़ॉलो-अप, क़ानूनी समय-सीमा नहीं)",draft,,
+i18n/hi.json · cw.by_date_suggested,"by {date}, a suggested follow-up, not a legal deadline","{date} तक, सुझाया गया फ़ॉलो-अप, क़ानूनी समय-सीमा नहीं",draft,,
 i18n/hi.json · cw.approved_on,approved by the supervisor on {date},Supervisor ने {date} को मंज़ूर किया,draft,,
 i18n/hi.json · cw.ref.electricity,Consumer number: [Consumer number],उपभोक्ता संख्या: [उपभोक्ता संख्या],draft,,
 i18n/hi.json · cw.ref.water,Consumer number: [Consumer number],उपभोक्ता संख्या: [उपभोक्ता संख्या],draft,,
@@ -1107,6 +1107,21 @@ i18n/hi.json · rs.status_not_started,Research starts by itself once the questio
 i18n/hi.json · rs.again,Research again,फिर से रिसर्च करें,screen text,,
 i18n/hi.json · rs.decide_first,Decide every research point first; the letter is then added to this draft for your approval.,पहले रिसर्च के हर बिंदु पर फ़ैसला करें; फिर पत्र इस ड्राफ़्ट में आपकी मंज़ूरी के लिए जुड़ जाएगा।,screen text,,
 i18n/hi.json · rs.nyaya_setu,Ask Nyaya Setu on WhatsApp (7217711814),WhatsApp पर न्याय सेतु से पूछें (7217711814),screen text,,
+i18n/hi.json · rs.edit_needed,"This point names a replaced law: edit it to the current law, or reject it.","यह बिंदु एक बदले जा चुके क़ानून का नाम लेता है: इसे मौजूदा क़ानून के अनुसार बदलें, या अस्वीकार करें।",screen text,,
+i18n/hi.json · rs.as_knowledge_point,Save as knowledge ({state}): {point},जानकारी के रूप में सहेजें ({state}): {point},screen text,,
+i18n/hi.json · ui.sup.problems_today,Today: AI busy {n} times; another try or the backup answered {ok}.,आज: AI {n} बार व्यस्त रहा; दोबारा कोशिश या बैकअप ने {ok} बार जवाब दिया।,screen text,,
+i18n/hi.json · ui.sup.problems_search,research backup search used {n} times,रिसर्च के लिए बैकअप सर्च {n} बार,screen text,,
+i18n/hi.json · ui.sup.problems_earlier,{n} earlier problems,{n} पुरानी समस्याएँ,screen text,,
+i18n/hi.json · ui.sup.problems_details,Details ({n}),विवरण ({n}),screen text,,
+i18n/hi.json · ui.lang.detected,Detected: {language}. Change it above if this is wrong.,पहचानी गई भाषा: {language}। ग़लत हो तो ऊपर बदलें।,screen text,,
+i18n/hi.json · ledger.question_for_lawyer,Question for the lawyer: {issue},वकील के लिए सवाल: {issue},screen text,,
+i18n/hi.json · sup.cards_unavailable,The case cards could not be shown for this older case; the drafts are below.,इस पुराने केस के कार्ड नहीं दिखाए जा सके; ड्राफ़्ट नीचे हैं।,screen text,,
+i18n/hi.json · rs.loading_caption,Searching official websites for this problem. The cards and drafts above and below are ready to read meanwhile.,इस समस्या के लिए सरकारी वेबसाइटों पर खोज हो रही है। तब तक ऊपर और नीचे के कार्ड और ड्राफ़्ट पढ़ सकते हैं।,screen text,,
+i18n/hi.json · gate.signed_in_short,Signed in as {name},{name} के रूप में साइन इन,screen text,,
+i18n/hi.json · ui.general.names_warning_short,"**No names**, phone numbers, Aadhaar, addresses or prisoner IDs: describe people by role (""the employer""). The story is never saved.","**नाम न लिखें**, न फ़ोन नंबर, आधार, पता या क़ैदी ID: लोगों को भूमिका से बताएँ (""मालिक"")। कहानी कभी सेव नहीं होती।",screen text,,
+i18n/hi.json · rs.warn_replaced,Replaced by the {new} on {date}: check before approving.,{date} को {new} ने इसकी जगह ले ली: मंज़ूर करने से पहले जाँचें।,screen text,,
+i18n/hi.json · rs.warn_mismatch,"The point names the {law}, but its source is “{title}”: check that the source matches the law.","यह बिंदु {law} का नाम लेता है, पर इसका स्रोत “{title}” है: जाँचें कि स्रोत उसी क़ानून का है।",screen text,,
+i18n/hi.json · rs.warn_other_state,"This source is a website of {other}, but the case is in {state}: check that the rule applies in {state}.","यह स्रोत {other} की वेबसाइट है, पर केस {state} का है: जाँचें कि नियम {state} में लागू होता है।",screen text,,
 case_notes_hi.txt,(fake practice story; check that it reads naturally),"अभ्यास केस (कोई असली व्यक्ति नहीं)।
 बोलने वाली: एक विचाराधीन क़ैदी की बड़ी बहन।
 उसके भाई को 15 मार्च 2024 को गिरफ़्तार किया गया था। अपराध फ़रवरी 2024 में हुआ था।
@@ -1122,6 +1137,12 @@ Unke pati ne ek thekedar ke liye June se August 2026 tak kaam kiya, par teen mah
 Thekedar har baar bolta hai ""agle hafte de denge"". Unke paas site attendance register ki photo hai.
 Pati ki kamai lagbhag 9000 rupaye mahina hai jab kaam milta hai.
 Koi khatra nahi hai aur abhi tak koi case file nahi hua.",practice story,,
+practice_stories/unpaid_wages_punjab_hinglish.txt,(fake practice story; check that it reads naturally),"Practice case (koi asli vyakti nahi).
+Bolne wala: ek factory mazdoor ka bhai. Mazdoor Ludhiana, Punjab mein ek cycle parts factory mein kaam karta tha.
+Malik ne 30 September ke baad se salary nahi di. Har mahine 12000 rupaye milne the, teen mahine se kuch nahi mila.
+Malik kehta hai ""order aayega tab denge"". Ab factory ne usse kaam se bhi nikal diya.
+Unke paas attendance card ki photo hai. Woh chahte hain ki bakaya tankhwah mil jaye.
+Koi khatra nahi hai aur abhi tak koi complaint nahi ki.",practice story,,
 practice_stories/upi_fraud_hinglish.txt,(fake practice story; check that it reads naturally),"Practice case (not a real person).
 Beta bol raha hai: meri maa 68 saal ki hain aur Patna, Bihar mein rehti hain.
 Kal unko ek call aaya, bola bank se bol raha hai. Usne UPI request bheji aur refund ke liye PIN daalne ko bola.

@@ -564,7 +564,8 @@ Rules:
   exact words as quote); otherwise null.
 - woman, under_18, sc_st, disability, state, income: about the person needing legal help (not the
   person telling the story). income: the amount and whether it is per month or per year, as written;
-  do not convert it.
+  do not convert it. income is what the person earns now; wages or money owed to them (unpaid salary)
+  are not income: leave income null then.
 
 Volunteer's notes:
 <<<
@@ -655,6 +656,10 @@ own files do not cover. Use Google Search to find OFFICIAL information for this 
 
 State: {state}
 Problem, in plain words: {issue}
+Today's date: {today}. Use only the law in force today. The Indian Penal Code, the Code of Criminal Procedure
+and the Indian Evidence Act were replaced on 1 July 2024 (by the BNS, the BNSS and the BSA), and 29 central labour
+Acts (for example the Payment of Wages Act and the Minimum Wages Act) were replaced on 21 November 2025 by the four
+labour codes: name the current law, never a replaced one.
 
 Write a short research brief in plain English, with these headings:
 1. Routes: who the person can complain to or apply to, in order (first the office or officer concerned,
@@ -663,8 +668,9 @@ Write a short research brief in plain English, with these headings:
 3. Time limits, if any (only if an official source states them).
 4. Where and how to file (office, online portal or address of the office, fee if any).
 5. Draft letter: a short application or complaint letter to the first office in the routes. Use blanks
-   in square brackets for every personal detail: [Name], [Address], [Phone], [Consumer or account
-   number], [Date], [Signature]. Never invent a name, number or address.
+   in square brackets for every personal detail the letter needs, such as [Name], [Address], [Date],
+   [Signature], and a reference number blank only if this kind of problem has one (for example a
+   consumer number for electricity). Never invent a name, number or address.
 
 Rules:
 - Use only official sources: Indian central or state government websites (gov.in, nic.in), India Code,
@@ -718,13 +724,18 @@ class ResearchRaw:
     sent: str            # exactly what was sent (state and issue), for the audit record
 
 
+def _today() -> str:
+    from datetime import date
+    return f"{date.today():%d %B %Y}"
+
+
 def research_issue(state: str, issue: str) -> ResearchRaw:
     """Research with Google Search grounding. Phone, Aadhaar and email numbers are removed first."""
     state, _ = privacy.redact((state or "").strip()[:60])
     issue, _ = privacy.redact((issue or "").strip()[:300])
     if not issue.strip() or not state.strip():
         raise AIUnavailable("Research needs the state and the problem in plain words.")
-    prompt = RESEARCH_PROMPT.format(state=state, issue=issue)
+    prompt = RESEARCH_PROMPT.format(state=state, issue=issue, today=_today())
     body = {"contents": [{"role": "user", "parts": [{"text": prompt}]}],
             "tools": [{"google_search": {}}], "generationConfig": {"temperature": 0}}
     data, model = _generate(body)
@@ -796,10 +807,13 @@ problem using ONLY the numbered official search results below. Do not use anythi
 
 State: {state}
 Problem, in plain words: {issue}
+Today's date: {today}. Use only the law in force today (the IPC, CrPC and Evidence Act were replaced on 1 July
+2024; 29 central labour Acts were replaced by the four labour codes on 21 November 2025): never a replaced law.
 
 Cover, if the results say it: 1. Routes: who the person can complain or apply to, in order. 2. Documents usually
 needed. 3. Time limits. 4. Where and how to file. 5. A short draft letter to the first office, with blanks in square
-brackets for every personal detail: [Name], [Address], [Phone], [Consumer or account number], [Date], [Signature].
+brackets for the personal details the letter needs ([Name], [Address], [Date], [Signature]; a reference number
+blank only if this kind of problem has one).
 Return the brief as sentences. For every sentence give "sources": the numbers of the results it comes from. A
 sentence that no result supports must not be written. Never predict outcomes or chances, never promise anything,
 and never give an opinion about anyone. Write "Not found in official sources." (with no sources) for a heading
@@ -822,7 +836,8 @@ def research_issue_tavily(state: str, issue: str) -> "ResearchRaw":
     if not results:
         raise AIUnavailable("Research failed: no official search results came back.")
     listed = "\n\n".join(f"[{n}] {r['title']} ({r['url']})\n{r['content']}" for n, r in enumerate(results, 1))
-    answer, model = _generate_json(BRIEF_FROM_RESULTS_PROMPT.format(state=state, issue=issue, results=listed),
+    answer, model = _generate_json(BRIEF_FROM_RESULTS_PROMPT.format(state=state, issue=issue, results=listed,
+                                                                    today=_today()),
                                    BRIEF_SCHEMA, groq=True)
     sentences = [s for s in (answer.get("sentences") if isinstance(answer, dict) else []) or []
                  if isinstance(s, dict) and str(s.get("text", "")).strip()]

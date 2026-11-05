@@ -161,9 +161,11 @@ def ai_info_for_audit():
 def new_case_screen():
     open_by_code()
     st.title(t("ui.new_case.title"))
-    st.caption(t("ui.new_case.caption"))
-    volunteer_line()
-    continue_box("new")
+    with st.container(key="nc-caption"):  # hidden on phones: the story box repeats it
+        st.caption(t("ui.new_case.caption"))
+    with st.container(key="worker-bar", horizontal=True, vertical_alignment="center", gap="small"):
+        volunteer_line()  # who is signed in, Sign out, today's camp and Continue a case: one compact bar
+        continue_box("new")
     msg = st.session_state.pop("case-msg", None)
     if msg:
         st.error(msg[1])
@@ -253,7 +255,21 @@ NOTES_LANGUAGE_KEYS = {"g_notes": "g_notes_lang", "f_notes": "f_notes_lang"}
 def notes_language_choice(key: str):
     options = multilingual.note_languages()
     st.session_state.setdefault(key, code() if code() in options else "en")
-    st.selectbox(t("ui.lang.notes_language"), list(options), format_func=options.get, key=key)
+    st.selectbox(t("ui.lang.notes_language"), list(options), format_func=options.get, key=key,
+                 on_change=lambda: st.session_state.update({f"{key}-chosen": True}))
+    if st.session_state.get(f"{key}-detected") and not st.session_state.get(f"{key}-chosen"):
+        st.caption(t("ui.lang.detected", language=options.get(st.session_state[key], st.session_state[key])))
+
+
+def detect_notes_language(text_key: str = "g_notes"):
+    """Pre-select the story's language (English, Hindi or Hinglish), unless the volunteer chose one."""
+    key = NOTES_LANGUAGE_KEYS[text_key]
+    if st.session_state.get(f"{key}-chosen"):
+        return
+    found = multilingual.detect_language(st.session_state.get(text_key) or "")
+    if found and found in multilingual.note_languages():
+        st.session_state[key] = found
+        st.session_state[f"{key}-detected"] = True
 
 
 def language_name(language: str) -> str:
@@ -499,16 +515,19 @@ def general_screen():
         flow_title(1)
     story_label = t("ui.general.story_box") if gen is None else t("ui.general.story_done")
     with st.expander(story_label, expanded=gen is None or bool(st.session_state.get("g_story_open"))):
-        st.warning(t("ui.general.names_warning"))
+        with st.container(key="names-warning-long"):
+            st.warning(t("ui.general.names_warning"))
+        with st.container(key="names-warning-short"):  # phones: the same rule, short
+            st.warning(t("ui.general.names_warning_short"))
         if llm.available():
+            st.text_area(t("ui.general.story_label"), key="g_notes", height=220,
+                         placeholder=t("ui.general.story_placeholder"), on_change=detect_notes_language)
             notes_language_choice("g_notes_lang")
             voice_box("g_audio", "g_notes")
-            st.text_area(t("ui.general.story_label"), key="g_notes", height=220,
-                         placeholder=t("ui.general.story_placeholder"))
             col1, col2 = st.columns(2)
             busy = bool(st.session_state.get("g_reading"))
             col1.button(t("ui.general.read"), type="primary", key="g-read", disabled=busy,
-                        on_click=lambda: st.session_state.update(g_reading=True))
+                        on_click=lambda: (detect_notes_language(), st.session_state.update(g_reading=True)))
             if gen:
                 col2.button(t("ui.general.clear"), on_click=clear_general)
                 if st.session_state.get("g_story_open"):
@@ -639,8 +658,7 @@ def auto_research(case_id: str, issue: str, state: str):
         tracker.note_research_run(case_id, who(), "failed")
         return
     try:
-        with st.spinner(t("rs.working"), show_time=True):
-            record = research.run(case_id, state, issue, who())
+        record = research.run(case_id, state, issue, who())
         result = "waiting" if record["points"] else "failed"
     except research.ResearchFailed:
         result = "failed"
@@ -689,15 +707,11 @@ def general_summary(gen):
     uncovered = general.uncovered_issues(facts)
     record = tracker.load(case_id) if case_id else None
     again = st.session_state.pop("rs-again", None)
+    research_now = None  # research runs last, in its own box, after the cards and drafts are on screen
     if uncovered and state and (llm.gemini_available() or llm.tavily_key()) \
             and (again or not (record or {}).get("research_runs")):
         case_id = case_id or ensure_case(general.CASE_TYPE)
-        auto_research(case_id, again[1] if again else uncovered[0], state)
-        record = tracker.load(case_id)
-        try:
-            facts.research = research.items_for_summary(case_id, state, [n for _, n in facts.issues])
-        except storage.StorageError:
-            pass
+        research_now = (case_id, again[1] if again else uncovered[0], state)
     status = research_status(case_id, record) if (uncovered or facts.research) else "none"
     facts.research_state = {"not started": "none" if not uncovered else "failed"}.get(status, status)
 
@@ -725,8 +739,10 @@ def general_summary(gen):
         case_cards(facts, eligibility, approved, kind, draft_lang)
     with col_check:
         fix_checklist(items, facts, eligibility, kind, missing_years, approved, gen)
-    research_panel(facts, uncovered, status, case_id, state)
-    drafts_panel(documents, status, uncovered)
+    research_slot = st.container(key="research-slot")
+    with research_slot:
+        research_panel(facts, uncovered, "loading" if research_now else status, case_id, state)
+    drafts_panel(documents, "loading" if research_now else status, uncovered)
     entries = ledger.general(facts, reading.facts, eligibility, ai_checked=bool(gen["model"]))
     ledger_box(entries)
     packet = casework.bundle(documents)
@@ -739,9 +755,19 @@ def general_summary(gen):
     sent = st.session_state.get("gen_sent")
     if sent:
         st.success(t("ui.sent", case_id=sent))
+        record = tracker.load(sent) or {}
+        if not record.get("intake_finished"):  # the next thing to do, right here
+            st.button(t("intake.finish"), key="intake-finish-sent", type="primary", icon=":material/task_alt:",
+                      on_click=finish_intake, args=(sent,))
+        elif record.get("next"):
+            n = record["next"]
+            st.success(t("intake.done", step=next_step_words(n["step"], None),
+                         due=show_date(date.fromisoformat(n["due"])) if n.get("due") else "-"),
+                       icon=":material/task_alt:")
         return
     checked = st.checkbox(t("ui.general.checked_no_names"), key="g_checked")
-    if st.button(send_label(items), disabled=not checked, key="send-g", type="primary", icon=":material/send:"):
+    if st.button(send_label(items), disabled=not checked or bool(research_now), key="send-g", type="primary",
+                 icon=":material/send:"):
         ai = None
         if gen["model"]:
             ai = {"model": gen["model"], "read_at": gen["read_at"], "extracted": dict(reading.facts),
@@ -756,6 +782,11 @@ def general_summary(gen):
             return
         st.session_state["gen_sent"] = case_id
         finish_agent_session(case_id, packet)
+        st.rerun()
+    if research_now:  # everything else is already on screen; the research box shows its own progress
+        with research_slot:
+            with st.spinner(t("rs.working"), show_time=True):
+                auto_research(*research_now)
         st.rerun()
 
 
@@ -793,10 +824,13 @@ def case_cards(g, eligibility, approved, kind, code_):
     steps = casework.next_steps(g, eligibility, general._approved_points(g), g.research_state, today, code_)
     srows = []
     for i, s in enumerate(steps, 1):
-        when = ""
-        if s.due:
-            when = f' <span class="when">{e(t("cw.by_date_suggested" if s.suggested else "cw.by_date", date=show_date(s.due)))}</span>'
-        srows.append(f"{i}. {e(s.text)}{when}" + (f'<span class="src">{e(s.source)}</span>' if s.source else ""))
+        text = e(s.text)
+        if s.due:  # "Collect the documents (by 13 November 2026, suggested follow-up)."
+            when = t("cw.by_date_suggested" if s.suggested else "cw.by_date", date=show_date(s.due))
+            body = s.text.rstrip()
+            end = body[-1] if body and body[-1] in ".।" else "."
+            text = f'{e(body.rstrip(".।"))} <span class="when">({e(when)})</span>{end}'
+        srows.append(f"{i}. {text}" + (f'<span class="src">{e(s.source)}</span>' if s.source else ""))
     st.markdown(ui.info_card(t("cw.next_steps"), srows, icon_name="checklist"), unsafe_allow_html=True)
 
 
@@ -885,6 +919,9 @@ def research_panel(g, uncovered, status, case_id, state):
         st.markdown(f"**{t('rs.title')}**")
         msg = {"waiting": "rs.status_waiting", "approved": "rs.status_approved", "failed": "rs.failed",
                "not started": "rs.need_state" if not state else "rs.status_not_started"}.get(status)
+        if status == "loading":
+            st.caption(t("rs.loading_caption"))
+            return
         if msg:
             (st.error if status == "failed" else st.info)(t(msg), icon=":material/travel_explore:")
         with st.container(horizontal=True, gap="small", key="research-actions"):
@@ -1389,8 +1426,9 @@ LEDGER_ICONS = {ledger.TOLD: ":material/record_voice_over:", ledger.AI_CHECKED: 
 def ledger_box(entries, expanded=False):
     """Where each fact comes from, for the volunteer and the supervisor."""
     open_points = ledger.unresolved([e if isinstance(e, ledger.Entry) else ledger.Entry(**e) for e in entries])
-    if open_points:
-        st.warning(t("ledger.unresolved_warning", n=len(open_points)))
+    for p in open_points:  # each open legal point as a question for the lawyer
+        issue = p.value if p.fact == "ledger.issue" else f"{t(p.fact)} ({p.value})"
+        st.warning(t("ledger.question_for_lawyer", issue=issue), icon=":material/gavel:")
     with st.expander(f"{t('ui.details')}: {t('ledger.title')}", expanded=expanded):
         for e in entries:
             e = e if isinstance(e, ledger.Entry) else ledger.Entry(**e)
@@ -2026,9 +2064,12 @@ def supervisor_screen():
         st.warning(t("ui.sup.no_password"))
         return
     if not st.session_state.get("supervisor_ok"):
-        typed = st.text_input(t("ui.sup.password"), type="password")
-        if st.button(t("ui.sup.sign_in")):
-            if hmac.compare_digest(typed, expected):
+        with st.form("sup-form", enter_to_submit=True, border=False):  # Enter signs in
+            typed = st.text_input(t("ui.sup.password"), type="password", key="sup-pass")
+            go = st.form_submit_button(t("ui.sup.sign_in"), type="primary", key="sup-go")
+        if go:
+            # spaces copied in by mistake around the password are ignored
+            if hmac.compare_digest((typed or "").strip().encode(), expected.strip().encode()):
                 st.session_state["supervisor_ok"] = True
                 st.rerun()
             else:
@@ -2063,9 +2104,12 @@ def supervisor_screen():
     problems = audit.list_problems()
     if not problems:
         st.caption(t("ui.sup.no_problems"))
-    for p in problems:
-        st.markdown(f"- **{p['time'].replace('T', ' ')}** · {t('ui.case')} {p['case_id']} · {p['where']}: {p['text']}"
-                    + (f" _({t('ui.sup.removed')} {p['removed']})_" if p.get("removed") else ""))
+    else:
+        st.markdown(problems_summary(problems))
+        with st.expander(t("ui.sup.problems_details", n=len(problems))):
+            for p in problems:
+                st.markdown(f"- **{p['time'].replace('T', ' ')}** · {t('ui.case')} {p['case_id']} · {p['where']}: "
+                            f"{p['text']}" + (f" _({t('ui.sup.removed')} {p['removed']})_" if p.get("removed") else ""))
 
     st.subheader(t("ui.sup.audit_all"))
     records = audit.list_records()
@@ -2074,6 +2118,27 @@ def supervisor_screen():
     for r in records:
         with st.expander(t("ui.sup.audit_row", case_id=r["case_id"], model=r["model"], last=r["events"][-1]["event"])):
             st.markdown(audit.describe(r))
+
+
+def short(text: str, n: int) -> str:
+    text = " ".join((text or "").split())
+    return text if len(text) <= n else text[:n - 1].rsplit(" ", 1)[0] + "\u2026"
+
+
+def problems_summary(problems: list) -> str:
+    """One short line: "Today: AI busy 14 times; the backup answered 10. Earlier: 3 problems." """
+    today = date.today().isoformat()
+    todays = [p for p in problems if p["time"].startswith(today)]
+    busy = [p for p in todays if not p.get("research_search")]
+    backup = [p for p in busy if str(p.get("outcome", "")).startswith("answered")]
+    parts = [t("ui.sup.problems_today", n=len(busy), ok=len(backup))] if busy else []
+    searches = [p for p in todays if p.get("research_search")]
+    if searches:
+        parts.append(t("ui.sup.problems_search", n=len(searches)))
+    earlier = len(problems) - len(todays)
+    if earlier:
+        parts.append(t("ui.sup.problems_earlier", n=earlier))
+    return " · ".join(parts) or t("ui.sup.problems_earlier", n=len(problems))
 
 
 def decide_research_point(research_id: str, point_id: str):
@@ -2124,6 +2189,41 @@ def research_point_view(record: dict, p: dict):
     else:
         st.markdown(html.escape(p["text"]))
     st.markdown("  \n".join(f":material/link: [{html.escape(s['title'])}]({s['url']})" for s in p["sources"]))
+    for w in p.get("warnings", []):
+        if w["kind"] == "replaced":
+            st.error(warning_text(w), icon=":material/gavel:")
+        else:
+            st.warning(warning_text(w), icon=":material/rule:")
+
+
+def warning_text(w: dict) -> str:
+    """A research warning in the screen's language (the saved English text if it is an older record)."""
+    try:
+        if w["kind"] == "replaced":
+            return t("rs.warn_replaced", new=w["new"], date=show_date(date.fromisoformat(w["since"])))
+        if w["kind"] == "mismatch":
+            return t("rs.warn_mismatch", law=w["law"], title=w["title"])
+        if w["kind"] == "other_state":
+            return t("rs.warn_other_state", other=w["other"], state=w["state"])
+    except KeyError:
+        pass
+    return w["text"]
+
+
+def research_decision(r: dict, p: dict):
+    """Approve / Edit then approve / Reject for one point. A point naming a replaced law cannot be
+    approved as it is: only edited (to the current law) or rejected."""
+    options = ["Approve", "Edit then approve", "Reject"]
+    if research.blocked(p):
+        options.remove("Approve")
+        st.caption(t("rs.edit_needed"))
+    choice = st.radio(t("rs.decision"), options, index=None, horizontal=True, key=f"rsd-{r['id']}-{p['id']}",
+                      format_func=lambda c: t({"Approve": "rs.approve", "Edit then approve": "rs.edit",
+                                               "Reject": "rs.reject"}[c]))
+    if choice == "Edit then approve":
+        st.text_area(t("rs.edit_label"), value=p["text"], key=f"rse-{r['id']}-{p['id']}", height=120)
+    st.button(t("rs.save"), key=f"rss-{r['id']}-{p['id']}", type="primary", disabled=choice is None,
+              on_click=decide_research_point, args=(r["id"], p["id"]))
 
 
 def status_chip_text(status: str) -> str:
@@ -2152,27 +2252,20 @@ def research_review_box():
                 with st.container(border=True):
                     research_point_view(r, p)
                     if p["status"] == research.WAITING:
-                        key = f"rsd-{r['id']}-{p['id']}"
-                        choice = st.radio(t("rs.decision"), ["Approve", "Edit then approve", "Reject"], index=None,
-                                          horizontal=True, key=key, format_func=lambda c: t(
-                                              {"Approve": "rs.approve", "Edit then approve": "rs.edit",
-                                               "Reject": "rs.reject"}[c]))
-                        if choice == "Edit then approve":
-                            st.text_area(t("rs.edit_label"), value=p["text"], key=f"rse-{r['id']}-{p['id']}", height=120)
-                        st.button(t("rs.save"), key=f"rss-{r['id']}-{p['id']}", type="primary", disabled=choice is None,
-                                  on_click=decide_research_point, args=(r["id"], p["id"]))
+                        research_decision(r, p)
             if r["dropped"]:
                 with st.expander(f"{t('rs.dropped')} ({len(r['dropped'])})"):
                     for d in r["dropped"]:
                         st.markdown(f"- {html.escape(d['text'][:200])} _({d['reason']})_")
     for r, p in savable:
-        with st.expander(t("rs.as_knowledge", state=r["state"]) + f" · {r['case_id']} {p['id']}",
+        with st.expander(t("rs.as_knowledge_point", state=r["state"], point=short(p["text"], 70)),
                          icon=":material/bookmark_add:"):
             research_point_view(r, p)
             st.text_input(t("rs.k_heading"), key=f"rsk-h-{r['id']}-{p['id']}",
                           value=f"{r['state']}: {research.KINDS[p['kind']].lower()} for {r['issue'][:60]}")
             st.text_input(t("rs.k_words"), key=f"rsk-w-{r['id']}-{p['id']}", value=", ".join(research.keywords(r["issue"])))
-            st.button(t("rs.as_knowledge", state=r["state"]), key=f"rsk-{r['id']}-{p['id']}", type="primary",
+            st.button(t("rs.as_knowledge_point", state=r["state"], point=short(p["text"], 40)),
+                      key=f"rsk-{r['id']}-{p['id']}", type="primary",
                       on_click=save_research_knowledge, args=(r["id"], p["id"]))
 
 
@@ -2253,17 +2346,25 @@ def review_research_inside(case_id: str) -> bool:
             with st.container(border=True):
                 research_point_view(r, p)
                 if p["status"] == research.WAITING:
-                    choice = st.radio(t("rs.decision"), ["Approve", "Edit then approve", "Reject"], index=None,
-                                      horizontal=True, key=f"rsd-{r['id']}-{p['id']}", format_func=lambda c: t(
-                                          {"Approve": "rs.approve", "Edit then approve": "rs.edit",
-                                           "Reject": "rs.reject"}[c]))
-                    if choice == "Edit then approve":
-                        st.text_area(t("rs.edit_label"), value=p["text"], key=f"rse-{r['id']}-{p['id']}", height=120)
-                    st.button(t("rs.save"), key=f"rss-{r['id']}-{p['id']}", type="primary", disabled=choice is None,
-                              on_click=decide_research_point, args=(r["id"], p["id"]))
+                    research_decision(r, p)
     if waiting:
         st.info(t("rs.decide_first"), icon=":material/lock:")
     return bool(waiting)
+
+
+def supervisor_case_cards(record: dict):
+    """The same case cards the volunteer saw in step 3 (At a glance, Facts, Timeline, Documents, Free
+    legal aid, For the lawyer, Next steps), rebuilt from the saved facts by the same code."""
+    if record.get("case_type") != general.CASE_TYPE or not record.get("facts"):
+        return
+    try:
+        g = general.GeneralFacts.from_dict(record["facts"])
+        approved = research.approved_points(record["id"])
+        g.research = research.items_for_summary(record["id"], g.facts.get("state"),
+                                                [n for _, n in g.issues]) if g.issues else []
+        case_cards(g, general.check_eligibility(g.facts), approved, casework.problem_type(g), code())
+    except (KeyError, TypeError, ValueError, storage.StorageError):
+        st.caption(t("sup.cards_unavailable"))
 
 
 def review_one(record: dict):
@@ -2272,8 +2373,10 @@ def review_one(record: dict):
                        sent=record["submitted"].replace("T", " ")), expanded=True):
         for h in record.get("history", []):
             st.caption(t("ui.sup.resent", when=h["resent"].replace("T", " "), reason=h["sent_back_reason"]))
-        for part in casework.split_bundle(record["draft"]):  # each document as a readable page
-            st.markdown(ui.letter_html(part.strip()), unsafe_allow_html=True)
+        supervisor_case_cards(record)
+        for n, part in enumerate(casework.split_bundle(record["draft"])):  # each document as a readable page
+            with st.container(border=True, key=f"sup-draft-{case_id}-{n}"):
+                st.markdown(ui.letter_html(part.strip()), unsafe_allow_html=True)
         with st.expander(t("cw.plain_text")):
             st.code(record["draft"], language=None, wrap_lines=True)
         blocked = review_research_inside(case_id)
@@ -2342,12 +2445,12 @@ def clinic_ok() -> bool:
 
 
 def clinic_sign_in():
-    typed = st.session_state.get("gate-pass") or ""
+    typed = (st.session_state.get("gate-pass") or "").strip()  # spaces copied in by mistake are ignored
     name = (st.session_state.get("gate-name") or "").strip()
     if not name:
         st.session_state["gate-msg"] = t("gate.need_name")
         return
-    if not hmac.compare_digest(typed.encode(), clinic_passcode().encode()):
+    if not hmac.compare_digest(typed.encode(), clinic_passcode().strip().encode()):
         st.session_state["gate-msg"] = t("gate.wrong")
         return
     st.session_state.update(clinic_ok=True, volunteer=tracker.clean_text(name, 40), **{"gate-pass": ""})
@@ -2356,10 +2459,10 @@ def clinic_sign_in():
 def clinic_gate():
     st.title(t("gate.title"))
     st.caption(t("gate.caption"))
-    with st.container(border=True):
+    with st.form("gate-form", enter_to_submit=True, border=True):  # Enter signs in
         st.text_input(t("gate.passcode"), type="password", key="gate-pass")
         st.text_input(t("gate.name"), key="gate-name", max_chars=40, help=t("gate.name_help"))
-        st.button(t("gate.go"), type="primary", key="gate-go", on_click=clinic_sign_in)
+        st.form_submit_button(t("gate.go"), type="primary", key="gate-go", on_click=clinic_sign_in)
     msg = st.session_state.pop("gate-msg", None)
     if msg:
         st.error(msg)
@@ -2368,9 +2471,9 @@ def clinic_gate():
 def volunteer_line():
     """Who is acting, and today's camp (optional, tagged on new cases)."""
     if clinic_passcode():
-        c1, c2 = st.columns([4, 1])
-        c1.caption(t("gate.signed_in", name=who()))
-        if c2.button(t("gate.sign_out"), key="gate-out", type="primary", icon=":material/logout:"):
+        st.markdown(f'<span class="who" title="{html.escape(t("gate.name_help"))}">'
+                    f'{html.escape(t("gate.signed_in_short", name=who()))}</span>', unsafe_allow_html=True)
+        if st.button(t("gate.sign_out"), key="gate-out", icon=":material/logout:"):
             for key in ("clinic_ok", "volunteer", "case_id"):
                 st.session_state.pop(key, None)
             st.rerun()
@@ -2938,7 +3041,8 @@ def toggle_case_tab(tab_key: str, option: str):
 
 def finish_intake(case_id: str):
     try:
-        tracker.finish_intake(case_id, who())
+        sent = tracker.status_of(case_id) == store.WAITING  # already sent: the supervisor reviews next
+        tracker.finish_intake(case_id, who(), next_step=tracker.NEXT_REVIEW if sent else "")
     except (tracker.TrackerError, storage.StorageError) as err:
         st.session_state["case-msg"] = ("error", str(err))
 
@@ -2969,6 +3073,7 @@ def next_step_text(row: dict) -> str:
 
 def go(screen: str):
     st.session_state["screen"] = screen
+    st.session_state["menu_open"] = False
 
 
 def start_case():
@@ -2987,8 +3092,11 @@ def home_to_case(speak: bool):
         st.session_state["g_notes"] = story
         # Also held apart (in this browser session only, never saved), because the clinic sign-in may
         # come in between and the story box is not drawn while it shows.
-        st.session_state["held_story"] = {"text": story, "lang": st.session_state.get("g_notes_lang")
+        found = multilingual.detect_language(story)
+        st.session_state["held_story"] = {"text": story, "lang": found or st.session_state.get("g_notes_lang")
                                           or (code() if code() in multilingual.note_languages() else "en")}
+        if found:
+            st.session_state["g_notes_lang-detected"] = True
     if speak:
         st.session_state["g_audio-open"] = True
 
@@ -3085,9 +3193,17 @@ def top_bar(current: str):
         with st.container(key="topnav", horizontal=True, vertical_alignment="center", gap=None):
             for screen, key in NAV:
                 st.button(t(f"screen.{screen}"), key=f"nav-{key}", type="tertiary", on_click=go, args=(screen,))
+        with st.container(key="topmenu"):  # phones: the menu folded behind one button
+            st.button(t("nav.menu"), key="topmenu-btn", icon=":material/close:" if st.session_state.get("menu_open")
+                      else ":material/menu:", on_click=toggle, args=("menu_open",))
         with st.container(key="topactions", horizontal=True, vertical_alignment="center", gap="small"):
             language_switch()
             st.button(t("nav.start"), type="primary", key="nav-start", on_click=start_case)
+    if st.session_state.get("menu_open"):
+        with st.container(key="phonemenu"):
+            for screen, key in NAV:
+                st.button(t(f"screen.{screen}"), key=f"navm-{key}", type="tertiary", on_click=go, args=(screen,),
+                          width="stretch")
     here = dict(NAV).get(current)
     if here:  # the current screen is underlined in the navigation
         st.markdown(f"<style>.st-key-nav-{here} button {{ background: var(--sand) !important; }}"

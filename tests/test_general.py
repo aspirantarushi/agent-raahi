@@ -105,7 +105,7 @@ def test_undertrial_story():
     reading, facts, text = summarise(UNDERTRIAL_ANSWER, UNDERTRIAL)
     assert text.startswith(DRAFT_HEADER)
     assert general.urgent_actions(reading.facts) == []
-    assert "- Someone is in custody now." in text
+    assert "Urgency: Urgent: someone is in custody now." in text and "URGENT\n" not in text  # said once
     assert "Arrest and bail — to discuss with a lawyer." in text
     for heading in ["Rights on arrest", "Who to approach for an undertrial"]:
         e = knowledge.get("undertrial_bail.md", heading)
@@ -121,7 +121,7 @@ def test_undertrial_story():
 def test_upi_fraud_story():
     reading, facts, text = summarise(UPI_ANSWER, UPI)
     assert general.urgent_actions(reading.facts) == [general.CALL_1930]
-    assert "URGENT\n- Call 1930 now." in text
+    assert "Urgency: Call 1930 now." in text and "URGENT\n" not in text  # said once, at a glance
     assert "Online fraud — to discuss with a lawyer." in text
     assert knowledge.get("cyber_fraud.md", "Call 1930 at once: report immediately").source_line in text
     assert "Qualifies for free legal aid whatever the income, as a woman." in text
@@ -423,7 +423,7 @@ def test_screen_without_ai(monkeypatch, tmp_path):
 
 @pytest.mark.skipif(not llm.available(), reason="No GEMINI_API_KEY: live AI test skipped")
 @pytest.mark.parametrize("notes, urgent, words", [
-    (UNDERTRIAL, [], "Someone is in custody now."),
+    (UNDERTRIAL, [], "someone is in custody now."),
     (UPI, [general.CALL_1930], "Call 1930 now."),
     (WAGES, [], "Not covered by our verified files yet; ask NALSA's free helpline 15100."),
 ])
@@ -515,7 +515,7 @@ def test_unconfirmed_money_loss_still_shows_call_1930():
     assert general.urgent_actions(reading.facts) == []
     assert general.urgent_actions(reading.facts, reading.unconfirmed_yes) == [general.CALL_1930]
     _, facts, text = summarise(raw, UPI)
-    assert "URGENT\n- Call 1930 now." in text  # also in the summary
+    assert "Urgency: Call 1930 now." in text and "URGENT\n" not in text  # said once, at a glance  # also in the summary
 
 
 def test_unconfirmed_danger_still_shows_call_112():
@@ -554,7 +554,7 @@ def test_questions_already_answered_are_dropped_and_missing_ones_added():
     r = general.check_general_answer(told, UPI)
     assert r.outcome == "to get her money back" and not any("want" in q for q in r.questions)
     facts = general.build_facts(r, [], r.questions, r.facts, TODAY)
-    assert "What the person wants\n- to get her money back" in general.summary_body(facts)
+    assert "- What the person wants: to get her money back" in general.summary_body(facts)
 
 
 def test_prompt_asks_for_outcome_years_and_age():

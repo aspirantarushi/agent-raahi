@@ -25,7 +25,7 @@ SENTENCES = {"sentences": [
     {"text": "If there is no reply, complain to the Consumer Grievance Redressal Forum.", "sources": [2]},
     {"text": "Keep the latest bill and payment receipts.", "sources": [3]},       # only a blog: dropped
     {"text": "Call the minister directly.", "sources": []},                        # no source: dropped
-    {"text": "Draft letter: To the Assistant Engineer, [Name of sub-division] ... [Name] [Signature]", "sources": [1]},
+    {"text": "Draft letter: To the Assistant Engineer, [Name of sub-division]: the electricity supply to my house was cut without notice. Please restore it. [Name] [Signature]", "sources": [1]},
 ]}
 POINTS = [
     {"kind": "route", "text": "Write first to the Assistant Engineer.",
@@ -34,7 +34,7 @@ POINTS = [
      "quote": "If there is no reply, complain to the Consumer Grievance Redressal Forum."},
     {"kind": "documents", "text": "Keep the latest bill and receipts.", "quote": "Keep the latest bill and payment receipts."},
     {"kind": "route", "text": "Call the minister.", "quote": "Call the minister directly."},
-    {"kind": "letter", "text": "To the Assistant Engineer, [Name of sub-division] ... [Name] [Signature]",
+    {"kind": "letter", "text": "To the Assistant Engineer, [Name of sub-division]: the electricity supply to my house was cut without notice. Please restore it. [Name] [Signature]",
      "quote": "Draft letter"},
 ]
 
@@ -170,5 +170,5 @@ def test_story_typed_on_home_survives_the_clinic_sign_in(monkeypatch):
     at.button(key="gate-go").click().run()
     assert not at.exception, at.exception[0].stack_trace
     assert at.text_area(key="g_notes").value == "Bhai ko 15 March 2024 ko pakda gaya."
-    assert at.selectbox(key="g_notes_lang").value == "hi"  # the same notes language
+    assert at.selectbox(key="g_notes_lang").value == "hi-Latn"  # detected: Hinglish (Hindi in English letters)
     assert "held_story" not in at.session_state          # held only until it is back in the box

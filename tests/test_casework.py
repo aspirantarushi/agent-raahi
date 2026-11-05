@@ -232,8 +232,8 @@ def test_summary_has_the_new_sections():
 
 def test_urgent_section_agrees_with_at_a_glance():
     text = general.summary_body(ELECTRICITY)
-    urgent = text.split("URGENT\n")[1].split("\n\n")[0]
-    assert "electricity is cut off now" in urgent and "Nothing urgent" not in urgent
+    urgent = text.split("Urgency: ")[1].split("\n")[0]       # said once, at a glance
+    assert "electricity is cut off now" in urgent and "Nothing urgent" not in text and "URGENT\n" not in text
     assert "बिजली का कनेक्शन अभी कटा हुआ है" in general.summary_body_hi(ELECTRICITY)
 
 

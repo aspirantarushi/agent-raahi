@@ -315,7 +315,7 @@ def dlsa_application(g, eligibility, issue: str, ai_model: Optional[str], code: 
         rep = [("[हाँ — बताएँ: महिला / बच्चा / अनुसूचित जाति / अनुसूचित जनजाति / दिव्यांग व्यक्ति / हिरासत में व्यक्ति / "
                 "औद्योगिक कामगार / मानव तस्करी या आपदा का शिकार] [नहीं]", f"हाँ — {group}" if group else
                 "[हाँ — बताएँ] [नहीं]"),
-               ("[₹ ___]", f"लगभग ₹{int(income) // 12:,}" if income else "[₹ ___]"),
+               ("[₹ ___]", f"लगभग ₹{int(income) // 12:,}" if income is not None else "[पुष्टि होनी है]"),
                ("[जैसे धारा 479 BNSS के तहत रिहाई का आवेदन करने के लिए वकील / रोके गए पैसे छुड़ाने के लिए वकील / "
                 "क़ानूनी सलाह]", f"क़ानूनी सलाह और मदद: {issue}"),
                ("[दो से पाँच वाक्य: क्या हुआ, कब, कौन सी अदालत या थाना, केस या FIR नंबर, आवेदक को अभी क्या चाहिए।]",
@@ -326,7 +326,7 @@ def dlsa_application(g, eligibility, issue: str, ai_model: Optional[str], code: 
         rep = [("[Yes — specify: woman / child / SC / ST / person with disability / person in custody / industrial "
                 "workman / victim of trafficking or disaster] [No]", f"Yes — {group}" if group else
                 "[Yes — specify] [No]"),
-               ("[₹ ___]", f"about ₹{int(income) // 12:,}" if income else "[₹ ___]"),
+               ("[₹ ___]", f"about ₹{int(income) // 12:,}" if income is not None else "[to be confirmed]"),
                ("[e.g. a lawyer to apply for release under Section 479 BNSS / a lawyer to apply for release of frozen "
                 "money / legal advice]", f"legal advice and help with: {issue}"),
                ("[Two to five sentences: what happened, when, which court or police station, case or FIR number, "

@@ -318,10 +318,23 @@ def guide_card(name: str, title: str, text: str) -> str:
     return f'<div class="card guide">{icon(name)}<h3>{html.escape(title)}</h3><p>{html.escape(text)}</p></div>'
 
 
+KEY_SPAN = re.compile(r'^<span class="k">(.*?)</span>(.*)$', re.S)
+
+
+def _row(r: str) -> str:
+    """A "label: value" row as two columns (a grey label, then the value), so they never run together;
+    the colon is kept for copied text and screen readers."""
+    m = KEY_SPAN.match(r)
+    if not m:
+        return f'<div class="row">{r}</div>'
+    return (f'<div class="row kv"><span class="k">{m[1]}<span class="sep">:</span></span>'
+            f'<span class="v">{m[2]}</span></div>')
+
+
 def info_card(title: str, rows: List[str], kind: str = "", icon_name: str = "") -> str:
     """A step-3 card: a heading and rows (each row already safe HTML)."""
     head = (icon(icon_name) if icon_name else "") + f"<h4>{html.escape(title)}</h4>"
-    body = "".join(f"<div class=\"row\">{r}</div>" for r in rows)
+    body = "".join(_row(r) for r in rows)
     return f'<div class="infocard {html.escape(kind)}"><div class="head">{head}</div>{body}</div>'
 
 

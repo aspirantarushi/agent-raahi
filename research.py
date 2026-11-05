@@ -104,7 +104,8 @@ def _span(haystack: str, needle: str):
     return (i, i + len(needle)) if i >= 0 else None
 
 
-def check_points(raw: "llm.ResearchRaw", points: List[dict], resolve: Optional[Callable[[str], Optional[str]]] = None):
+def check_points(raw: "llm.ResearchRaw", points: List[dict], resolve: Optional[Callable[[str], Optional[str]]] = None,
+                 state: str = ""):
     """(kept points, dropped points, sources). A point is kept only if the words of the brief it comes
     from are backed by search results with an allowed official address. Links come only from the
     search results (raw.sources), never from the AI's own text."""
@@ -113,7 +114,7 @@ def check_points(raw: "llm.ResearchRaw", points: List[dict], resolve: Optional[C
     sources = []
     for i, s in enumerate(raw.sources):
         url = resolve(s.get("uri", ""))
-        sources.append({"index": i, "title": privacy.redact(str(s.get("title", "")))[0][:120], "url": url,
+        sources.append({"index": i, "title": clean_title(s.get("title", ""), url), "url": url,
                         "allowed": bool(url) and allowed_link(url)})
     kept, dropped = [], []
     for p in points:
@@ -125,7 +126,10 @@ def check_points(raw: "llm.ResearchRaw", points: List[dict], resolve: Optional[C
             dropped.append({"kind": kind, "text": text, "reason": "predicts an outcome"})
             continue
         if kind == "letter":
-            kept.append({"kind": kind, "text": text, "sources": []})  # sources given below
+            if only_blanks(text):
+                dropped.append({"kind": kind, "text": text, "reason": "a letter with nothing but blanks"})
+            else:
+                kept.append({"kind": kind, "text": text, "sources": []})  # sources given below
             continue
         span = _span(brief, p.get("quote", ""))
         if span is None:
@@ -139,7 +143,7 @@ def check_points(raw: "llm.ResearchRaw", points: List[dict], resolve: Optional[C
         official = []
         for i in dict.fromkeys(backing):
             s = sources[i]
-            if s["allowed"] and s["url"] not in [o["url"] for o in official]:
+            if s["allowed"] and same_link(s["url"]) not in [same_link(o["url"]) for o in official]:
                 official.append({"url": s["url"], "title": s["title"] or host(s["url"])})
         if not backing:
             dropped.append({"kind": kind, "text": text, "reason": "no search result backs it"})
@@ -159,8 +163,99 @@ def check_points(raw: "llm.ResearchRaw", points: List[dict], resolve: Optional[C
             kept.remove(p)
             dropped.append({"kind": "letter", "text": p["text"], "reason": "no official route kept to base it on"})
     for n, p in enumerate(kept, 1):
-        p.update(id=f"p{n}", status=WAITING, decided_on=None, decided_by=None, original=p["text"])
+        p.update(id=f"p{n}", status=WAITING, decided_on=None, decided_by=None, original=p["text"],
+                 warnings=point_warnings(p, state))
     return kept, dropped, sources
+
+
+# ---------- checks shown to the supervisor ----------
+
+def clean_title(title, url: Optional[str]) -> str:
+    """A short readable source title: no site name tails ("... | Press Information Bureau"), no
+    file-name noise, never empty (falls back to the site's address)."""
+    t = privacy.redact(_norm(str(title or "")))[0]
+    parts = [x.strip(" -|:") for x in re.split(r"\s*[|–—]\s*|\s+-\s+(?=[A-Z])", t) if x.strip(" -|:")]
+    t = (parts[0] if len(parts[0]) >= 12 or len(parts) == 1 else f"{parts[0]}: {parts[1]}") if parts else ""
+    t = re.sub(r"\.(pdf|aspx?|html?)$", "", t, flags=re.I).replace("_", " ").strip()
+    if not t or t.casefold() in ("view", "home", "index", "page", "press release page"):
+        t = host(url or "") or "source"
+    return t[:100]
+
+
+def same_link(url: str) -> str:
+    """The same page written two ways (http/https, www, a trailing slash) counts once."""
+    u = (url or "").strip().casefold()
+    u = re.sub(r"^https?://(www\.)?", "", u).rstrip("/")
+    return u
+
+
+BLANK = re.compile(r"\[[^\]]*\]")
+
+
+def only_blanks(letter: str) -> bool:
+    """A "draft letter" point with no real words once the [blanks] and greetings are taken out."""
+    words = re.findall(r"[A-Za-z\u0900-\u097F]{3,}", BLANK.sub(" ", letter))
+    filler = {"dear", "sir", "madam", "subject", "date", "yours", "faithfully", "sincerely", "the", "and", "to",
+              "from", "regards", "name", "address", "signature", "draft", "letter"}
+    return len([w for w in words if w.casefold() not in filler]) < 8
+
+
+LAW_NAME = re.compile(r"((?:[A-Z][A-Za-z()'’\-]+\s+(?:(?:of|and|the|for|on|to)\s+)*){1,7}"
+                      r"(?:Act|Rules|Code|Regulations|Order))")
+LAW_STOP = {"the", "of", "and", "act", "rules", "code", "regulations", "order", "in", "for", "on", "under", "a"}
+
+
+# Parts of official web addresses that name a state ("labour.and.nic.in" is Andaman and Nicobar, "pblabour"...)
+STATE_SITES = {
+    "Andaman and Nicobar Islands": ["and", "andaman"], "Andhra Pradesh": ["ap", "andhra", "aponline"],
+    "Arunachal Pradesh": ["arunachal", "arn"], "Assam": ["assam"], "Bihar": ["bihar", "bih", "br"],
+    "Chandigarh": ["chandigarh", "chd"], "Chhattisgarh": ["cg", "chhattisgarh"], "Delhi": ["delhi"],
+    "Goa": ["goa"], "Gujarat": ["gujarat", "gj"], "Haryana": ["haryana", "hr", "hry"],
+    "Himachal Pradesh": ["hp", "himachal"], "Jammu and Kashmir": ["jk", "jammu", "jkgad"],
+    "Jharkhand": ["jharkhand", "jh"], "Karnataka": ["karnataka", "kar"], "Kerala": ["kerala"],
+    "Ladakh": ["ladakh"], "Madhya Pradesh": ["mp", "mponline"], "Maharashtra": ["maharashtra", "mahakamgar", "mh"],
+    "Manipur": ["manipur"], "Meghalaya": ["meghalaya"], "Mizoram": ["mizoram"], "Nagaland": ["nagaland"],
+    "Odisha": ["odisha", "orissa"], "Puducherry": ["py", "puducherry"], "Punjab": ["punjab", "pb", "pblabour"],
+    "Rajasthan": ["rajasthan", "raj"], "Sikkim": ["sikkim"], "Tamil Nadu": ["tn", "tamilnadu"],
+    "Telangana": ["telangana", "ts"], "Tripura": ["tripura"], "Uttar Pradesh": ["up", "uplabour", "uttarpradesh"],
+    "Uttarakhand": ["uk", "uttarakhand"], "West Bengal": ["wb", "westbengal", "wblc"],
+}
+
+
+def site_state(url: str) -> Optional[str]:
+    """The state an official address belongs to, if a part of it names one; None for central sites."""
+    labels = (host(url) or "").casefold().split(".")
+    for state, codes in STATE_SITES.items():
+        if any(c in labels[:-2] for c in codes):  # never the "gov.in" / "nic.in" ending
+            return state
+    return None
+
+
+def point_warnings(p: dict, state: str = "") -> List[dict]:
+    """Warnings the supervisor must see: a replaced law (cannot be approved without editing), or a
+    source that is about a different law than the one the point names."""
+    import replaced_laws
+    out = [{"kind": "replaced", "text": r.warning(), "old": r.old, "new": r.new, "since": r.since.isoformat()}
+           for r in replaced_laws.found_in(p["text"])]
+    for name in dict.fromkeys(m.group(1).strip() for m in LAW_NAME.finditer(p["text"])):
+        keys = [w for w in re.findall(r"[A-Za-z]{3,}", name.casefold()) if w not in LAW_STOP]
+        titled = [s for s in p.get("sources", []) if re.search(r"\b(Act|Rules|Code|Regulations)\b", s.get("title", ""))]
+        if keys and titled and not any(all(k in (s["title"] + " " + s["url"]).casefold() for k in keys) for s in titled):
+            out.append({"kind": "mismatch", "text": f"The point names the {name}, but its source is "
+                        f"\u201c{titled[0]['title']}\u201d: check that the source matches the law.",
+                        "law": name, "title": titled[0]["title"]})
+    if state:
+        for s in p.get("sources", []):
+            other = site_state(s["url"])
+            if other and other.casefold() != state.casefold():
+                out.append({"kind": "other_state", "text": f"This source is a website of {other}, but the case is "
+                            f"in {state}: check that the rule applies in {state}.", "other": other, "state": state})
+                break
+    return out
+
+
+def blocked(point: dict) -> List[str]:
+    return [w["text"] for w in point.get("warnings", []) if w["kind"] == "replaced"]
 
 
 # ---------- running research for a case ----------
@@ -200,7 +295,7 @@ def run(case_id: str, state: str, issue: str, by: str, base: Path = HERE,
     except llm.AIUnavailable as err:
         audit.add_event(case_id, "research failed", audit.VOLUNTEER, f"{search}: {err} (by {by})", base=base)
         raise ResearchFailed(FAILED) from None
-    kept, dropped, sources = check_points(raw, points, resolve or resolve_link)
+    kept, dropped, sources = check_points(raw, points, resolve or resolve_link, state)
     if not kept:
         audit.add_event(case_id, "research failed", audit.VOLUNTEER,
                         f"no point had an official source ({len(dropped)} dropped; by {by})", base=base)
@@ -256,11 +351,18 @@ def decide(research_id: str, point_id: str, decision: str, text: Optional[str] =
         raise ResearchFailed("No such point.")
     if point["status"] != WAITING:
         raise ResearchFailed("This point was already decided.")
+    if decision == APPROVE and blocked(point):
+        raise ResearchFailed("This point names a replaced law: edit it (to the current law) before approving.")
     if decision == EDIT:
         edited = privacy.redact(_norm(text or ""))[0][:2000]
         if not edited:
             raise ResearchFailed("Write the corrected point first.")
+        import replaced_laws
+        still = replaced_laws.still_relies_on_old(edited)
+        if still:
+            raise ResearchFailed(f"The edited point still names the {still[0].old} without the {still[0].new}.")
         point["text"] = edited
+        point["warnings"] = [w for w in point.get("warnings", []) if w["kind"] != "replaced"]
     point.update(status={APPROVE: "approved", EDIT: "approved after editing", REJECT: "rejected"}[decision],
                  decided_on=today.isoformat(), decided_by=audit.SUPERVISOR)
     if decision != REJECT:

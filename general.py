@@ -223,7 +223,7 @@ def check_general_answer(raw: dict, notes: str, code: str = "en") -> GeneralRead
     income = raw.get("income") if isinstance(raw.get("income"), dict) else {}
     amount, per, quote = income.get("amount"), income.get("per"), income.get("quote")
     if isinstance(amount, (int, float)) and amount >= 0 and per in ("month", "year") \
-            and intake._in_notes(quote, notes) and int(amount) in _digits_in(quote):
+            and intake._in_notes(quote, notes) and int(amount) in _digits_in(quote) and not owed_money(quote):
         r.facts["annual_income"] = int(amount) * (12 if per == "month" else 1)
         r.evidence["annual_income"] = quote
     elif amount is not None:
@@ -270,6 +270,12 @@ FACT_WORDS = {
     "sc_st": ["caste", "tribe", "sc/st", "जाति"],
     "disability": ["disab", "दिव्यांग"],
 }
+ELIGIBILITY_WORDS = {k: v for k, v in FACT_WORDS.items() if k not in ("state", "annual_income")}
+ELIGIBILITY_WORDS["annual_income"] = ["income", "earn", "आमदनी", "कमाई"]  # not "salary": wages owed are asked
+for _fact, _words in {"under_18": ["umar", "umr", "umra", "saal se kam"], "woman": ["mahila", "aurat"],
+                      "in_custody": ["jail mein", "hirasat"], "sc_st": ["jaati", "jati", "anusuchit"],
+                      "disability": ["viklang", "divyang"], "annual_income": ["kamai", "aamdani", "aamdani"]}.items():
+    ELIGIBILITY_WORDS[_fact] = ELIGIBILITY_WORDS[_fact] + _words  # Hinglish
 OUTCOME_WORDS = ["want", "hope", "outcome", "expect", "wish", "चाह", "परिणाम", "नतीजा", "नतीजे", "उम्मीद", "अपेक्षा",
                  "chahte", "chahti", "chahta", "chahiye"]
 RELATIVE_WHEN = re.compile(r"today|yesterday|ago|last (week|month|night)|this (week|month|morning)|आज|कल|पहले|पिछले",
@@ -285,8 +291,11 @@ def follow_up_questions(r: GeneralReading, code: str = "en") -> List[str]:
     def has(question: str, words) -> bool:  # whole words only ("age" is not in "wages")
         return any(re.search(rf"(?<!\w){re.escape(w)}", question.casefold()) for w in words)
 
+    # The legal aid questions (custody, woman, age, SC/ST, disability, income) are asked by plain code,
+    # only when they matter: the AI's own versions of them are left out, so nothing is asked twice.
     questions = [q for q in r.questions
-                 if not any(fact in r.facts and has(q, words) for fact, words in FACT_WORDS.items())]
+                 if not any(fact in r.facts and has(q, words) for fact, words in FACT_WORDS.items())
+                 and not any(has(q, words) for words in ELIGIBILITY_WORDS.values())]
     if not r.person and not any(has(q, ["who needs", "who is the person", "किसे मदद"]) for q in questions):
         questions.append(t("q.person"))
     if not r.outcome and not any(has(q, OUTCOME_WORDS) for q in questions):
@@ -403,7 +412,7 @@ ELIGIBILITY_QUESTIONS = {
     "sc_st": "Is the person needing help from a Scheduled Caste or Scheduled Tribe?",
     "disability": "Does the person needing help have a disability?",
     "state": "Which state or union territory does the person live in?",
-    "annual_income": "What is the family's income? (per month or per year)",
+    "annual_income": "What does the person earn now? (current income per month or per year, not wages they are owed)",
 }
 
 
@@ -526,14 +535,34 @@ def possible_names(summary: str, notes: str) -> List[str]:
     """Capitalised words from the middle of sentences in the notes that also appear in the summary.
     A rough check: names can't be detected reliably, so the volunteer must also confirm."""
     states = {w.casefold() for s in state_names() for w in s.split()}
+    places = place_words(notes, states)
     found = []
     for sentence in re.split(r"(?<=[.!?:])\s+|\n", notes):
         words = re.findall(r"[A-Za-z][A-Za-z'’-]+", sentence)
         for w in words[1:]:
             if w[0].isupper() and len(w) > 2 and w.casefold() not in _NOT_NAMES and w.casefold() not in states \
+                    and w.casefold() not in places \
                     and re.search(rf"\b{re.escape(w)}\b", summary) and w not in found:
                 found.append(w)
     return found
+
+
+PLACE_BEFORE = re.compile(r"\b(?:in|at|near|lives in|works in|district|city of|town of|village of)\s+$", re.I)
+PLACE_AFTER = re.compile(r"^\s*(?:mein|me|main|district|distt|city|zila|jila|town|village|gaon|nagar|tehsil|block|"
+                         r"police station|thana|,\s*(?:\w+\s+)?(?:%s))\b", re.I)
+
+
+def place_words(notes: str, states: set) -> set:
+    """Words that are places in the notes (cities, districts, states), never flagged as names: a word
+    after "in", "at" or "near", before "mein", "district", "zila", or before ", <state>"."""
+    after = re.compile(PLACE_AFTER.pattern.replace("%s", "|".join(sorted({re.escape(w) for w in states if len(w) > 2}))),
+                       re.I)
+    out = set()
+    for m in re.finditer(r"[A-Z][A-Za-z'’-]+(?:\s+[A-Z][A-Za-z'’-]+)*", notes or ""):
+        before, rest = notes[:m.start()], notes[m.end():]
+        if PLACE_BEFORE.search(before) or after.search(rest):
+            out.update(w.casefold() for w in m.group(0).split())
+    return out
 
 
 # ---------- the summary draft ----------
@@ -576,19 +605,87 @@ class GeneralFacts:
                    research_state=d.get("research_state", "none"))
 
 
+OWED = re.compile(r"unpaid|not (been )?paid|n[o']t paid|owed|owes|due to (him|her|them)|pending|arrears|withheld|"
+                  r"baki|baaki|bakaya|nahi+n? (mili|mila|diya|di|de rahe|de raha)|nahi+n? diye|"
+                  r"बकाया|बाक़ी|बाकी|नहीं (मिली|मिला|मिले|दी|दिया|दिए)|रोक", re.I)
+
+
+def owed_money(quote: str) -> bool:
+    """An amount the person is owed (unpaid wages) is not their income: never used for legal aid."""
+    return bool(OWED.search(quote or ""))
+
+
+YEAR = re.compile(r"\b(19|20)\d{2}\b")
+DOC_QUESTION = re.compile(r"document|paper|proof|receipt|slip|record|card|pass|copy|letter|evidence|दस्तावेज़|"
+                          r"दस्तावेज|कागज़|काग़ज़|कागज|kagaz|kaagaz|saboot|सबूत|रसीद", re.I)
+NO_ANSWER = re.compile(r"^\s*(no|none|nothing|not|nahi+n?|nahin|kuch nahi|नहीं|कुछ नहीं|don'?t know|pata nahi)\b", re.I)
+
+
+def _year_answer(when: str, answer: str) -> Optional[str]:
+    """The answer to "What is the full date of '30 September'?": the full date if the answer has one,
+    else the old date with the year added. None if the answer has no year."""
+    a = " ".join(privacy.normalise_digits(answer).split()).strip(" .")
+    year = YEAR.search(a)
+    if not year:
+        return None
+    if re.search(r"[A-Za-z\u0900-\u097F]{3,}", a[:year.start()]) and len(a) <= 40:
+        return a  # "30 September 2026"
+    return f"{when} {year[0]}"
+
+
+def apply_answers(g: "GeneralFacts", code: str = "en") -> "GeneralFacts":
+    """Answers to the questions update the case itself (plain code): a full date fixes the timeline
+    entry it was asked for, documents the person has go into the documents list, and the answers to
+    "who needs the help" and "what do they want" fill those facts."""
+    for question, answer in g.answers:
+        if not answer.strip():
+            continue
+        for c in ("en", "hi"):
+            for i, (when, what) in enumerate(g.timeline):
+                if question == lang.t("q.year", c, when=when, what=what):
+                    new = _year_answer(when, answer)
+                    if new:
+                        g.timeline[i] = (new, what)
+            for i, (when, what) in enumerate(g.coming_dates):
+                if question == lang.t("q.year", c, when=when, what=what):
+                    new = _year_answer(when, answer)
+                    if new:
+                        g.coming_dates[i] = (new, what)
+        full = " ".join(privacy.normalise_digits(answer).split()).casefold()
+        if YEAR.search(full):  # any answer with a full date fixes the same date written without a year
+            for entries in (g.timeline, g.coming_dates):
+                for i, (when, what) in enumerate(entries):
+                    w = " ".join(privacy.normalise_digits(when).split()).casefold()
+                    if w and not YEAR.search(w) and re.search(rf"(?<!\w){re.escape(w)},?\s+(19|20)\d{{2}}", full):
+                        y = re.search(rf"(?<!\w){re.escape(w)},?\s+((19|20)\d{{2}})", full)[1]
+                        entries[i] = (f"{when} {y}", what)
+        if question in (lang.t("q.person", "en"), lang.t("q.person", "hi")) and not g.person:
+            g.person = clean(answer, 120)
+        elif question in (lang.t("q.outcome", "en"), lang.t("q.outcome", "hi")) and not g.outcome:
+            g.outcome = clean(answer, 200)
+        elif DOC_QUESTION.search(question) and not NO_ANSWER.search(answer):
+            parts = re.split(r",|;|\band\b|\baur\b|\bor\b|और|तथा", re.sub(r"^\s*(yes|haan|han|ha|हाँ|हां)[,.\s-]*", "",
+                                                                       answer, flags=re.I))
+            for part in parts:
+                item = clean(re.sub(r"^\s*(a|an|the|his|her|their|ek)\s+", "", part.strip(" .")), 80)
+                if len(item) >= 3 and item.casefold() not in [d.casefold() for d in g.documents_held]:
+                    g.documents_held.append(item)
+    return g
+
+
 def build_facts(reading: GeneralReading, answers: List[Tuple[str, str]], still_to_ask: List[str],
                 facts: Dict[str, object], today: date) -> GeneralFacts:
     sections = [f"IPC {o.ipc_section} = BNS {o.bns_section}: {o.offence}" for o in reading.sections]
-    return GeneralFacts(
-        person=reading.person, what_happened=reading.what_happened, timeline=reading.timeline,
-        coming_dates=reading.coming_dates, issues=reading.issues, sections=sections,
-        documents_held=reading.documents_held,
+    return apply_answers(GeneralFacts(
+        person=reading.person, what_happened=reading.what_happened, timeline=list(reading.timeline),
+        coming_dates=list(reading.coming_dates), issues=reading.issues, sections=sections,
+        documents_held=list(reading.documents_held),
         answers=[(clean(q, 200), clean(a, 300)) for q, a in answers],
         still_to_ask=still_to_ask, facts=dict(facts), today=today.isoformat(),
         precautions=[k for k in reading.unconfirmed_yes if k in PRECAUTION_FACTS],
         outcome=reading.outcome,
         evidence={k: v for k, v in reading.evidence.items() if k == "unofficial_payment_demand"},
-    )
+    ))
 
 
 def _yes_no(v) -> str:
@@ -648,7 +745,8 @@ def summary_body(g: GeneralFacts) -> str:
            "Prepared from the volunteer's notes. People are described by their role only.",
            f"Person needing help: {g.person or 'Not stated (ask who needs the help)'}", ""]
 
-    out += _glance_lines(g, "en")
+    glance = _glance_lines(g, "en")
+    out += glance
     urgent = urgent_actions(facts, g.precautions)
     flags = []
     if facts.get("in_custody") is True:
@@ -657,15 +755,11 @@ def summary_body(g: GeneralFacts) -> str:
         flags.append(lang.t("cw.urgent_service", "en", what=lang.t(
             "cw.service.water" if _is_water(g) else "cw.service.electricity", "en")))
     flags += [f"Coming up: {w} — {what}" for w, what in g.coming_dates]
-    out.append("URGENT")
-    out += [f"- {a}" for a in urgent + flags] or ["- Nothing urgent found in the notes."]
-    out.append("")
+    out += _urgent_section("URGENT", urgent + flags, glance)
 
     out.append("What happened")
     out += [f"- {s}" for s in g.what_happened] or ["- (not clear from the notes)"]
-    if g.outcome:
-        out += ["", "What the person wants", f"- {g.outcome}"]
-    if g.timeline:
+    if g.timeline:  # what the person wants is "At a glance"
         out += ["", "Timeline"] + [f"- {w}: {what}" for w, what in g.timeline]
     if g.sections:
         out += ["", "Sections written in the notes (as found in our sentence table)"]
@@ -696,7 +790,7 @@ def summary_body(g: GeneralFacts) -> str:
     if eligibility.missing:
         out.append("- Still needed: " + "; ".join(ELIGIBILITY_QUESTIONS[m] for m in eligibility.missing))
     out += [f"- {n}" for n in eligibility.notes]
-    out += [f"  {s}" for s in eligibility.sources]
+    out += [f"  {s}" for s in eligibility.sources if s not in " ".join(eligibility.notes)]
     out.append(f"- Facts used: in custody {_yes_no(facts.get('in_custody'))}; woman {_yes_no(facts.get('woman'))}; "
                f"under 18 {_yes_no(facts.get('under_18'))}; SC/ST {_yes_no(facts.get('sc_st'))}; "
                f"disability {_yes_no(facts.get('disability'))}; state {facts.get('state') or 'not known'}; "
@@ -766,7 +860,8 @@ def summary_body_hi(g: "GeneralFacts") -> str:
     steps, steps_entry = next_steps({**facts, "_precautions": g.precautions}, categories, eligibility, docs_missing)
     out = [_hi("sum.title"), _hi("sum.date", date=lang.show_date(date.fromisoformat(g.today), "hi")),
            _hi("sum.prepared"), _hi("sum.person", person=g.person or _hi("cw.person_not_stated")), ""]
-    out += _glance_lines(g, "hi")
+    glance = _glance_lines(g, "hi")
+    out += glance
 
     urgent = [_hi("safety.call112") if a == CALL_112 else _hi("safety.call1930")
               for a in urgent_actions(facts, g.precautions)]
@@ -775,15 +870,11 @@ def summary_body_hi(g: "GeneralFacts") -> str:
         flags.append(lang.t("cw.urgent_service", "hi", what=lang.t(
             "cw.service.water" if _is_water(g) else "cw.service.electricity", "hi")))
     flags += [_hi("sum.coming_up", when=w, what=what) for w, what in g.coming_dates]
-    out.append(_hi("sum.urgent"))
-    out += [f"- {a}" for a in urgent + flags] or [f"- {_hi('sum.nothing_urgent')}"]
-    out.append("")
+    out += _urgent_section(_hi("sum.urgent"), urgent + flags, glance)
 
     out.append(_hi("sum.what_happened"))
     out += [f"- {x}" for x in g.what_happened] or [f"- {_hi('sum.not_clear')}"]
-    if g.outcome:
-        out += ["", _hi("sum.outcome"), f"- {g.outcome}"]
-    if g.timeline:
+    if g.timeline:  # what the person wants is in "एक नज़र में"
         out += ["", _hi("sum.timeline")] + [f"- {w}: {what}" for w, what in g.timeline]
     if g.sections:
         out += ["", _hi("sum.sections")] + [f"- {x}" for x in g.sections]
@@ -817,7 +908,7 @@ def summary_body_hi(g: "GeneralFacts") -> str:
     worth = knowledge.get(*WORTH_PURSUING_ENTRY)
     out.append(f"- {_hi('elig.dlsa_decides')} {worth.source_line}")
     out += [f"- {n}" for n in eligibility.notes[1:]]  # state notes from income_limits.csv (in English)
-    out += [f"  {x}" for x in eligibility.sources]
+    out += [f"  {x}" for x in eligibility.sources if x not in worth.source_line]
     income = facts.get("annual_income")
     out.append(_hi("sum.facts_used", custody=_yes_no_hi(facts.get("in_custody")), woman=_yes_no_hi(facts.get("woman")),
                    under18=_yes_no_hi(facts.get("under_18")), scst=_yes_no_hi(facts.get("sc_st")),
@@ -856,6 +947,13 @@ def _approved_points(g: "GeneralFacts") -> List[dict]:
         out.append({"kind": kind, "text": i["text"], "approved_on": i.get("approved_on", ""),
                     "sources": [], "source_line": src})
     return out
+
+
+def _urgent_section(title: str, items: List[str], glance: List[str]) -> List[str]:
+    """Only what "At a glance" doesn't already say (no section at all if it says everything)."""
+    said = " ".join(glance).casefold()
+    extra = [a for a in dict.fromkeys(items) if a.casefold().rstrip(".।") not in said]
+    return [title, *[f"- {a}" for a in extra], ""] if extra else []
 
 
 def _glance_lines(g: "GeneralFacts", code: str) -> List[str]:
@@ -898,14 +996,21 @@ def _step_lines(g: "GeneralFacts", eligibility, code: str) -> List[str]:
                                 code)
     out = []
     for i, s in enumerate(steps, 1):
-        when = ""
+        text = s.text
         if s.due:
-            when = " — " + lang.t("cw.by_date" if not s.suggested else "cw.by_date_suggested", code,
-                                  date=lang.show_date(s.due, code))
-        out.append(f"{i}. {s.text}{when}")
+            text = with_date(s.text, lang.t("cw.by_date" if not s.suggested else "cw.by_date_suggested", code,
+                                            date=lang.show_date(s.due, code)))
+        out.append(f"{i}. {text}")
         if s.source:
             out.append(f"   ({s.source})")
     return out
+
+
+def with_date(text: str, when: str) -> str:
+    """Adds the date before the full stop, as in: Collect the documents (by 13 November)."""
+    text = text.rstrip()
+    end = text[-1] if text and text[-1] in ".।" else ""
+    return f"{text[:-1] if end else text} ({when}){end or '.'}"
 
 
 def _hindi_document(item: str, categories: List[str]) -> str:

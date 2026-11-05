@@ -22,6 +22,29 @@ HINGLISH = "hi-Latn"  # Hindi written in English letters
 DIRECT = ("en", "hi", HINGLISH)  # the AI reads these itself (drafts stay in English or Hindi)
 
 
+HINGLISH_WORDS = {"hai", "hain", "nahi", "nahin", "nhi", "ka", "ki", "ke", "ko", "se", "mein", "me", "main", "mera",
+                  "meri", "mere", "tha", "thi", "the", "kya", "aur", "bhi", "kar", "karta", "karti", "raha", "rahi",
+                  "rahe", "gaya", "gayi", "diya", "di", "mila", "mili", "bhai", "behen", "paisa", "paise", "unka",
+                  "unki", "uska", "uski", "humne", "hum", "ab", "abhi", "kuch", "koi", "wala", "wali", "lekin",
+                  "par", "pe", "ne", "hua", "hui", "chahiye", "chahte", "chahti", "saal", "mahine", "din", "ghar",
+                  "kaam", "maalik", "malik", "bola", "boli", "jab", "tab", "kyunki", "sirf", "bahut"}
+ENGLISH_ONLY = {"the", "is", "was", "and", "of", "to", "he", "she", "has", "have", "not", "his", "her", "they"}
+
+
+def detect_language(text: str) -> Optional[str]:
+    """English, Hindi (Devanagari) or Hinglish (Hindi in English letters), by plain counting. None if
+    there is too little text to tell. The volunteer can always change it."""
+    letters = [c for c in text or "" if c.isalpha()]
+    if len(letters) < 12:
+        return None
+    devanagari = sum(1 for c in letters if "\u0900" <= c <= "\u097f")
+    if devanagari / len(letters) > 0.3:
+        return "hi"
+    words = [w.casefold() for w in __import__("re").findall(r"[A-Za-z]+", text)]
+    hindi = sum(1 for w in words if w in HINGLISH_WORDS and w not in ENGLISH_ONLY)
+    return HINGLISH if words and (hindi >= 3 and hindi / len(words) >= 0.12) else "en"
+
+
 def note_languages() -> Dict[str, str]:
     """English, Hindi, Hinglish, then the other scheduled languages, each in its own script."""
     hinglish = {HINGLISH: "Hinglish (Hindi in English letters)"}
