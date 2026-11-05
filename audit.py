@@ -169,6 +169,22 @@ def report_problem(text: str, case_id: Optional[str], where: str, base: Path = H
     return entry
 
 
+AI_SERVICE = "AI service"
+
+
+def log_ai_failure(attempts: List[dict], outcome: str, base: Path = HERE) -> dict:
+    """One AI request that failed at least once: each try's error type and model, and the outcome.
+    Never any case text (only the fixed error types from llm.py and model names are written)."""
+    tries = "; ".join(f"{a['model']}: {a['error']}" + (f" (error {a['code']})" if a.get("code") else "")
+                      for a in attempts)
+    entry = {"time": now(), "case_id": "no case number (AI service)", "where": AI_SERVICE,
+             "text": f"AI failure. Tries: {tries}. Outcome: {outcome}.",
+             "ai_failures": [{"model": str(a["model"]), "error": str(a["error"]), "code": a.get("code")}
+                             for a in attempts], "outcome": outcome}
+    storage.backend(base).log_append("problems", entry)
+    return entry
+
+
 def list_problems(base: Path = HERE) -> List[dict]:
     return list(reversed(storage.backend(base).log_entries("problems")))  # newest first
 

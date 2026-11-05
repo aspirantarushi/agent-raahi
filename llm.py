@@ -1,7 +1,11 @@
 """Every AI call in the app lives in this file, so the model can be swapped.
 
-Provider: Google Gemini API (free tier). Model gemini-3.5-flash-lite (fast); if Google says
-it is busy or it is too slow, the same request goes once to gemini-3.8-flash.
+Provider: Google Gemini API (free tier). Model gemini-3.5-flash-lite (fast). If Google says it is
+busy (503, 500, 504), a per-minute limit is reached (429) or it is too slow, the request is tried
+again after 2, 4 and 8 seconds, then once with the backup model gemini-3.8-flash. A DAILY limit
+(429 with a per-day quota) is not retried: waiting seconds can't help, so the backup is tried at once.
+If it still fails, the app says "The AI is busy; continue with the form" and the form opens.
+Every failure is written to the problems log: time, error type and model (never case text).
 The key is read from the environment variable GEMINI_API_KEY, or from a .env file
 in the project folder (kept out of git). It is never written in the code.
 
@@ -19,6 +23,7 @@ import json
 import os
 import socket
 import ssl
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -32,12 +37,25 @@ DEFAULT_MODEL = "gemini-3.5-flash-lite"
 FALLBACK_MODEL = "gemini-3.8-flash"  # used when the main model is busy or too slow
 API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 TIMEOUT_SECONDS = 25
-BUSY_CODES = {429, 500, 503, 504}  # worth trying the other model
+BUSY_CODES = {429, 500, 503, 504}  # worth trying again
+RETRY_WAITS = (2, 4, 8)            # seconds to wait before each new try of the main model
+BUSY_MESSAGE = "The AI is busy; continue with the form."
+_sleep = time.sleep                # tests replace this, so they never wait
+
+# Error types written to the problems log
+BUSY, LIMIT, DAILY_LIMIT, TIMEOUT, NETWORK, KEY, NOT_FOUND, REFUSED, UNREADABLE = (
+    "busy (503/500/504)", "limit reached (429)", "daily limit reached (429)", "timeout", "no internet",
+    "key not accepted", "model not found", "request not accepted", "answer unreadable")
 
 
 class AIUnavailable(Exception):
     """The AI could not be used (no key, no internet, an error or an unreadable answer).
-    The app then carries on with the normal form."""
+    The app then carries on with the normal form. busy: True when the AI was busy, limited or slow
+    (the friendly "continue with the form" case)."""
+
+    def __init__(self, message: str, busy: bool = False):
+        super().__init__(message)
+        self.busy = busy
 
 
 # ---------- settings ----------
@@ -90,11 +108,28 @@ def _ssl_context() -> ssl.SSLContext:
 # ---------- the one place that talks to the AI ----------
 
 class _Busy(Exception):
-    """The model was busy or too slow: try the next one."""
+    """The model was busy, limited or too slow: worth trying again."""
 
-    def __init__(self, message: str):
+    def __init__(self, message: str, kind: str = BUSY, code: Optional[int] = None):
         super().__init__(message)
-        self.message = message
+        self.message, self.kind, self.code = message, kind, code
+
+
+class _Failed(AIUnavailable):
+    """Not worth trying again (bad key, unknown model, no internet), with its error type for the log."""
+
+    def __init__(self, message: str, kind: str, code: Optional[int] = None):
+        super().__init__(message)
+        self.kind, self.code = kind, code
+
+
+def _is_daily(error: dict) -> bool:
+    """A 429 whose quota is per day (free tier): waiting seconds won't help."""
+    for detail in error.get("details", []) or []:
+        for v in detail.get("violations", []) or []:
+            if "PerDay" in str(v.get("quotaId", "")):
+                return True
+    return False
 
 
 def _call_model(model: str, key: str, body: dict) -> dict:
@@ -104,36 +139,60 @@ def _call_model(model: str, key: str, body: dict) -> dict:
         headers={"Content-Type": "application/json", "x-goog-api-key": key},
         method="POST",
     )
+    slow = "AI reading failed: the AI service took too long to answer; try again in a few minutes."
+    offline = "AI reading failed: could not reach the AI service (check the internet)."
     try:
         with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS, context=_ssl_context()) as response:
             return json.load(response)
     except urllib.error.HTTPError as err:
-        message = ""
+        error = {}
         try:
-            message = json.load(err).get("error", {}).get("message", "")
+            error = json.load(err).get("error", {}) or {}
         except Exception:
             pass
+        message = error.get("message", "")
         if err.code in BUSY_CODES:
-            hint = ("the free-tier limit was reached; try again later" if err.code == 429
-                    else "the AI service is busy; try again in a few minutes")
-            raise _Busy(f"AI reading failed: {hint} (error {err.code}).") from None
-        hint = {
-            400: "the request was not accepted",
-            401: "the API key was not accepted",
-            403: "the API key was not accepted",
-            404: f"the model '{model}' was not found",
-        }.get(err.code, "the AI service had a problem")
-        raise AIUnavailable(f"AI reading failed: {hint} (error {err.code}). {message}".strip()) from None
+            if err.code == 429:
+                kind = DAILY_LIMIT if _is_daily(error) else LIMIT
+                hint = "the free-tier limit was reached; try again later"
+            else:
+                kind, hint = BUSY, "the AI service is busy; try again in a few minutes"
+            raise _Busy(f"AI reading failed: {hint} (error {err.code}).", kind, err.code) from None
+        kind, hint = {
+            400: (REFUSED, "the request was not accepted"),
+            401: (KEY, "the API key was not accepted"),
+            403: (KEY, "the API key was not accepted"),
+            404: (NOT_FOUND, f"the model '{model}' was not found"),
+        }.get(err.code, (f"error {err.code}", "the AI service had a problem"))
+        raise _Failed(f"AI reading failed: {hint} (error {err.code}). {message}".strip(), kind, err.code) from None
     except (TimeoutError, socket.timeout):
-        raise _Busy("AI reading failed: the AI service took too long to answer; try again in a few minutes.") \
-            from None
+        raise _Busy(slow, TIMEOUT) from None
     except urllib.error.URLError as err:
         if isinstance(err.reason, (TimeoutError, socket.timeout)):
-            raise _Busy("AI reading failed: the AI service took too long to answer; try again in a few minutes.") \
-                from None
-        raise AIUnavailable("AI reading failed: could not reach the AI service (check the internet).") from None
+            raise _Busy(slow, TIMEOUT) from None
+        raise _Failed(offline, NETWORK) from None
     except OSError:
-        raise AIUnavailable("AI reading failed: could not reach the AI service (check the internet).") from None
+        raise _Failed(offline, NETWORK) from None
+
+
+def record_failures(attempts: list, outcome: str) -> None:
+    """Write the failed tries of one AI request to the problems log: time, error type, model, outcome.
+    Never the case text. A storage problem never stops the app."""
+    if not attempts:
+        return
+    try:
+        import audit
+        audit.log_ai_failure(attempts, outcome)
+    except Exception:
+        pass
+
+
+def _plan():
+    """(model, seconds to wait first) for each try: the main model now and after 2, 4 and 8 seconds,
+    then the backup once."""
+    models = models_to_try()
+    tries = [(models[0], 0)] + [(models[0], w) for w in RETRY_WAITS]
+    return tries + [(m, 0) for m in models[1:]]
 
 
 def _generate_json(prompt: str, schema: dict, extra_parts: Optional[list] = None) -> Tuple[dict, str]:
@@ -149,22 +208,36 @@ def _generate_json(prompt: str, schema: dict, extra_parts: Optional[list] = None
             "responseSchema": schema,
         },
     }
-    last_busy = None
-    for model in models_to_try():
+    attempts, used, data = [], None, None
+    skip_model = None  # a model whose daily limit is used up: no more tries of it
+    for model, wait in _plan():
+        if model == skip_model:
+            continue
+        if wait:
+            _sleep(wait)
         try:
             data = _call_model(model, key, body)
             used = model
             break
         except _Busy as busy:
-            last_busy = busy
-    else:
-        raise AIUnavailable(last_busy.message)
+            attempts.append({"model": model, "error": busy.kind, "code": busy.code})
+            if busy.kind == DAILY_LIMIT:
+                skip_model = model
+        except _Failed as failed:
+            attempts.append({"model": model, "error": failed.kind, "code": failed.code})
+            record_failures(attempts, "gave up: the form opened instead")
+            raise
+    if used is None:
+        record_failures(attempts, "gave up after every try: the form opened instead")
+        raise AIUnavailable(BUSY_MESSAGE, busy=True)
+    record_failures(attempts, f"answered by {used} after {len(attempts)} failed tries")
 
     try:
         parts = data["candidates"][0]["content"]["parts"]
         text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
         return json.loads(text), used
     except (KeyError, IndexError, TypeError, ValueError):
+        record_failures([{"model": used, "error": UNREADABLE, "code": None}], "gave up: the form opened instead")
         raise AIUnavailable("AI reading failed: the answer could not be read.") from None
 
 

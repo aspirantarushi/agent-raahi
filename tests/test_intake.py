@@ -206,6 +206,7 @@ def no_key(monkeypatch):
 def fake_key(monkeypatch):
     monkeypatch.setattr(llm, "_load_dotenv", lambda *a, **k: None)
     monkeypatch.setenv("GEMINI_API_KEY", "test-key-not-real")
+    monkeypatch.setattr(llm, "_sleep", lambda seconds: None)  # retries without really waiting
 
 
 def test_no_key_means_not_available(no_key):
@@ -214,7 +215,8 @@ def test_no_key_means_not_available(no_key):
         llm.read_undertrial_notes(NOTES)
 
 
-@pytest.mark.parametrize("code, words", [(429, "limit"), (503, "busy"), (403, "key was not accepted"),
+@pytest.mark.parametrize("code, words", [(429, "The AI is busy; continue with the form"),
+                                         (503, "The AI is busy; continue with the form"), (403, "key was not accepted"),
                                          (404, "not found")])
 def test_http_errors_become_friendly_messages(fake_key, monkeypatch, code, words):
     def fail(*a, **k):
@@ -249,7 +251,7 @@ def test_busy_main_model_falls_back_to_flash(fake_key, monkeypatch):
 
     monkeypatch.setattr(llm.urllib.request, "urlopen", urlopen)
     reading = llm.read_undertrial_notes(NOTES)
-    assert tried == ["gemini-3.5-flash-lite", "gemini-3.8-flash"]
+    assert tried == ["gemini-3.5-flash-lite"] * 4 + ["gemini-3.8-flash"]  # now, after 2, 4, 8 s, then the backup
     assert reading.answer["lawyer"]["value"] == "Legal aid lawyer"
     assert reading.model == "gemini-3.8-flash"  # the model that actually answered
 
@@ -269,7 +271,7 @@ def test_both_models_busy_gives_friendly_message(fake_key, monkeypatch):
         raise TimeoutError()
 
     monkeypatch.setattr(llm.urllib.request, "urlopen", urlopen)
-    with pytest.raises(llm.AIUnavailable, match="took too long"):
+    with pytest.raises(llm.AIUnavailable, match="The AI is busy; continue with the form"):
         llm.read_undertrial_notes(NOTES)
 
 

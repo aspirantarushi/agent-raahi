@@ -802,5 +802,7 @@
  "sup.changed_row": "Case {case_id}: version {v}, changed by {by} on {on}",
  "sup.mark_reviewed": "Mark changes as reviewed",
  "sup.reviewed": "Changes on case {case_id} marked as reviewed.",
- "ui.more_menu": "More"
+ "ui.more_menu": "More",
+ "ui.ai_busy": "The AI is busy; continue with the form.",
+ "ui.ai_busy_more": "Your story is kept in the box above, so nothing is lost. You can try \"Read the story\" again later."
 }

@@ -197,7 +197,8 @@ def transcribe_recording(audio_key: str, target_key: str):
         transcript = multilingual.speech_to_text(recording.getvalue(),
                                                  getattr(recording, "type", None) or "audio/wav", language)
     except (llm.AIUnavailable, bhashini.BhashiniUnavailable) as err:
-        st.session_state[f"{audio_key}-msg"] = ("error", f"{err} {t('ui.voice.type_instead')}")
+        shown = t("ui.ai_busy") if getattr(err, "busy", False) else str(err)
+        st.session_state[f"{audio_key}-msg"] = ("error", f"{shown} {t('ui.voice.type_instead')}")
         return
     if not transcript.text:
         st.session_state[f"{audio_key}-msg"] = ("error", t("ui.voice.nothing_heard"))
@@ -286,8 +287,13 @@ def read_general():
         notes_reading = llm.read_general_notes(prepared.text, output_lang=code() if code() in ("en", "hi") else "en",
                                                **extra)
     except llm.AIUnavailable as err:
-        st.session_state["gen_error"] = str(err)
+        # The AI gave up (after its retries): the question form opens without it, and the story stays
+        # in its box, so nothing is lost.
+        start_general_without_ai()
+        st.session_state["gen_error"] = t("ui.ai_busy") if err.busy else str(err)
+        st.session_state["gen_busy"] = err.busy
         return
+    st.session_state.pop("gen_busy", None)
     reading = general.check_general_answer(notes_reading.answer, notes_reading.notes_sent)
     removed = dict(prepared.removed)
     for kind, n in notes_reading.removed.items():
@@ -336,7 +342,7 @@ def start_general_without_ai():
 
 
 def clear_general():
-    for key in ["gen", "gen_error", "g_notes", "g_manual", "g_checked", "gen_sent"]:
+    for key in ["gen", "gen_error", "gen_busy", "g_notes", "g_manual", "g_checked", "gen_sent"]:
         st.session_state.pop(key, None)
 
 
@@ -482,7 +488,9 @@ def general_screen():
         if not llm.available() or st.session_state.get("gen_error"):
             st.text_area(t("ui.general.manual_label"), key="g_manual", height=120)
             st.button(t("ui.general.start_without_ai"), on_click=start_general_without_ai)
-    if st.session_state.get("gen_error"):
+    if st.session_state.get("gen_busy") and st.session_state.get("gen_error"):
+        st.warning(f"**{st.session_state['gen_error']}** {t('ui.ai_busy_more')}", icon=":material/hourglass_top:")
+    elif st.session_state.get("gen_error"):
         st.error(st.session_state["gen_error"] + " " + t("ui.general.type_instead"))
     if not gen:
         return
@@ -647,7 +655,7 @@ def read_notes():
     try:
         notes_reading = llm.read_undertrial_notes(prepared.text)
     except llm.AIUnavailable as err:
-        st.session_state["ai_error"] = str(err)
+        st.session_state["ai_error"] = t("ui.ai_busy") if err.busy else str(err)  # the form below stays open
         return
     reading = intake.check_ai_answer(notes_reading.answer, notes_reading.notes_sent)
     removed = dict(prepared.removed)
