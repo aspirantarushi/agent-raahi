@@ -308,7 +308,7 @@ div[class*="st-key-learn-card-"] > div:has(.stButton) { width: 100%; }
   .infocard .row.kv { grid-template-columns: 1fr; gap: 2px; }
 }
 .infocard .row .src { display: block; color: var(--muted2); font-size: 13px; font-style: italic; overflow-wrap: anywhere; }
-.infocard .row .when { color: var(--teal-dark); font-weight: 600; white-space: nowrap; }
+.infocard .row .when { color: var(--teal-dark); font-weight: 600; white-space: normal; overflow-wrap: anywhere; }
 .infocard.glance { border: 2px solid var(--teal); background: #F4FAF8; }
 .infocard.urgent { border-color: var(--amber-ink); }
 .infocard.lawyer { background: var(--amber-bg); border-color: #EAD3A8; }
@@ -339,8 +339,9 @@ div[class*="st-key-learn-card-"] > div:has(.stButton) { width: 100%; }
 .docpage .more { color: var(--muted2); font-size: .93em; margin-top: 2px; }
 .docpage mark.blank { background: #FFF1A8; color: inherit; padding: 0 3px; border-radius: 3px; }
 .docpage .doc-sign { margin-top: 10px; }
-.docpage .doc-sign .space { height: 54px; width: 240px; border-bottom: 1px solid #9CA3AF; }
-.docpage .doc-sign p { margin-top: 4px; }
+.docpage .doc-sign .space { height: 44px; width: 240px; max-width: 70%; }
+.docpage .doc-sign.line .space { border-bottom: 1px solid #9CA3AF; }
+.docpage .doc-sign p { margin-top: 4px; font-size: inherit !important; }
 .docpage .doc-rule { border: 0; border-top: 1px solid var(--line); margin: 18px 0 12px; }
 .docpage .doc-notes { background: #F6F4EF; border-radius: 10px; padding: 10px 16px; font-size: 14px; color: var(--muted2); }
 .docpage .doc-disclosure { font-size: 12.5px; line-height: 1.5; color: var(--muted2); }
@@ -498,4 +499,45 @@ div[class*="st-key-learn-card-"] > div:has(.stButton) { width: 100%; }
   .st-key-topmenu-btn button [data-testid="stMarkdownContainer"] { position: absolute !important; width: 1px; height: 1px;
     overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .st-key-topmenu-btn button { padding: 0 10px !important; min-width: 44px; }
+}
+
+/* ---------- no sideways scrolling anywhere; the phone step line; the draft buttons ---------- */
+[data-testid="stMain"], [data-testid="stAppViewContainer"], .stApp { overflow-x: hidden !important; }
+.stepper-phone { display: none; }
+div[class*="-actions"]:has(> [class*="-docx"]) > div { flex: 1 1 0 !important; min-width: 0; width: auto !important;
+  max-width: 220px; }
+div[class*="-actions"]:has(> [class*="-docx"]) > div > div, div[class*="-actions"]:has(> [class*="-docx"]) .stButton,
+div[class*="-actions"]:has(> [class*="-docx"]) .stDownloadButton { width: 100% !important; }
+div[class*="-actions"]:has(> [class*="-docx"]) .stButton > button,
+div[class*="-actions"]:has(> [class*="-docx"]) .stDownloadButton > button { border-radius: 999px; }
+div[class*="-actions"]:has(> [class*="-docx"]) .stButton > button,
+div[class*="-actions"]:has(> [class*="-docx"]) .stDownloadButton > button { width: 100% !important; height: 40px;
+  min-height: 40px !important; padding: 0 10px !important; }
+div[class*="-actions"]:has(> [class*="-docx"]) iframe { width: 100% !important; display: block; }
+@media (max-width: 640px) {
+  .hero::before { width: 100% !important; margin-left: -50% !important; }
+  .stepper { display: none !important; }
+  .stepper-phone { display: block; margin: .2rem 0 .3rem 0 !important; font-size: 14.5px; color: var(--ink);
+    padding: 6px 12px; border-left: 4px solid var(--teal); background: #F4FAF8; border-radius: 8px; }
+  .safety-bar { margin-bottom: 14px !important; }
+  div[class*="-actions"]:has(> [class*="-docx"]) { flex-wrap: wrap !important; }
+  div[class*="-actions"]:has(> [class*="-docx"]) { column-gap: 8px !important; row-gap: 8px !important; }
+  div[class*="-actions"]:has(> [class*="-docx"]) > div { flex: 0 0 calc(50% - 4px) !important; max-width: none; }
+  /* Camp and Continue: the icon with a short word under it */
+  .st-key-camp-start button, .st-key-worker-bar [data-testid="stExpander"]:not(:has(details[open])) summary {
+    height: 52px !important; flex-direction: column !important; gap: 0 !important; padding: 2px 8px !important; }
+  .st-key-camp-start button::after, .st-key-worker-bar [data-testid="stExpander"]:not(:has(details[open])) summary::after {
+    font-size: 11px; line-height: 1.1; color: var(--muted); }
+  .st-key-gate-out button { height: 52px !important; }
+}
+
+.st-key-practice-note p { font-size: 13px !important; line-height: 1.4; margin: 0 0 6px 0 !important; color: var(--muted2) !important; }
+@media (max-width: 640px) {
+  .st-key-worker-bar { flex-wrap: nowrap !important; }
+  .st-key-worker-bar > div:has(.who) { flex: 1 1 0 !important; min-width: 0; }
+  .st-key-worker-bar .stButton > button, .st-key-worker-bar [data-testid="stExpander"]:not(:has(details[open])) summary {
+    min-width: 54px !important; padding: 2px 6px !important; }
+  .st-key-camp-start button::after, .st-key-worker-bar [data-testid="stExpander"]:not(:has(details[open])) summary::after {
+    font-size: 10.5px; white-space: nowrap; }
+  .st-key-worker-bar:has(details[open]), .st-key-worker-bar:has(.st-key-camp-form) { flex-wrap: wrap !important; }
 }

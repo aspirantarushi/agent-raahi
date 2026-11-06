@@ -164,6 +164,9 @@ def new_case_screen():
     st.title(t("ui.new_case.title"))
     with st.container(key="nc-caption"):  # hidden on phones: the story box repeats it
         st.caption(t("ui.new_case.caption"))
+    st.markdown(f"<style>@media (max-width: 640px) {{ .st-key-camp-start button::after {{ content: \"{css_text(t('ui.camp_short'))}\"; }}"
+                f" .st-key-worker-bar [data-testid=\"stExpander\"]:not(:has(details[open])) summary::after"
+                f" {{ content: \"{css_text(t('ui.continue_short'))}\"; }} }}</style>", unsafe_allow_html=True)
     with st.container(key="worker-bar", gap="small"):
         volunteer_line()  # who is signed in, then Sign out, today's camp and Continue a case, one below the other
         continue_box("new")
@@ -557,7 +560,7 @@ def general_screen():
     restore_held_story()
     gen = st.session_state.get("gen")
     step = general_step(gen)
-    st.markdown(ui.stepper([t(k) for k in GENERAL_FLOW], step), unsafe_allow_html=True)
+    st.markdown(ui.stepper([t(k) for k in GENERAL_FLOW], step, t("ui.step_of")), unsafe_allow_html=True)
     if gen:  # urgent actions always at the top
         for action in general.urgent_actions(gen["facts"], gen["reading"].unconfirmed_yes):
             st.error(f"## {t(URGENT_KEYS[action])}", icon=":material/emergency:")
@@ -571,7 +574,8 @@ def general_screen():
             st.warning(t("ui.general.names_warning"))
         with st.container(key="names-warning-short"):  # phones: the same rule, short
             st.warning(t("ui.general.names_warning_short"))
-        st.caption(t("ui.practice_only"))  # the pilot uses practice stories only
+        with st.container(key="practice-note"):  # the pilot uses practice stories only: one small line
+            st.caption(t("ui.practice_only"))
         if llm.available():
             st.text_area(t("ui.general.story_label"), key="g_notes", height=220,
                          placeholder=t("ui.general.story_placeholder"), on_change=detect_notes_language)
@@ -827,40 +831,41 @@ def general_summary(gen):
     if sent:
         st.success(t("ui.sent", case_id=sent))  # "Finish intake" follows right below
         return
-    unticked = readiness.gaps(items)
-    if unticked:  # sending with unticked items needs a short reason; the supervisor sees both
-        st.warning(t("ready.sup_unticked", items="; ".join(i.label(code()) for i in unticked)), icon=":material/rule:")
-        st.text_input(t("ready.send_reason"), key="g_send_reason", max_chars=200)
-    left_out = [pid for pid, keep in rs_ticks.items() if not keep]
-    no_reason = [pid for pid in left_out if not rs_reasons.get(pid)]
-    if no_reason:
-        st.caption(t("rs.left_out_needs_reason", points=", ".join(no_reason)))
-    checked = st.checkbox(t("ui.general.checked_no_names"), key="g_checked")
-    label = f"{t('ui.send_to_supervisor')} \u2014 " + (t("ready.button_unticked", n=len(unticked)) if unticked
-                                                      else t("ready.button_ready"))
-    if unticked and checked and not send_reason:
-        st.caption(t("ready.send_reason_needed"))
-    if st.button(label, disabled=not checked or bool(research_now) or (bool(unticked) and not send_reason)
-                 or bool(no_reason), key="send-g", type="primary", icon=":material/send:"):
-        ai = None
-        if gen["model"]:
-            ai = {"model": gen["model"], "read_at": gen["read_at"], "extracted": dict(reading.facts),
-                  "not_accepted": sorted(set(reading.dropped))}
-        try:
-            case_id = ensure_case(general.CASE_TYPE)
-            case_id = store.submit(packet, facts, ai=ai, draft_lang=draft_lang,
-                                   readiness=readiness_rows(items) + ([{"key": "send_reason", "status": "note",
-                                                                        "note": send_reason}] if unticked else []),
-                                   ledger=[e.as_dict() for e in entries], case_id=case_id, by=who())
-            tracker.confirm_facts(case_id, gen["facts"], who())
-            if waiting_rs:  # every point goes to the supervisor, with which ones the volunteer left out and why
-                research.volunteer_review(waiting_rs["id"], rs_ticks, rs_reasons, who())
-        except (ValueError, storage.StorageError, research.ResearchFailed) as err:
-            st.error(str(err))
-            return
-        st.session_state["gen_sent"] = case_id
-        finish_agent_session(case_id, packet)
-        st.rerun()
+    with st.container(border=True, key="send-card"):  # the send section, its reason boxes inside the card
+        unticked = readiness.gaps(items)
+        if unticked:  # sending with unticked items needs a short reason; the supervisor sees both
+            st.warning(t("ready.sup_unticked", items="; ".join(i.label(code()) for i in unticked)), icon=":material/rule:")
+            st.text_input(t("ready.send_reason"), key="g_send_reason", max_chars=200)
+        left_out = [pid for pid, keep in rs_ticks.items() if not keep]
+        no_reason = [pid for pid in left_out if not rs_reasons.get(pid)]
+        if no_reason:
+            st.caption(t("rs.left_out_needs_reason", points=", ".join(no_reason)))
+        checked = st.checkbox(t("ui.general.checked_no_names"), key="g_checked")
+        label = f"{t('ui.send_to_supervisor')} \u2014 " + (t("ready.button_unticked", n=len(unticked)) if unticked
+                                                          else t("ready.button_ready"))
+        if unticked and checked and not send_reason:
+            st.caption(t("ready.send_reason_needed"))
+        if st.button(label, disabled=not checked or bool(research_now) or (bool(unticked) and not send_reason)
+                     or bool(no_reason), key="send-g", type="primary", icon=":material/send:"):
+            ai = None
+            if gen["model"]:
+                ai = {"model": gen["model"], "read_at": gen["read_at"], "extracted": dict(reading.facts),
+                      "not_accepted": sorted(set(reading.dropped))}
+            try:
+                case_id = ensure_case(general.CASE_TYPE)
+                case_id = store.submit(packet, facts, ai=ai, draft_lang=draft_lang,
+                                       readiness=readiness_rows(items) + ([{"key": "send_reason", "status": "note",
+                                                                            "note": send_reason}] if unticked else []),
+                                       ledger=[e.as_dict() for e in entries], case_id=case_id, by=who())
+                tracker.confirm_facts(case_id, gen["facts"], who())
+                if waiting_rs:  # every point goes to the supervisor, with which ones the volunteer left out and why
+                    research.volunteer_review(waiting_rs["id"], rs_ticks, rs_reasons, who())
+            except (ValueError, storage.StorageError, research.ResearchFailed) as err:
+                st.error(str(err))
+                return
+            st.session_state["gen_sent"] = case_id
+            finish_agent_session(case_id, packet)
+            st.rerun()
     if research_now:  # everything else is already on screen; the research box shows its own progress
         with research_slot:
             with st.spinner(t("rs.working"), show_time=True):
@@ -907,7 +912,8 @@ def case_cards(g, eligibility, approved, kind, code_):
     if origin == "plain":
         docs.append(f'<span class="src">{e(t("cw.docs_plain_note"))}</span>')
     st.markdown(ui.info_card(t("cw.documents"), docs, icon_name="folder"), unsafe_allow_html=True)
-    aid = [rich(eligibility_text(eligibility)), *[f'<span class="src">{e(s)}</span>' for s in eligibility.sources[:1]]]
+    aid = [rich(eligibility_text(eligibility)),
+           *[f'<span class="src">{document.linked_html(s)}</span>' for s in eligibility.sources[:1]]]
     st.markdown(ui.info_card(t("sum.legal_aid_short"), aid, icon_name="balance"), unsafe_allow_html=True)
     flags = casework.lawyer_flags(g, code_)
     if flags:
@@ -921,8 +927,8 @@ def case_cards(g, eligibility, approved, kind, code_):
             when = t("cw.by_date_suggested" if s.suggested else "cw.by_date", date=show_date(s.due))
             body = s.text.rstrip()
             end = body[-1] if body and body[-1] in ".।" else "."
-            text = f'{rich(body.rstrip(".।"))} <span class="when">({rich(when)})</span>{end}'
-        srows.append(text + (f'<span class="src">{e(s.source)}</span>' if s.source else ""))
+            text = f'{rich(body.rstrip(".।"))} <span class="when">({rich(when)}){end}</span>'
+        srows.append(text + (f'<span class="src">{document.linked_html(s.source)}</span>' if s.source else ""))
     st.markdown(ui.info_card(t("cw.next_steps"), [bullets(srows, ordered=True)], icon_name="checklist"),
                 unsafe_allow_html=True)
 
@@ -1081,6 +1087,9 @@ def research_panel(g, uncovered, status, case_id, state, waiting_rs=None):
             return
         if waiting_rs:
             research_points_for_volunteer(waiting_rs)
+            ticked = any(st.session_state.get(f"rsv-{waiting_rs['id']}-{p['id']}") for p in waiting_rs["points"]
+                         if p.get("kind") != "letter")
+            st.success(t("rs.letter_drafted" if ticked else "rs.letter_facts_only"), icon=":material/task_alt:")
         elif msg:
             (st.error if status == "failed" else st.info)(t(msg), icon=":material/travel_explore:")
         with st.container(horizontal=True, gap="small", key="research-actions"):
@@ -1104,7 +1113,7 @@ def drafts_panel(documents, status, uncovered):
     st.markdown(f'<div class="step-title" style="text-align:left;font-size:1.3rem">{html.escape(t("cw.drafts"))}</div>',
                 unsafe_allow_html=True)
     st.caption(t("cw.drafts_caption"))
-    if uncovered and status != "approved":
+    if uncovered and status == "loading":  # only while research is still running
         st.info(t("cw.letter_waiting"), icon=":material/hourglass_top:")
     for i, (title, text) in enumerate(documents):
         with st.container(border=True, key=f"draft-{i}"):
@@ -1138,14 +1147,15 @@ def copy_button(text: str, key: str):
     """"Copy text": the draft's text onto the clipboard (works inside the app's frame on phones too)."""
     label, done = html.escape(t("cw.copy")), html.escape(t("cw.copied"))
     components.html(
-        f"""<button id="b" style="font:500 15px system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#13213B;
-        background:#fff;border:1px solid #DCD5C6;border-radius:999px;padding:8px 16px;cursor:pointer;min-height:40px">
-        {label}</button><textarea id="t" style="position:absolute;left:-9999px">{html.escape(text)}</textarea>
+        f"""<style>html,body{{margin:0;padding:0;overflow:hidden}}</style>
+        <button id="b" style="font:500 15px 'Noto Sans','Noto Sans Devanagari',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+        color:#13213B;background:#fff;border:1px solid #DCD5C6;border-radius:999px;padding:0 12px;cursor:pointer;
+        height:40px;width:100%;white-space:nowrap">{label}</button><textarea id="t" style="position:absolute;left:-9999px">{html.escape(text)}</textarea>
         <script>
         const b=document.getElementById('b'), x=document.getElementById('t');
         b.onclick=async()=>{{try{{await navigator.clipboard.writeText(x.value);}}catch(e){{x.select();document.execCommand('copy');}}
           b.textContent='{done}'; setTimeout(()=>b.textContent='{label}',2000);}};
-        </script>""", height=46)
+        </script>""", height=40)
 
 
 def document_view(text: str, key: str, title: str, edit_key: str = ""):
@@ -1156,12 +1166,13 @@ def document_view(text: str, key: str, title: str, edit_key: str = ""):
         if edit_key:
             st.button(t("cw.edit"), key=f"{key}-edit", icon=":material/edit:",
                       on_click=lambda: st.session_state.update({edit_key: True}))
-        st.download_button(t("cw.word"), docx_bytes(text, title), file_name=file_name(title, "docx"),
+        st.download_button(t("cw.word_short"), docx_bytes(text, title), file_name=file_name(title, "docx"),
                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                            key=f"{key}-docx", icon=":material/description:")
         st.download_button(t("cw.pdf"), pdf_bytes(text, title), file_name=file_name(title, "pdf"),
                            mime="application/pdf", key=f"{key}-pdf", icon=":material/picture_as_pdf:")
-    copy_button(text, key)
+        with st.container(key=f"{key}-copy"):
+            copy_button(text, key)
 
 
 def save_doc_edit(i: int):
@@ -3282,6 +3293,19 @@ def next_step_text(row: dict) -> str:
 
 # ---------- Home ----------
 
+def keep_place_in_address(screen: str):
+    """The screen (and, on New case, the open case number) in the page address, so switching language,
+    reloading or a phone reconnecting keeps the volunteer where they were. Case numbers only, never names."""
+    key = {**{s: k for s, k in NAV}, "Evaluation": "evaluation"}.get(screen, "home")
+    if st.query_params.get("screen") != key:
+        st.query_params["screen"] = key
+    case_id = st.session_state.get("case_id") if screen == "New case" else None
+    if case_id and st.query_params.get("case") != case_id:
+        st.query_params["case"] = case_id
+    elif not case_id and "case" in st.query_params:
+        del st.query_params["case"]
+
+
 def go(screen: str):
     st.session_state["screen"] = screen
     st.session_state["menu_open"] = False
@@ -3433,12 +3457,19 @@ SCREENS = {
     "Supervisor": supervisor_screen,
 }
 
-st.session_state.setdefault("screen", START_SCREEN)
+SCREEN_KEYS = {**{screen: key for screen, key in NAV}, "Evaluation": "evaluation"}
+if "screen" not in st.session_state:  # a fresh session (also after a phone reloads the page): the address says where
+    from_url = {key: screen for screen, key in SCREEN_KEYS.items()}.get(st.query_params.get("screen", ""))
+    st.session_state["screen"] = from_url or START_SCREEN
+    wanted = st.query_params.get("case", "")
+    if wanted and re.fullmatch(r"U-\d{8}-[a-z0-9]{4}", wanted):
+        st.session_state["case_id"] = wanted  # opened again after the clinic sign-in
 if st.query_params.get("code"):  # opened from the QR code on a case slip
     st.session_state["continue_code"] = st.query_params.get("code")
     st.session_state["screen"] = "New case"
     del st.query_params["code"]
 choice = st.session_state["screen"] if st.session_state["screen"] in SCREENS else "Home"
+keep_place_in_address(choice)
 st.session_state["shown_drafts"] = []
 top_bar(choice)
 if storage.records_will_be_lost():  # online without Supabase: nothing saved would survive a restart

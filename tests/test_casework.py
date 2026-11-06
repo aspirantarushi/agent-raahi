@@ -95,7 +95,7 @@ def test_electricity_next_steps_follow_the_approved_route_with_dates():
     assert any("DLSA" in x for x in texts) and texts.index(BIHAR_POINTS[0]["text"]) < [
         i for i, x in enumerate(texts) if "DLSA" in x][0]  # specific steps before general help
     waiting = [s.text for s in casework.next_steps(ELECTRICITY, e, [], "waiting", TODAY)]
-    assert any("waiting for the supervisor" in x for x in waiting)
+    assert any("the supervisor checks every point" in x for x in waiting)
 
 
 def test_electricity_checklist_has_no_custody_and_records_only_yes_no_for_the_number():

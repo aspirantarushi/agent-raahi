@@ -176,6 +176,35 @@ def inline_html(text: str) -> str:
     return _inline_html(text)
 
 
+URL = re.compile(r"https?://[^\s)<>\]]+")
+
+
+def linked_html(text: str) -> str:
+    """Like inline_html, but a source written as "Name (https://...)" shows as the name, linked; a web
+    address on its own shows as its site name, linked. On screen only: Word and PDF keep the address."""
+    out, pos = [], 0
+    for m in re.finditer(r"\s*\((https?://[^\s)]+)\)|(?<![\w/])(https?://[^\s)<>\]]+)", text):
+        url = m.group(1) or m.group(2)
+        if m.group(1):  # "Name (url)": the name runs back to "Source:", "; " or the line's start
+            cut = max(text.rfind("Source: ", pos, m.start()) + len("Source: ") if text.rfind("Source: ", pos, m.start()) >= 0 else -1,
+                      text.rfind("; ", pos, m.start()) + 2 if text.rfind("; ", pos, m.start()) >= 0 else -1,
+                      text.rfind("(", pos, m.start()) + 1 if text.rfind("(", pos, m.start()) >= 0 and
+                      text.count("(", pos, m.start()) > text.count(")", pos, m.start()) else -1, pos)
+            name = text[cut:m.start()].strip() or _site(url)
+            out.append(_inline_html(text[pos:cut]))
+        else:
+            name = _site(url)
+            out.append(_inline_html(text[pos:m.start()]))
+        out.append(f'<a href="{html.escape(url, quote=True)}" target="_blank" rel="noopener noreferrer">{html.escape(name)}</a>')
+        pos = m.end()
+    out.append(_inline_html(text[pos:]))
+    return "".join(out)
+
+
+def _site(url: str) -> str:
+    return re.sub(r"^https?://(www\.)?", "", url).split("/")[0]
+
+
 def _inline_html(text: str) -> str:
     return "".join(f'<mark class="blank">{html.escape(t)}</mark>' if s == "blank" else
                    f"<b>{html.escape(t)}</b>" if s == "bold" else html.escape(t) for t, s in runs(text))
@@ -192,22 +221,23 @@ def to_html(text: str) -> str:
             part = b.part
             out.append(f'<div class="doc-{part}">')
         lab = f"<b>{html.escape(b.label)}</b>" if b.label else ""
-        body = lab + _inline_html(b.text)
-        more = "".join(f'<div class="more">{_inline_html(m)}</div>' for m in b.more)
+        body = lab + linked_html(b.text)
+        more = "".join(f'<div class="more">{linked_html(m)}</div>' for m in b.more)
         if b.kind == "draft":
             out.append(f'<p class="doc-draft">{html.escape(b.text)}</p>')
         elif b.kind == "notready":
-            out.append(f'<p class="doc-notready{" sub" if b.indent else ""}">{_inline_html(b.text)}</p>')
+            out.append(f'<p class="doc-notready{" sub" if b.indent else ""}">{linked_html(b.text)}</p>')
         elif b.kind == "title":
-            out.append(f"<h3 class=\"doc-title\">{_inline_html(b.text)}</h3>")
+            out.append(f"<h3 class=\"doc-title\">{linked_html(b.text)}</h3>")
         elif b.kind == "subtitle":
-            out.append(f'<p class="doc-subtitle">{_inline_html(b.text)}</p>')
+            out.append(f'<p class="doc-subtitle">{linked_html(b.text)}</p>')
         elif b.kind == "heading":
-            out.append(f'<h4 class="doc-h">{_inline_html(b.text)}</h4>')
+            out.append(f'<h4 class="doc-h">{linked_html(b.text)}</h4>')
         elif b.kind == "rule":
             out.append('<hr class="doc-rule">')
         elif b.kind == "sign":
-            out.append(f'<div class="doc-sign"><div class="space"></div><p>{body}</p></div>')
+            line = "" if (BLANK.fullmatch(b.text.strip()) or "___" in b.text) else " line"
+            out.append(f'<div class="doc-sign{line}"><div class="space"></div><p class="doc-p">{body}</p></div>')
         elif b.kind == "bullet":
             out.append(f'<div class="doc-li{" sub" if b.indent else ""}"><span class="dot">•</span><div>{body}{more}</div></div>')
         elif b.kind == "number":
@@ -310,7 +340,8 @@ def to_docx(text: str, title: str = "") -> bytes:
         elif b.kind == "sign":
             for _ in range(3):
                 para("", size=8)
-            para("_" * 34, color=grey)
+            if "___" not in b.text and not BLANK.fullmatch(b.text.strip()):
+                para("_" * 34, color=grey)
             para(b.text, label=b.label, size=size, color=color)
         elif b.kind == "bullet":
             para(b.text, label=b.label, indent=0.6 + 0.6 * b.indent, number="•", size=size, color=color)
@@ -407,7 +438,7 @@ def to_pdf(text: str, title: str = "") -> bytes:
             pdf.ln(3)
         elif b.kind == "sign":
             pdf.ln(14)  # room to sign or put a thumb impression
-            if "___" not in b.text:  # the line itself already has a place to sign
+            if "___" not in b.text and not BLANK.fullmatch(b.text.strip()):  # it already has a place to sign
                 pdf.set_draw_color(120, 120, 120)
                 pdf.line(pdf.l_margin, pdf.get_y(), pdf.l_margin + 70, pdf.get_y())
                 pdf.ln(1.5)

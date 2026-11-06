@@ -292,7 +292,7 @@ i18n/hi.json · cw.flag_payment_noquote,The story mentions a demand for an unoff
 i18n/hi.json · cw.for_lawyer,For the lawyer,वकील के लिए,draft,,
 i18n/hi.json · cw.step_custody,"Someone is in custody: open the Section 479 check, and contact the jail legal aid clinic or the District Legal Services Authority (DLSA).","कोई हिरासत में है: धारा 479 की जाँच खोलें, और जेल के क़ानूनी सहायता क्लिनिक या ज़िला विधिक सेवा प्राधिकरण (DLSA) से संपर्क करें।",draft,,
 i18n/hi.json · cw.step_fraud,Online fraud: stop further loss straight away and tell the bank in writing.,ऑनलाइन धोखाधड़ी: आगे का नुक़सान तुरंत रोकें और बैंक को लिखित में बताएँ।,draft,,
-i18n/hi.json · cw.step_waiting,Research on this problem is waiting for the supervisor's approval. The letter and the specific steps appear once points are approved.,इस समस्या पर रिसर्च Supervisor की मंज़ूरी की राह में है। बिंदु मंज़ूर होने पर पत्र और ख़ास कदम दिखेंगे।,draft,,
+i18n/hi.json · cw.step_waiting,"Research is shown below: untick any point you think is wrong. The letter is drafted from the ticked points, and the supervisor checks every point.","रिसर्च नीचे है: जो बिंदु ग़लत लगे उसका टिक हटाएँ। पत्र टिक वाले बिंदुओं से बनता है, और सुपरवाइज़र हर बिंदु जाँचते हैं।",draft,,
 i18n/hi.json · cw.step_research_failed,"Research didn't work this time: ask NALSA's free helpline 15100, or press ""Research again"".","इस बार रिसर्च नहीं हो पाई: NALSA की मुफ़्त हेल्पलाइन 15100 से पूछें, या ""फिर से रिसर्च करें"" दबाएँ।",draft,,
 i18n/hi.json · cw.step_no_research,"Our files don't cover this problem yet: research it (below), or ask NALSA's free helpline 15100.","हमारी फ़ाइलों में यह समस्या अभी नहीं है: नीचे रिसर्च करें, या NALSA की मुफ़्त हेल्पलाइन 15100 से पूछें।",draft,,
 i18n/hi.json · cw.step_dlsa,"Apply to the District Legal Services Authority (DLSA) for free legal aid (application ready below), or call 15100.","मुफ़्त क़ानूनी मदद के लिए ज़िला विधिक सेवा प्राधिकरण (DLSA) में आवेदन करें (आवेदन नीचे तैयार है), या 15100 पर कॉल करें।",draft,,
@@ -1193,6 +1193,11 @@ i18n/hi.json · footer.open_source,Open source (MIT licence),ओपन सोर
 i18n/hi.json · footer.built_on,Built on AgentFoundry,AgentFoundry पर बना,screen text,,
 i18n/hi.json · footer.privacy,Privacy,निजता,screen text,,
 i18n/hi.json · ui.practice_only,"Practice data only in this pilot: use made-up stories, never a real person's case.","इस पायलट में सिर्फ़ अभ्यास का डेटा: बनाई हुई कहानियाँ इस्तेमाल करें, किसी असली व्यक्ति का केस नहीं।",screen text,,
+i18n/hi.json · ui.step_of,Step {n} of {total},चरण {n} / {total},screen text,,
+i18n/hi.json · rs.letter_drafted,Letter drafted from the ticked points (see the drafts below).,टिक वाले बिंदुओं से पत्र ड्राफ़्ट हो गया (नीचे ड्राफ़्ट देखें)।,screen text,,
+i18n/hi.json · rs.letter_facts_only,"No point is ticked, so a facts-only letter is drafted (see the drafts below).","कोई बिंदु टिक नहीं है, इसलिए सिर्फ़ तथ्यों वाला पत्र ड्राफ़्ट हुआ (नीचे ड्राफ़्ट देखें)।",screen text,,
+i18n/hi.json · ui.camp_short,Camp,कैंप,screen text,,
+i18n/hi.json · ui.continue_short,Continue,आगे बढ़ाएँ,screen text,,
 case_notes_hi.txt,(fake practice story; check that it reads naturally),"अभ्यास केस (कोई असली व्यक्ति नहीं)।
 बोलने वाली: एक विचाराधीन क़ैदी की बड़ी बहन।
 उसके भाई को 15 मार्च 2024 को गिरफ़्तार किया गया था। अपराध फ़रवरी 2024 में हुआ था।

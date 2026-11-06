@@ -911,7 +911,7 @@
  "cw.for_lawyer": "For the lawyer",
  "cw.step_custody": "Someone is in custody: open the Section 479 check, and contact the jail legal aid clinic or the District Legal Services Authority (DLSA).",
  "cw.step_fraud": "Online fraud: stop further loss straight away and tell the bank in writing.",
- "cw.step_waiting": "Research on this problem is waiting for the supervisor's approval. The letter and the specific steps appear once points are approved.",
+ "cw.step_waiting": "Research is shown below: untick any point you think is wrong. The letter is drafted from the ticked points, and the supervisor checks every point.",
  "cw.step_research_failed": "Research didn't work this time: ask NALSA's free helpline 15100, or press \"Research again\".",
  "cw.step_no_research": "Our files don't cover this problem yet: research it (below), or ask NALSA's free helpline 15100.",
  "cw.step_dlsa": "Apply to the District Legal Services Authority (DLSA) for free legal aid (application ready below), or call 15100.",
@@ -1081,5 +1081,11 @@
  "cw.office.water": "Name and address of the water supply office for the area",
  "cw.office.ration": "Name and address of the District Supply Office",
  "cw.office.land": "Name and address of the revenue office (Tehsil) for the area",
- "cw.office.other": "Name and address of the office that handles this problem"
+ "cw.office.other": "Name and address of the office that handles this problem",
+ "ui.step_of": "Step {n} of {total}",
+ "cw.word_short": "Word",
+ "rs.letter_drafted": "Letter drafted from the ticked points (see the drafts below).",
+ "rs.letter_facts_only": "No point is ticked, so a facts-only letter is drafted (see the drafts below).",
+ "ui.camp_short": "Camp",
+ "ui.continue_short": "Continue"
 }

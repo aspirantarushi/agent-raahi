@@ -91,3 +91,16 @@ def test_pdf_is_a4_with_hindi_and_english_fonts():
 
 def test_hindi_and_english_pieces_get_their_own_fonts():
     assert document._scripts("AI की मदद (DLSA)") == [("AI ", False), ("की मदद (", True), ("DLSA)", False)]
+
+
+def test_sources_show_their_name_as_a_link_on_screen():
+    line = "Source: Legal Services Authorities Act, 1987, Section 12 (https://sclsc.gov.in/legal-services/Entitlement)"
+    page = document.linked_html(line)
+    assert '<a href="https://sclsc.gov.in/legal-services/Entitlement" target="_blank"' in page
+    assert ">Legal Services Authorities Act, 1987, Section 12</a>" in page and "(https://" not in page
+    assert ">nalsa.gov.in</a>" in document.linked_html("Source (current amended text): https://nalsa.gov.in/regulations/")
+
+
+def test_signature_blank_has_no_extra_line():
+    page = document.to_html("DRAFT — to be checked by a lawyer\n\nYours faithfully,\n\n[Name]\n[Signature or thumb impression]\n")
+    assert 'class="doc-sign"' in page and 'class="doc-sign line"' not in page

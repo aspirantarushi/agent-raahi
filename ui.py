@@ -64,14 +64,17 @@ def safety_bar(danger: str, legal_aid: str) -> str:
             f'<a href="tel:15100">{html.escape(legal_aid)}</a></nav>')
 
 
-def stepper(steps: List[str], current: int) -> str:
+def stepper(steps: List[str], current: int, step_word: str = "") -> str:
     """Step progress, "1. Tell the story" -> "2. Questions" -> ... on one line each (current is 1-based)."""
     items = []
     for i, label in enumerate(steps, 1):
         state = "done" if i < current else "now" if i == current else ""
         aria = ' aria-current="step"' if i == current else ""
         items.append(f'<li class="{state}"{aria}>{i}. {html.escape(label)}</li>')
-    return f'<ol class="stepper" aria-label="Progress">{"".join(items)}</ol>'
+    now = steps[current - 1] if 1 <= current <= len(steps) else ""
+    phone = (f'<p class="stepper-phone" aria-hidden="true"><b>{html.escape(step_word.format(n=current, total=len(steps)))}</b>'
+             f' \u00b7 {html.escape(now)}</p>') if step_word else ""
+    return f'<ol class="stepper" aria-label="Progress">{"".join(items)}</ol>{phone}'
 
 
 def step_heading(icon_name: str, text: str) -> str:
