@@ -194,11 +194,22 @@ div[class*="st-key-learn-card-"] { flex: 1 1 auto; }
 div[class*="st-key-learn-card-"] > div:last-child { margin-top: auto; padding-top: 10px; }
 div[class*="st-key-home-learn-"] .stButton > button { flex-direction: row-reverse; gap: 6px; }
 div[class*="st-key-learn-card-"] .stButton > button p { white-space: nowrap; }
+/* the same button on every card, on one line at the bottom */
+div[class*="st-key-learn-card-"] .stButton, div[class*="st-key-learn-card-"] .stButton > button { width: 100% !important; }
+div[class*="st-key-learn-card-"] .stButton > button { min-height: 46px !important; height: 46px; box-sizing: border-box;
+  border-width: 1px !important; border-style: solid !important; justify-content: center !important; }
+div[class*="st-key-learn-card-"] [data-testid="stBaseButton-primary"] { border-color: var(--ink) !important; }
+div[class*="st-key-learn-card-"] .card h3 { min-height: 2.6em; }
+div[class*="st-key-learn-card-"] > div:has(.stButton) { width: 100%; }
+.st-key-learnlinks [data-testid="stLayoutWrapper"]:has(> div[class*="st-key-learn-card-"]) { flex: 1 1 auto !important;
+  display: flex !important; flex-direction: column; }
 
 /* ---------- footer ---------- */
 .footer { border-top: 1px solid var(--line); margin: 64px calc(50% - 50vw) 0 calc(50% - 50vw);
-  padding: 32px max(24px, calc(50vw - var(--page) / 2)); display: flex; justify-content: space-between; gap: 16px;
-  flex-wrap: wrap; font-size: 14px; color: var(--muted2); }
+  padding: 28px max(24px, calc(50vw - var(--page) / 2)); display: block; text-align: center;
+  font-size: 14px; line-height: 1.7; color: var(--muted2); }
+.footer a { color: var(--teal-dark); font-weight: 600; text-underline-offset: 3px; }
+.footer .fi { white-space: nowrap; }
 .footer b { color: var(--ink); font-weight: 600; }
 .footer { margin-top: 72px; }
 
@@ -414,6 +425,8 @@ div[class*="st-key-learn-card-"] .stButton > button p { white-space: nowrap; }
   .hero-brand svg { width: 56px; height: 56px; } .hero-brand .word { font-size: 32px; }
   .helpline .lines { flex-direction: column; align-items: center; gap: 0; }
   div[class*="st-key-learn-card-"] { height: auto; }
+  .st-key-learnlinks [data-testid="stHorizontalBlock"] { gap: 14px !important; }
+  div[class*="st-key-learn-card-"] .card h3 { min-height: 0; }
   .hero h1 { font-size: 36px !important; }
   .hero .sub { font-size: 17px; }
   .st-key-storybox { padding: 8px 8px 8px 14px; }

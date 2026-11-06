@@ -211,3 +211,13 @@ def test_with_agent_raahi_box_lists_five_features_and_no_example_case():
         assert f"<b>{t('home.raahi_f1_b')}</b>" in page
     assert lang.t("home.raahi_h", "en") == "One case file, from first story to follow-up."
     assert lang.t("home.raahi_f5_b", "en") == "Follow-up dates,"
+
+
+def test_footer_is_one_short_line_with_the_privacy_link():
+    import ui
+    import lang
+    t = (lambda k: lang.t(k, "en"))
+    page = ui.footer(t("app.name"), [t("footer.open_source"), t("footer.built_on")], t("footer.privacy"))
+    assert page.count("<span class=\"fi\">") == 4 and "Practice data only" not in page
+    assert 'href="https://github.com/aspirantarushi/agent-raahi/blob/main/docs/PRIVACY.md" target="_blank"' in page
+    assert "Open source (MIT licence)" in page and "Built on AgentFoundry" in page

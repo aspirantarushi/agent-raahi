@@ -648,7 +648,6 @@
  "home.learn2": "Undertrial prisoners and Section 479",
  "home.learn3": "Online fraud: the first hours",
  "home.learn_go": "Open Learn",
- "home.footer": "Open source (MIT licence). Practice data only in this pilot. Every draft is checked by a supervising lawyer. See docs/PRIVACY.md for what is stored.",
  "gate.no_name": "volunteer (no name typed)",
  "gate.need_name": "Type your name or initials. It is saved with what you do.",
  "gate.wrong": "That passcode is not right. Ask your clinic coordinator.",
@@ -1069,5 +1068,9 @@
  "rs.no_reason": "none given",
  "cw.doc_letter_draft": "Complaint letter (draft: uses AI research not yet checked by a lawyer)",
  "cw.not_checked_yet": "AI research, not yet checked by a lawyer",
- "rs.warn_replaced_source": "Its source is the {old} (or rules under it), replaced by the {new} on {date}: check before approving."
+ "rs.warn_replaced_source": "Its source is the {old} (or rules under it), replaced by the {new} on {date}: check before approving.",
+ "footer.open_source": "Open source (MIT licence)",
+ "footer.built_on": "Built on AgentFoundry",
+ "footer.privacy": "Privacy",
+ "ui.practice_only": "Practice data only in this pilot: use made-up stories, never a real person's case."
 }

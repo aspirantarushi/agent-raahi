@@ -53,6 +53,7 @@ def test_logo_is_in_the_header():
 
 def test_header_on_screen_in_both_languages():
     at = AppTest.from_file("../app.py", default_timeout=20).run()
+    at.button(key="nav-home").click().run()  # the tagline is on Home (the footer is one short line now)
     html = " ".join(m.value for m in at.markdown)
     assert EN_MARK in html and "Lighting the way to legal aid" in html
     assert "An AI casework agent for legal aid clinics and NGOs" in html

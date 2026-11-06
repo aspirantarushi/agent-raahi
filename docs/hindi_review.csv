@@ -897,7 +897,6 @@ i18n/hi.json · home.learn1,Free legal aid: who qualifies,मुफ़्त क
 i18n/hi.json · home.learn2,Undertrial prisoners and Section 479,विचाराधीन क़ैदी और धारा 479,screen text,,
 i18n/hi.json · home.learn3,Online fraud: the first hours,ऑनलाइन धोखाधड़ी: शुरुआती घंटे,screen text,,
 i18n/hi.json · home.learn_go,Open Learn,Learn खोलें,screen text,,
-i18n/hi.json · home.footer,Open source (MIT licence). Practice data only in this pilot. Every draft is checked by a supervising lawyer. See docs/PRIVACY.md for what is stored.,"ओपन सोर्स (MIT लाइसेंस)। इस पायलट में सिर्फ़ अभ्यास डेटा। हर ड्राफ़्ट सुपरवाइज़िंग वकील जाँचते हैं। क्या सेव होता है, यह docs/PRIVACY.md में देखें।",screen text,,
 i18n/hi.json · gate.no_name,volunteer (no name typed),स्वयंसेवक (नाम नहीं लिखा),screen text,,
 i18n/hi.json · gate.need_name,Type your name or initials. It is saved with what you do.,"अपना नाम या नाम के पहले अक्षर लिखें। आप जो करेंगे, उसके साथ यह सहेजा जाएगा।",screen text,,
 i18n/hi.json · gate.wrong,That passcode is not right. Ask your clinic coordinator.,यह पासकोड सही नहीं है। अपने क्लिनिक समन्वयक से पूछें।,screen text,,
@@ -1181,6 +1180,10 @@ i18n/hi.json · rs.sup_left_out,The volunteer left this point out of the letter.
 i18n/hi.json · rs.sup_kept,The volunteer kept this point; the draft letter uses it.,स्वयंसेवक ने यह बिंदु रखा; ड्राफ़्ट पत्र में इसका इस्तेमाल है।,screen text,,
 i18n/hi.json · rs.no_reason,none given,कोई कारण नहीं दिया,screen text,,
 i18n/hi.json · rs.warn_replaced_source,"Its source is the {old} (or rules under it), replaced by the {new} on {date}: check before approving.","इसका स्रोत {old} (या उसके नियम) है, जिसकी जगह {date} को {new} ने ले ली: मंज़ूर करने से पहले जाँचें।",screen text,,
+i18n/hi.json · footer.open_source,Open source (MIT licence),ओपन सोर्स (MIT लाइसेंस),screen text,,
+i18n/hi.json · footer.built_on,Built on AgentFoundry,AgentFoundry पर बना,screen text,,
+i18n/hi.json · footer.privacy,Privacy,निजता,screen text,,
+i18n/hi.json · ui.practice_only,"Practice data only in this pilot: use made-up stories, never a real person's case.","इस पायलट में सिर्फ़ अभ्यास का डेटा: बनाई हुई कहानियाँ इस्तेमाल करें, किसी असली व्यक्ति का केस नहीं।",screen text,,
 case_notes_hi.txt,(fake practice story; check that it reads naturally),"अभ्यास केस (कोई असली व्यक्ति नहीं)।
 बोलने वाली: एक विचाराधीन क़ैदी की बड़ी बहन।
 उसके भाई को 15 मार्च 2024 को गिरफ़्तार किया गया था। अपराध फ़रवरी 2024 में हुआ था।

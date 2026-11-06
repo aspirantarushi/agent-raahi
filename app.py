@@ -571,6 +571,7 @@ def general_screen():
             st.warning(t("ui.general.names_warning"))
         with st.container(key="names-warning-short"):  # phones: the same rule, short
             st.warning(t("ui.general.names_warning_short"))
+        st.caption(t("ui.practice_only"))  # the pilot uses practice stories only
         if llm.available():
             st.text_area(t("ui.general.story_label"), key="g_notes", height=220,
                          placeholder=t("ui.general.story_placeholder"), on_change=detect_notes_language)
@@ -3445,5 +3446,5 @@ if choice in ("Home", "Learn") or clinic_ok():
     SCREENS[choice]()
 else:
     clinic_gate()  # every other screen needs the clinic passcode (when one is set)
-st.markdown(ui.footer(t("app.name"), f"{t('app.tagline')}. {t('app.description')}.", t("home.footer"),
-                      lang.t("app.tagline", "hi") if code() == "en" else ""), unsafe_allow_html=True)
+st.markdown(ui.footer(t("app.name"), [t("footer.open_source"), t("footer.built_on")], t("footer.privacy")),
+            unsafe_allow_html=True)

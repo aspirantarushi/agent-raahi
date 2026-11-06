@@ -312,10 +312,15 @@ def facts_carousel(title: str, facts, labels: dict) -> str:
             f'</section><script type="application/json" id="labels">{data}</script><script>{script}</script></body></html>')
 
 
-def footer(name: str, tagline: str, text: str, tagline_hi: str = "") -> str:
-    second = f' · <span lang="hi">{html.escape(tagline_hi)}</span>' if tagline_hi and tagline_hi != tagline else ""
-    return (f'<footer class="footer"><span><b>{wordmark(name)}</b> · {html.escape(tagline)}{second}</span>'
-            f'<span>{html.escape(text)}</span></footer>')
+PRIVACY_URL = "https://github.com/aspirantarushi/agent-raahi/blob/main/docs/PRIVACY.md"
+
+
+def footer(name: str, parts, privacy: str) -> str:
+    """One short centred line: the name, open source, built on AgentFoundry, and Privacy (the privacy
+    page on GitHub, opening in a new tab)."""
+    items = [f"<b>{wordmark(name)}</b>", *[html.escape(p) for p in parts],
+             f'<a href="{PRIVACY_URL}" target="_blank" rel="noopener noreferrer">{html.escape(privacy)}</a>']
+    return '<footer class="footer">' + " \u00b7 ".join(f'<span class="fi">{i}</span>' for i in items) + "</footer>"
 
 
 def guide_card(name: str, title: str, text: str) -> str:
