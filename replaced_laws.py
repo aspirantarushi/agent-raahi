@@ -115,3 +115,37 @@ def found_in(text: str) -> List[Replaced]:
 def still_relies_on_old(text: str) -> List[Replaced]:
     """Replaced laws named without the law that replaced them (an edited point that names both is fine)."""
     return [r for r in found_in(text) if r.new.split(",")[0].casefold() not in (text or "").casefold()]
+
+
+# ---------- the law in force today for a problem, so research finds pages under it first ----------
+
+CURRENT_FOR_PROBLEM = [  # (words in the problem, the current law to search under)
+    (r"wage|salary|salaries|pay(ment)?s? (not|un)|unpaid|bonus|minimum wage|mazdoor|mazdoori|tankhwah|tankha|"
+     r"vetan|वेतन|मज़दूरी|मजदूरी|तनख़्वाह|तनख्वाह", WAGES),
+    (r"dismiss|retrench|terminat|layoff|lay-off|lock-?out|strike|trade union|industrial dispute|standing order|"
+     r"नौकरी से निकाल|kaam se nikal", IR),
+    (r"provident fund|\bpf\b|\besi\b|gratuity|maternity benefit|employees'? compensation|injury at work|"
+     r"accident at work|pension|social security", SS),
+    (r"factory safety|unsafe work|working conditions|contract labou?r|migrant worker|working hours|overtime|"
+     r"construction worker", OSH),
+    (r"arrest|bail|\bfir\b|police|custody|chargesheet|charge-sheet|crime|criminal|theft|assault|undertrial|"
+     r"गिरफ़्तार|ज़मानत|जमानत|हिरासत", f"{BNSS} and the {BNS}"),
+    (r"evidence|witness", BSA),
+]
+
+
+def current_law_for(problem: str) -> str:
+    """The law in force today that a problem falls under, if it is one the four labour codes or the new
+    criminal laws replaced ("" otherwise). Plain words only; never a legal opinion on the case."""
+    text = (problem or "").casefold()
+    for pattern, law in CURRENT_FOR_PROBLEM:
+        if re.search(pattern, text):
+            return law
+    return ""
+
+
+def search_text(problem: str) -> str:
+    """The problem as sent to the search, with the current law named so official pages under it come
+    first (for example "unpaid wages (current law: Code on Wages, 2019)")."""
+    law = current_law_for(problem)
+    return f"{problem} (current law: {law})" if law and law.split(",")[0].casefold() not in problem.casefold() else problem

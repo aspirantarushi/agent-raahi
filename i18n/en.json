@@ -1072,5 +1072,14 @@
  "footer.open_source": "Open source (MIT licence)",
  "footer.built_on": "Built on AgentFoundry",
  "footer.privacy": "Privacy",
- "ui.practice_only": "Practice data only in this pilot: use made-up stories, never a real person's case."
+ "ui.practice_only": "Practice data only in this pilot: use made-up stories, never a real person's case.",
+ "cw.facts_only_label": "Facts-only letter: no legal points yet; the supervisor may add them.",
+ "cw.facts_only_basis": "no legal points yet: this letter uses only the facts of the case and what the person wants; the supervisor may add legal points",
+ "cw.doc_letter_facts": "Request letter (facts only: no legal points yet)",
+ "cw.office.wages": "Name and address of the Labour Department office for the district",
+ "cw.office.electricity": "Name and address of the electricity company's grievance office (the sub-division office)",
+ "cw.office.water": "Name and address of the water supply office for the area",
+ "cw.office.ration": "Name and address of the District Supply Office",
+ "cw.office.land": "Name and address of the revenue office (Tehsil) for the area",
+ "cw.office.other": "Name and address of the office that handles this problem"
 }

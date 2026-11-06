@@ -656,6 +656,8 @@ own files do not cover. Use Google Search to find OFFICIAL information for this 
 
 State: {state}
 Problem, in plain words: {issue}
+If the problem names its current law, search for official pages about that law first (for example the state's
+rules or Labour Department pages under the Code on Wages, 2019), not pages about the law it replaced.
 Today's date: {today}. Use only the law in force today. The Indian Penal Code, the Code of Criminal Procedure
 and the Indian Evidence Act were replaced on 1 July 2024 (by the BNS, the BNSS and the BSA), and 29 central labour
 Acts (for example the Payment of Wages Act and the Minimum Wages Act) were replaced on 21 November 2025 by the four

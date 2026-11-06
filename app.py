@@ -773,7 +773,7 @@ def general_summary(gen):
     again = st.session_state.pop("rs-again", None)
     research_now = None  # research runs last, in its own box, after the cards and drafts are on screen
     if uncovered and state and (llm.gemini_available() or llm.tavily_key()) \
-            and (again or not (record or {}).get("research_runs")):
+            and (again or (not (record or {}).get("research_runs") and not research.for_case(case_id))):
         case_id = case_id or ensure_case(general.CASE_TYPE)
         research_now = (case_id, again[1] if again else uncovered[0], state)
     status = research_status(case_id, record) if (uncovered or facts.research) else "none"
@@ -798,6 +798,8 @@ def general_summary(gen):
     if letter_points:  # drafted straight away from the volunteer's ticked points (or the approved ones)
         documents.append((t("cw.doc_letter") if approved else t("cw.doc_letter_draft"),
                           casework.complaint_letter(facts, letter_points, issue, gen["model"], draft_lang)))
+    elif uncovered and not research_now:  # no point ticked (or research failed): a facts-only request letter
+        documents.append((t("cw.doc_letter_facts"), casework.facts_only_letter(facts, issue, gen["model"], draft_lang)))
     if eligibility.status == "eligible":
         documents.append((t("cw.doc_dlsa"), casework.dlsa_application(facts, eligibility, issue, gen["model"],
                                                                        draft_lang)))
@@ -2362,10 +2364,11 @@ def add_letter_to_pending(case_id: str, issue: str):
     approved = research.approved_points(case_id)
     if pending.get("case_type") != general.CASE_TYPE:
         return
-    if not approved:  # every point rejected: the draft letter made from them goes
-        store.remove_letter(case_id)
-        return
     g = general.GeneralFacts.from_dict(pending["facts"])
+    if not approved:  # every point rejected: the letter goes back to facts only (no legal points)
+        store.replace_letter(case_id, casework.facts_only_letter(g, issue, pending.get("ai_model"),
+                                                                 pending.get("draft_lang", "en")))
+        return
     letter = casework.complaint_letter(g, approved, issue, pending.get("ai_model"), pending.get("draft_lang", "en"))
     store.replace_letter(case_id, letter)
 

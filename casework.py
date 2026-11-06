@@ -357,6 +357,32 @@ def complaint_letter(g, approved: List[dict], issue: str, ai_model: Optional[str
     return drafts.add_disclosure(text, ai_model, rules=general.RULES_USED, code=code)
 
 
+OFFICE_TYPES = ("wages", "electricity", "water", "ration", "land")  # an office type we can name in plain words
+OFFICE_BLANK = {"en": "[Name and address of the office]", "hi": "[कार्यालय का नाम और पता]"}
+
+
+def facts_only_letter(g, issue: str, ai_model: Optional[str], code: str = "en") -> str:
+    """The fallback when no research point is ticked (or research failed, or the supervisor rejected
+    every point): a short request letter to the right type of office, using ONLY the facts of the case
+    and what the person wants. No sections, no Acts, no deadlines. Labelled as facts-only."""
+    import copy
+    clean = copy.copy(g)
+    clean.what_happened = [s for s in g.what_happened if not legal_claims(s)]
+    clean.timeline = [(w, x) for w, x in g.timeline if not legal_claims(x)]
+    clean.outcome = g.outcome if not legal_claims(g.outcome or "") else ""
+    kind = problem_type(g)
+    office = lang.t(f"cw.office.{kind if kind in OFFICE_TYPES else 'other'}", code)
+    text = complaint_letter(clean, [], issue, ai_model, code)
+    text = text.replace(OFFICE_BLANK[code], f"[{office}]", 1)
+    text = text.replace(lang.t("cw.letter_route_blank", code), f"[{office}]", 1)
+    text = text.replace(lang.t("cw.letter_no_basis", code), "- " + lang.t("cw.facts_only_basis", code), 1)
+    lines = text.split("\n")
+    header = 1
+    while header < len(lines) and lines[header].strip() and header < 3:  # the DRAFT line(s) stay first
+        header += 1
+    return "\n".join(lines[:header] + ["", lang.t("cw.facts_only_label", code)] + lines[header:])
+
+
 def dlsa_application(g, eligibility, issue: str, ai_model: Optional[str], code: str = "en") -> str:
     """The free legal aid application (templates/dlsa_application.md), filled with facts of the case.
     Name, address and phone stay as blanks to fill by hand."""

@@ -55,6 +55,12 @@ size of the problem, severity, quality of the solution, proven impact (real use 
   points only (or taken out if all are rejected), and the supervisor approves, edits or rejects
   the drafts. Only approved points reach the case record and the knowledge base. Every step is in
   the audit record.
+- When a problem falls under a law that was replaced (for example unpaid wages → Code on Wages, 2019;
+  arrest or bail → BNSS/BNS), the search names the current law (replaced_laws.search_text), so
+  official pages under it come first. If no research point is ticked (or research fails, or the
+  supervisor rejects every point), a facts-only request letter is drafted to the right type of
+  office, using only the facts of the case and what the person wants (no sections, Acts or
+  deadlines), labelled "Facts-only letter: no legal points yet; the supervisor may add them."
 - Safety first: if anyone is in danger, show "Call 112 now." For cyber fraud with money lost in
   the last few days and 1930 not yet called, show "Call 1930 now."
 - Drafts and case files are saved only after the supervisor clicks Approve.
