@@ -47,11 +47,10 @@ def test_practice_case_is_filled():
         "offence_month": "2024-02",
     }
     assert r.dropped == []
-    # Only the month of the offence is known: February 2024 is before 1 July 2024, so the month decides
-    # the law and the day is not asked for (it is asked only for June or July 2024).
+    # Only the month of the offence is known: the month and year decide the law, so the day is not asked.
     assert r.notes_say["offence_date"] == "The offence was in February 2024."
     assert intake.missing_facts(r.values) == []
-    assert intake.missing_facts({**r.values, "offence_month": "2024-07"}) == ["offence_date"]
+    assert intake.missing_facts({**r.values, "offence_month": "2024-07"}) == []  # July 2024 too: BNS
 
 
 # ---------- the AI never gets to guess ----------

@@ -123,7 +123,7 @@ BNS_START = date(2024, 7, 1)  # the BNS replaced the IPC for offences from this 
 
 
 def law_date(facts: "UndertrialFacts") -> Optional[date]:
-    """The offence date, or (only the month known, not June or July 2024) a date in that month: used only
+    """The offence date, or (only the month known) the first day of that month: used only
     to decide IPC or BNS, never shown as the offence date."""
     return facts.offence_date or section479.month_law_date(getattr(facts, "offence_month", None))
 

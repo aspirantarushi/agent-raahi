@@ -238,7 +238,7 @@ def missing_facts(values: Dict[str, object], skipped: Optional[set] = None) -> L
             if offence_question(values) and not values.get("answer"):
                 missing.append(fact)
         elif fact == "offence_date" and section479.month_law_date(values.get("offence_month")):
-            continue  # the month is known and decides the law (not June or July 2024): no need for the day
+            continue  # the month and year decide the law: the day is never needed
         elif values.get(fact) is None:
             missing.append(fact)
     return missing

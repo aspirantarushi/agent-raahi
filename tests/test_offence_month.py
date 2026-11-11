@@ -1,5 +1,6 @@
 """Evaluation case 2: the notes give the month and year of the offence but not the day. The month decides
-IPC or BNS (every day of May 2024 is before 1 July 2024); the day is asked only for June or July 2024.
+IPC or BNS: every day of June 2024 is before 1 July 2024 (IPC), every day of July 2024 is on or after it
+(BNS). The day is never asked when the month and year are known.
 Fake data only."""
 
 from datetime import date
@@ -36,9 +37,9 @@ def test_month_and_year_from_the_notes(quote, month):
     assert intake.month_year(quote) == month
 
 
-@pytest.mark.parametrize("month, decides", [("2024-05", True), ("2023-12", True), ("2024-06", False),
-                                            ("2024-07", False), ("2024-08", True), (None, False)])
-def test_the_month_decides_except_june_and_july_2024(month, decides):
+@pytest.mark.parametrize("month, decides", [("2024-05", True), ("2023-12", True), ("2024-06", True),
+                                            ("2024-07", True), ("2024-08", True), (None, False), ("May", False)])
+def test_the_month_and_year_always_decide(month, decides):
     assert (section479.month_law_date(month) is not None) == decides
 
 
@@ -47,14 +48,16 @@ def test_may_2024_uses_the_ipc_maximum_without_the_day():
     assert (r.maximum.months, r.maximum.section) == (36, "IPC 384") and not r.lawyer_check
     assert (r.one_third.when, r.one_half.when) == (date(2025, 8, 5), date(2026, 2, 5))
     assert calc().maximum.months == 84 and calc().lawyer_check  # no month, no day: BNS, to be checked (as before)
-    assert calc(offence_month="2024-06").maximum.months == 84  # June 2024: the day is needed
+    june, july = calc(offence_month="2024-06"), calc(offence_month="2024-07")
+    assert (june.maximum.months, june.maximum.section) == (36, "IPC 384")  # every day of June 2024: before 1 July
+    assert (july.maximum.months, july.maximum.section) == (84, "BNS 308(2)")  # every day of July 2024: on or after
+    assert not june.lawyer_check
 
 
-def test_the_day_is_asked_only_for_june_and_july_2024():
-    values = {"offence_month": "2024-05"}
-    assert "offence_date" not in intake.missing_facts(values)
-    assert "offence_date" in intake.missing_facts({"offence_month": "2024-06"})
-    assert "offence_date" in intake.missing_facts({})
+def test_the_day_is_never_asked_when_the_month_is_known():
+    for month in ("2024-05", "2024-06", "2024-07", "2023-12"):
+        assert "offence_date" not in intake.missing_facts({"offence_month": month})
+    assert "offence_date" in intake.missing_facts({})  # no month either: asked
 
 
 def test_draft_says_the_month_never_a_made_up_day():

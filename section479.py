@@ -90,14 +90,14 @@ class Maximum:
 
 def month_law_date(month: Optional[str]) -> Optional[date]:
     """'2024-05' (the notes give the month and year, not the day) -> a date in that month, used ONLY to
-    decide IPC or BNS: every day of May 2024 is before 1 July 2024. None for June and July 2024 (close
-    to 1 July 2024: the day is asked for), or when no month is known."""
+    decide IPC or BNS. The month and year always decide: every day of June 2024 is before 1 July 2024
+    (IPC), every day of July 2024 is on or after it (BNS). None when no month is known."""
     try:
         year, month_no = (int(x) for x in (month or "").split("-"))
         first = date(year, month_no, 1)
     except ValueError:
         return None
-    return None if (year, month_no) in ((2024, 6), (2024, 7)) else first
+    return first
 
 
 def choose_maximum(offence: Offence, offence_date: Optional[date]) -> Maximum:
@@ -276,7 +276,7 @@ def calculate(
     """Work out the Section 479 dates for one offence.
 
     offence_month: "2024-05" when the notes give the month and year but not the day; it decides IPC or
-    BNS (except June and July 2024), as offence_date would.
+    BNS, as offence_date would.
 
     question_answered: True once the row's ask_to_decide question has been answered
     and this row is confirmed as the right one. Ignored for rows with no question.

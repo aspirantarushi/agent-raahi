@@ -1555,9 +1555,7 @@ def undertrial_form():
                                  help=t("ui.form.offence_date_help"))
     month = st.session_state.get("f_offence_month") if offence_date is None else None
     if month:  # the notes give only the month and year
-        decides = section479.month_law_date(month) is not None
-        st.caption(t("ui.form.month_decides" if decides else "ui.form.month_ask_day", month=show_value(month)))
-        month = month if decides else None
+        st.caption(t("ui.form.month_decides", month=show_value(month)))  # the month and year decide the law
     custody_began = st.date_input(t("fact.custody_began"), format="DD/MM/YYYY", key="f_custody",
                                   min_value=date(1990, 1, 1), max_value=date.today())
     today = st.date_input(t("fact.today"), format="DD/MM/YYYY", key="f_today")

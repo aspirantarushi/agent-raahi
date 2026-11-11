@@ -125,8 +125,8 @@ Met = M, partly = P, not met = N.
    Places ("in Patna", "Krishna district") and everyday words that are also names ("asha", "das",
    सीमा, प्रकाश) are not flagged. Across all 18 practice stories, only "Ramesh" is flagged.
 5. **Month known, day "Don't know": the BNS maximum was used** (case 2). When the notes give the month
-   and year, the month now decides IPC or BNS (all of May 2024 is before 1 July 2024); the day is asked
-   only for June or July 2024. The draft and case file say "May 2024 (the day is not known)", never a
+   and year, the month now decides IPC or BNS (all of May 2024 is before 1 July 2024; all of June 2024 is
+   before it, all of July 2024 on or after it); the day is never asked when the month is known. The draft and case file say "May 2024 (the day is not known)", never a
    made-up day (`intake.py`, `section479.py`, `drafts.py`).
    While fixing this: on the Section 479 path, "Removed before sending: 1 × a phone number" was only
    shown on the question screens, so it disappeared when no question was asked; it is now also shown in
