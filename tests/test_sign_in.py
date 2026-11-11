@@ -35,6 +35,13 @@ def supervisor_signs_in(at, password=SUPERVISOR):
     return at
 
 
+def gives_name(at, name):
+    at.text_input(key="sup-name").set_value(name)
+    at.button(key="sup-name-go").click().run()
+    ok(at)
+    return at
+
+
 def test_supervisor_menu_opens_supervisor_sign_in_with_only_the_password(passwords):
     at = AppTest.from_file("../app.py", default_timeout=20).run()
     at.button(key="nav-supervisor").click().run()  # the Supervisor menu, not signed in as a volunteer
@@ -47,12 +54,14 @@ def test_supervisor_menu_opens_supervisor_sign_in_with_only_the_password(passwor
 def test_correct_supervisor_password_also_opens_the_clinic(passwords):
     at = supervisor_signs_in(open_screen("Supervisor"))
     assert at.session_state["supervisor_ok"] is True and at.session_state["clinic_ok"] is True
-    assert at.title[0].value == "Supervisor" and "Signed in as supervisor." in [s.value for s in at.success]
+    assert at.title[0].value == "Supervisor sign-in" and boxes(at) == {"sup-name"}  # then the name
+    at = gives_name(at, "SK")
+    assert at.title[0].value == "Supervisor" and "Signed in as supervisor: SK." in [s.value for s in at.success]
     at = open_screen("New case", at)  # no volunteer sign-in needed in this session
     ok(at)
     assert at.title[0].value == "New case"
     assert "gate-pass" not in boxes(at)
-    assert at.session_state["volunteer"] == "Supervisor"  # saved with what the supervisor does
+    assert at.session_state["volunteer"] == "SK"  # saved with what the supervisor does
 
 
 def test_wrong_supervisor_password_gives_no_access(passwords):

@@ -263,6 +263,8 @@ def test_research_on_screen(monkeypatch, fake_ai):
     at.button(key="nav-supervisor").click().run()
     next(t for t in at.text_input if t.label == "Supervisor password").set_value("practice-sup")
     next(b for b in at.button if b.label == "Sign in").click().run()
+    at.text_input(key="sup-name").set_value("Supervisor S")  # then the name or initials
+    at.button(key="sup-name-go").click().run()
     assert not any(r.key == f"action-{case_id}" for r in at.radio)  # no approve until the points are decided
     assert any("left this point out of the letter. Reason: the forum is for a later step" in w.value for w in at.warning)
     for point, choice in (("p1", "Approve"), ("p2", "Reject"), ("p3", "Approve")):

@@ -9,7 +9,10 @@ Never stored: names, pasted case notes, the AI's quotes from the notes, or perso
 numbers (phone, Aadhaar, email are removed from any text before saving).
 """
 
+import csv
+import io
 import json
+import re
 from datetime import date, datetime
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -70,8 +73,10 @@ def volunteer_changes(ai_extracted: Dict[str, object], final_facts: Dict[str, ob
     return changes
 
 
-def start_record(case_id: str, final_facts: dict, ai: Optional[dict] = None, base: Path = HERE) -> dict:
-    """Create the audit record when a draft is first sent to the supervisor.
+def start_record(case_id: str, final_facts: dict, ai: Optional[dict] = None, base: Path = HERE,
+                 by: str = "", case_type: str = "") -> dict:
+    """Create the audit record when a draft is first sent to the supervisor, with one event:
+    "sent to supervisor", by the volunteer's name (or "volunteer" when no name was given).
 
     ai: {"model": ..., "read_at": ..., "extracted": {fact: value}, "not_accepted": [fact, ...]}
         or None when no AI was used.
@@ -90,21 +95,25 @@ def start_record(case_id: str, final_facts: dict, ai: Optional[dict] = None, bas
             field for fact, field in AI_FACT_TO_CASE_FIELD.items()
             if fact not in extracted and final_facts.get(field) not in (None, "")
         ) if ai else [],
-        "events": [{"time": now(), "event": "sent to supervisor", "by": VOLUNTEER}],
+        "case_type": case_type,
+        "events": [{"time": now(), "event": SENT, "by": _plain(by) or VOLUNTEER, "role": "volunteer"}],
     }
     _save(record, base)
     return record
 
 
 def add_event(case_id: str, event: str, by: str, details: str = "", base: Path = HERE,
-              changes: Optional[List[dict]] = None) -> None:
-    """changes: [{"field", "old", "new"}] for an edit, saved with the event (old -> new)."""
+              changes: Optional[List[dict]] = None, role: str = "") -> None:
+    """changes: [{"field", "old", "new"}] for an edit, saved with the event (old -> new).
+    role: "volunteer" or "supervisor" when by is a person's name."""
     record = storage.read_json("audit", case_id, base)
     if record is None:  # a draft sent before audit records existed
         record = {"case_id": case_id, "created": now(), "model": "not recorded", "ai_extracted": {},
                   "ai_answers_not_accepted": [], "volunteer_changed": [], "entered_by_volunteer": [],
                   "events": []}
-    entry = {"time": now(), "event": event, "by": by}
+    entry = {"time": now(), "event": event, "by": _plain(by)}
+    if role:
+        entry["role"] = role
     if details:
         entry["details"] = _plain(details)
     if changes:
@@ -112,6 +121,93 @@ def add_event(case_id: str, event: str, by: str, details: str = "", base: Path =
                             for c in changes]
     record["events"].append(entry)
     _save(record, base)
+
+
+SENT = "sent to supervisor"
+RESENT = "fixed and resent"
+SENT_BACK = "sent back"
+APPROVED = "approved"
+DELETED = "case deleted"
+# Status of a case, from its audit events (the last of these events decides)
+STATUS_EVENTS = {SENT: "waiting", "sent to the supervisor": "waiting", RESENT: "waiting",
+                 SENT_BACK: "sent back", APPROVED: "approved", DELETED: "deleted"}
+STATUSES = ["waiting", "sent back", "approved", "deleted"]
+
+
+def who_did(event: dict) -> str:
+    """"Asha (supervisor)" when a name and role were saved; otherwise what was saved."""
+    by = event.get("by", "")
+    return f"{by} ({event['role']})" if event.get("role") and by not in (VOLUNTEER, SUPERVISOR) else by
+
+
+def _sender(event: dict) -> str:
+    """The volunteer who sent or resent: the name saved with the event (older records: "by <name>")."""
+    if event.get("by") not in (VOLUNTEER, "", None):
+        return event["by"]
+    found = re.match(r"by (.+)$", event.get("details", ""))
+    return found.group(1) if found else ""
+
+
+def summary_row(record: dict, code: str = "", case_type: str = "") -> dict:
+    """One row of the supervisor's table of all cases, from the case's audit record."""
+    events = record.get("events", [])
+    status, sent, decision = "", None, None
+    for e in events:
+        if e["event"] in STATUS_EVENTS:
+            status = STATUS_EVENTS[e["event"]]
+            if status == "waiting":
+                sent = e  # the last send or resend (older records: the second copy, which has the name)
+            else:
+                decision = e
+    return {"case_id": record["case_id"], "code": code or record["case_id"],
+            "case_type": record.get("case_type") or case_type, "status": status or "waiting",
+            "sent_by": _sender(sent) if sent else "", "sent_on": (sent or {}).get("time", "")[:16].replace("T", " "),
+            "decision_by": who_did(decision) if decision else "",
+            "decision_on": (decision or {}).get("time", "")[:16].replace("T", " "),
+            "ai_used": record.get("model", ""), "last_step": events[-1]["event"] if events else "",
+            "created": record.get("created", "")}
+
+
+def filter_rows(rows: List[dict], search: str = "", status: str = "", start: Optional[date] = None,
+                end: Optional[date] = None) -> List[dict]:
+    """Search by case code (or case number), one status, and the day it was sent (or recorded)."""
+    q = (search or "").strip().casefold()
+    out = []
+    for r in rows:
+        if q and q not in r["code"].casefold() and q not in r["case_id"].casefold():
+            continue
+        if status and r["status"] != status:
+            continue
+        day = (r["sent_on"] or r["created"])[:10]
+        if start and (not day or day < start.isoformat()):
+            continue
+        if end and (not day or day > end.isoformat()):
+            continue
+        out.append(r)
+    return sorted(out, key=lambda r: r["sent_on"] or r["created"], reverse=True)  # newest first
+
+
+def history_rows(record: dict) -> List[dict]:
+    """A case's full history: one row per event (Time, What happened, By, Details)."""
+    rows = []
+    for e in record.get("events", []):
+        details = e.get("details", "")
+        if e.get("changes"):
+            details = "; ".join(filter(None, [details] + [f"{c['field']}: {c['old']} -> {c['new']}"
+                                                          for c in e["changes"]]))
+        rows.append({"time": e["time"][:16].replace("T", " "), "event": e["event"], "by": who_did(e),
+                     "details": details})
+    return rows
+
+
+def to_csv(rows: List[dict], columns: List[tuple]) -> str:
+    """columns: [(key, heading)]. Plain CSV of what the table shows (no notes, no personal numbers)."""
+    out = io.StringIO()
+    writer = csv.writer(out)
+    writer.writerow([h for _, h in columns])
+    for r in rows:
+        writer.writerow([r.get(k, "") for k, _ in columns])
+    return out.getvalue()
 
 
 def read_record(case_id: str, base: Path = HERE) -> Optional[dict]:
@@ -145,7 +241,7 @@ def describe(record: dict) -> str:
             lines.append("- Entered by the volunteer (not found by the AI): "
                          + ", ".join(record["entered_by_volunteer"]))
     for e in record["events"]:
-        line = f"- {e['time'].replace('T', ' ')}: {e['event']}, by {e['by']}"
+        line = f"- {e['time'].replace('T', ' ')}: {e['event']}, by {who_did(e)}"
         if e.get("details"):
             line += f" ({e['details']})"
         lines.append(line)
@@ -199,9 +295,10 @@ def list_problems(base: Path = HERE) -> List[dict]:
     return list(reversed(storage.backend(base).log_entries("problems")))  # newest first
 
 
-def replace_with_deletion(case_id: str, base: Path = HERE) -> None:
-    """After a case is deleted, its audit record keeps only "case deleted" and the date."""
+def replace_with_deletion(case_id: str, base: Path = HERE, by: str = "") -> None:
+    """After a case is deleted, its audit record keeps only "case deleted", the date and who deleted it."""
     record = {"case_id": case_id, "created": now(), "model": "deleted", "ai_extracted": {},
               "ai_answers_not_accepted": [], "volunteer_changed": [], "entered_by_volunteer": [],
-              "events": [{"time": now(), "event": "case deleted", "by": SUPERVISOR}]}
+              "events": [{"time": now(), "event": DELETED, "by": _plain(by) or SUPERVISOR,
+                          **({"role": "supervisor"} if by else {})}]}
     _save(record, base)

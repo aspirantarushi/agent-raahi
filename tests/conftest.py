@@ -35,3 +35,12 @@ def no_real_research(monkeypatch):
         raise llm.AIUnavailable("Research is not run in tests.")
     monkeypatch.setattr(llm, "research_issue", not_in_tests)
     monkeypatch.setattr(llm, "tavily_search", not_in_tests)
+
+
+@pytest.fixture(autouse=True)
+def fresh_sign_in_counts():
+    """Wrong-password counts live in the app's memory: every test starts with none."""
+    import signin_guard
+    signin_guard.reset_all()
+    yield
+    signin_guard.reset_all()

@@ -31,6 +31,43 @@ SENT_BACK = "sent back"
 APPROVED = "approved"
 
 
+class AlreadyDecided(ValueError):
+    """The case is no longer waiting: approved or sent back already (a double click, or two supervisors)."""
+    def __init__(self):
+        super().__init__("This case was already decided.")
+
+
+class OwnDraft(ValueError):
+    """A supervisor may not approve a draft they sent or resent themselves."""
+    def __init__(self):
+        super().__init__("You sent this draft, so another supervisor must approve it.")
+
+
+def same_person(a: str, b: str) -> bool:
+    """Names or initials compared without case, spaces or dots ("A.K. Rao" = "ak rao")."""
+    def plain(x):
+        return re.sub(r"[\W_]+", "", (x or "").casefold())
+    return bool(plain(a)) and plain(a) == plain(b)
+
+
+def sent_this(record: dict, supervisor: str) -> bool:
+    """True if the supervisor is the volunteer who sent the draft or last resent it."""
+    return same_person(supervisor, record.get("sent_by", "")) or same_person(supervisor, record.get("resent_by", ""))
+
+
+def _waiting(case_id: str, base: Path) -> dict:
+    """The waiting draft, or AlreadyDecided if it was approved or sent back in the meantime."""
+    _check_id(case_id)
+    record = storage.read_json("pending", case_id, base)
+    if record is None:
+        if storage.backend(base).read("drafts", case_id) is not None or audit.read_record(case_id, base=base):
+            raise AlreadyDecided()
+        raise ValueError("No such draft waiting or sent back.")
+    if record["status"] != WAITING:
+        raise AlreadyDecided()
+    return record
+
+
 def _save_pending(record: dict, base: Path) -> None:
     storage.write_json("pending", record["id"], record, base)
 
@@ -85,9 +122,7 @@ def submit(draft_text: str, facts: UndertrialFacts, base: Path = HERE, ai: Optio
         "sent_by": by,
     }
     _save_pending(record, base)
-    audit.start_record(case_id, facts.to_dict(), ai, base=base)
-    if by:
-        audit.add_event(case_id, "sent to the supervisor", audit.VOLUNTEER, f"by {by}", base=base)
+    audit.start_record(case_id, facts.to_dict(), ai, base=base, by=by, case_type=record["case_type"])  # one event
     if readiness is not None:
         open_items = [r for r in readiness if r["status"] in ("missing", "uncertain")]
         audit.add_event(case_id, "readiness when sent", audit.VOLUNTEER,
@@ -110,11 +145,13 @@ def list_pending(base: Path = HERE, status: str = WAITING) -> List[dict]:
 
 
 def approve(case_id: str, edited_text: Optional[str] = None, base: Path = HERE,
-            approved_on: Optional[date] = None) -> None:
-    """Save the draft in drafts/ and a case file in cases/, then remove it from pending/."""
-    record = _load(case_id, base)
-    if record["status"] != WAITING:
-        raise ValueError("Only waiting drafts can be approved.")
+            approved_on: Optional[date] = None, by: str = "") -> None:
+    """Save the draft in drafts/ and a case file in cases/, then remove it from pending/.
+    by: the supervisor's name or initials, recorded with the approval. A supervisor who sent (or last
+    resent) the draft cannot approve it (OwnDraft); a case no longer waiting raises AlreadyDecided."""
+    record = _waiting(case_id, base)
+    if sent_this(record, by):
+        raise OwnDraft()
     text = edited_text if edited_text is not None else record["draft"]
     text = text.replace("\r\n", "\n")
     edited = text.strip() != record["draft"].strip()
@@ -141,8 +178,9 @@ def approve(case_id: str, edited_text: Optional[str] = None, base: Path = HERE,
     store.write("drafts", case_id, text if text.endswith("\n") else text + "\n")
     store.write("cases", case_id, case_text)
     store.delete("pending", case_id)
-    audit.add_event(case_id, "approved", audit.SUPERVISOR,
-                    "edited by the supervisor before approval" if edited else "approved as sent", base=base)
+    audit.add_event(case_id, "approved", by or audit.SUPERVISOR,
+                    "edited by the supervisor before approval" if edited else "approved as sent", base=base,
+                    role="supervisor" if by else "")
     # Next-step timeline for the approved case
     if is_general:
         g = general.GeneralFacts.from_dict(record["facts"])
@@ -152,17 +190,18 @@ def approve(case_id: str, edited_text: Optional[str] = None, base: Path = HERE,
         timeline.create_for_undertrial(case_id, facts, result, approved_on, base=base)
 
 
-def reject(case_id: str, reason: str, base: Path = HERE) -> None:
+def reject(case_id: str, reason: str, base: Path = HERE, by: str = "") -> None:
+    """Send a waiting draft back with a reason. by: the supervisor's name or initials."""
     reason = reason.strip()
     if not reason:
         raise ValueError("Please give a reason for sending it back.")
-    record = _load(case_id, base)
-    if record["status"] != WAITING:
-        raise ValueError("Only waiting drafts can be sent back.")
+    record = _waiting(case_id, base)
     record["status"] = SENT_BACK
     record["reason"] = reason
+    record["sent_back_by"] = by
     _save_pending(record, base)
-    audit.add_event(case_id, "sent back", audit.SUPERVISOR, f"reason: {reason}", base=base)
+    audit.add_event(case_id, "sent back", by or audit.SUPERVISOR, f"reason: {reason}", base=base,
+                    role="supervisor" if by else "")
 
 
 def resend(case_id: str, fixed_text: str, base: Path = HERE, by: str = "") -> None:
@@ -179,9 +218,9 @@ def resend(case_id: str, fixed_text: str, base: Path = HERE, by: str = "") -> No
     record.setdefault("history", []).append(
         {"sent_back_reason": record["reason"], "resent": datetime.now().isoformat(timespec="minutes")}
     )
-    record.update(status=WAITING, reason="", draft=text)
+    record.update(status=WAITING, reason="", draft=text, resent_by=by)
     _save_pending(record, base)
-    audit.add_event(case_id, "fixed and resent", audit.VOLUNTEER, f"by {by}" if by else "", base=base)
+    audit.add_event(case_id, "fixed and resent", by or audit.VOLUNTEER, base=base, role="volunteer" if by else "")
 
 
 LETTER_MARKERS = ("For the volunteer and the supervisor (remove this part", "स्वयंसेवक और सुपरवाइज़र के लिए (पत्र भेजने")
@@ -249,7 +288,7 @@ def approved_draft(case_id: str, base: Path = HERE) -> Optional[str]:
     return storage.backend(base).read("drafts", case_id)
 
 
-def delete_case(case_id: str, base: Path = HERE) -> List[str]:
+def delete_case(case_id: str, base: Path = HERE, by: str = "") -> List[str]:
     """Remove a case completely: waiting or sent-back record, approved draft, case file, timeline, the
     tracker record (facts, visit log) and its problem reports. The audit record keeps only "case deleted"
     with the date. Returns what was removed."""
@@ -263,5 +302,5 @@ def delete_case(case_id: str, base: Path = HERE) -> List[str]:
     for research_id in [i for i in store.ids("research") if i.startswith(case_id + ".")]:
         if store.delete("research", research_id):
             removed.append("research")
-    audit.replace_with_deletion(case_id, base=base)
+    audit.replace_with_deletion(case_id, base=base, by=by)
     return removed

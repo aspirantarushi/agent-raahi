@@ -69,6 +69,8 @@ def test_supervisor_deletes_on_screen(monkeypatch, tmp_path):
     at.button(key="nav-supervisor").click().run()
     at.text_input[0].set_value("test-pass")
     next(b for b in at.button if b.label == "Sign in").click().run()
+    at.text_input(key="sup-name").set_value("Supervisor S")  # then the name or initials
+    at.button(key="sup-name-go").click().run()
     at.selectbox(key="del-case").set_value(case_id).run()
     at.button(key="del-go").click().run()
     assert any("Type DELETE" in e.value for e in at.error)  # not confirmed: nothing deleted

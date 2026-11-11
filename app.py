@@ -12,6 +12,8 @@ import html
 import json
 import os
 import re
+import secrets
+import time
 from datetime import date, timedelta
 
 import streamlit as st
@@ -35,6 +37,7 @@ import ledger
 import readiness
 import research
 import section479
+import signin_guard
 import storage
 import store
 import timeline
@@ -2280,24 +2283,89 @@ def is_supervisor_password(typed: str) -> bool:
     return bool(expected) and hmac.compare_digest((typed or "").strip().encode(), expected.encode())
 
 
+SUPERVISOR_IDLE_SECONDS = 30 * 60  # shared computers at camps: sign the supervisor out after 30 idle minutes
+
+
+def guard_keys(kind: str) -> list:
+    """Who the wrong-password count is for: this browser session and (as a second check) its network
+    address, so reloading the page does not start the count again."""
+    session = st.session_state.setdefault("_session_key", secrets.token_hex(8))
+    try:
+        ip = st.context.ip_address
+    except Exception:
+        ip = None
+    return [f"{kind}:session:{session}"] + ([f"ip:{kind}:{ip}"] if ip else [])
+
+
+def locked_message(kind: str) -> str:
+    """"Too many tries; wait 5 minutes" while this sign-in is locked ("" when it is not)."""
+    return t("gate.too_many") if signin_guard.seconds_locked(guard_keys(kind)) else ""
+
+
 def supervisor_sign_in():
-    """Runs when the supervisor clicks Sign in. The supervisor password alone is enough: it also opens
-    the clinic's other screens for this session (no clinic passcode or name needed)."""
-    if not is_supervisor_password(st.session_state.get("sup-pass") or ""):
-        st.session_state["sup-msg"] = t("ui.sup.wrong")
+    """Runs when the supervisor clicks Sign in. The supervisor password alone opens the supervisor
+    screen (the name is asked next) and the clinic's other screens for this session."""
+    keys = guard_keys("supervisor")
+    if signin_guard.seconds_locked(keys):
+        st.session_state["sup-msg"] = t("gate.too_many")
         return
-    st.session_state.update(supervisor_ok=True, **{"sup-pass": ""})
+    if not is_supervisor_password(st.session_state.get("sup-pass") or ""):
+        signin_guard.failed(keys)
+        st.session_state["sup-msg"] = t("gate.too_many") if signin_guard.seconds_locked(keys) else t("ui.sup.wrong")
+        return
+    signin_guard.succeeded(keys)
+    st.session_state.update(supervisor_ok=True, sup_last_active=time.time(), **{"sup-pass": ""})
+    st.session_state.pop("supervisor_name", None)  # asked next, every time
     if not st.session_state.get("clinic_ok"):  # clinic access came with the supervisor sign-in
         st.session_state.update(clinic_ok=True, clinic_via_supervisor=True)
         if not (st.session_state.get("volunteer") or "").strip():
-            st.session_state["volunteer"] = SUPERVISOR_ACTOR  # saved with what they do (same in every language)
+            st.session_state["volunteer"] = SUPERVISOR_ACTOR  # until the name is given
+
+
+def supervisor_name_given():
+    """Runs when the supervisor types their name or initials after the password."""
+    name = tracker.clean_text(st.session_state.get("sup-name") or "", 40)
+    if not name:
+        st.session_state["sup-msg"] = t("gate.need_name")
+        return
+    st.session_state.update(supervisor_name=name, sup_last_active=time.time())
+    if st.session_state.get("clinic_via_supervisor"):
+        st.session_state["volunteer"] = name  # what they do on other screens is saved with their name too
+
+
+def supervisor_name() -> str:
+    return st.session_state.get("supervisor_name") or ""
 
 
 def supervisor_sign_out():
     st.session_state["supervisor_ok"] = False
+    for key in ("supervisor_name", "sup_last_active"):
+        st.session_state.pop(key, None)
     if st.session_state.pop("clinic_via_supervisor", False):  # the clinic access ends with it
         for key in ("clinic_ok", "volunteer", "case_id"):
             st.session_state.pop(key, None)
+
+
+def supervisor_idle_check():
+    """At the start of every run: a supervisor idle for 30 minutes is signed out; any other run counts
+    as activity. (The timer below makes the screen check by itself, even if nobody touches it.)"""
+    if not st.session_state.get("supervisor_ok"):
+        return
+    now = time.time()
+    if now - st.session_state.get("sup_last_active", now) > SUPERVISOR_IDLE_SECONDS:
+        supervisor_sign_out()
+        st.session_state["sup-msg-info"] = t("ui.sup.idle_out")
+    else:
+        st.session_state["sup_last_active"] = now
+
+
+@st.fragment(run_every=60)
+def supervisor_idle_timer():
+    """Once a minute, without counting as activity: if the supervisor has been idle for 30 minutes,
+    run the whole page again, which signs them out and hides the supervisor screen."""
+    last = st.session_state.get("sup_last_active")
+    if st.session_state.get("supervisor_ok") and last and time.time() - last > SUPERVISOR_IDLE_SECONDS:
+        st.rerun(scope="app")
 
 
 def supervisor_screen():
@@ -2308,22 +2376,39 @@ def supervisor_screen():
     if not st.session_state.get("supervisor_ok"):
         # Only the supervisor password: no clinic passcode and no name
         page_title(t("ui.sup.sign_in_title"))
+        info = st.session_state.pop("sup-msg-info", None)
+        if info:
+            st.info(info, icon=":material/timer:")
         with st.form("sup-form", enter_to_submit=True, border=False):  # Enter signs in
             st.text_input(t("ui.sup.password"), type="password", key="sup-pass")
             st.form_submit_button(t("ui.sup.sign_in"), type="primary", key="sup-go", on_click=supervisor_sign_in)
-        msg = st.session_state.pop("sup-msg", None)
+        msg = st.session_state.pop("sup-msg", None) or locked_message("supervisor")
         if msg:
             st.error(msg)
         return
+    if not supervisor_name():
+        # After the password: the supervisor's name or initials, saved with every decision
+        page_title(t("ui.sup.sign_in_title"))
+        with st.form("sup-name-form", enter_to_submit=True, border=False):
+            st.text_input(t("gate.name"), key="sup-name", max_chars=40, help=t("ui.sup.name_help"))
+            st.form_submit_button(t("ui.next"), type="primary", key="sup-name-go", on_click=supervisor_name_given)
+        msg = st.session_state.pop("sup-msg", None)
+        if msg:
+            st.error(msg)
+        st.button(t("ui.sup.sign_out"), key="sup-out", type="tertiary", on_click=supervisor_sign_out)
+        return
     page_title(t("ui.sup.title"))
     top1, top2 = st.columns([3, 1])
-    top1.success(t("ui.sup.signed_in"))
+    top1.success(t("ui.sup.signed_in_as", name=supervisor_name()))
     top2.button(t("ui.sup.sign_out"), type="primary", icon=":material/logout:", key="sup-out",
                 on_click=supervisor_sign_out)
 
     flash = st.session_state.pop("supervisor_flash", None)
     if flash:
         st.success(flash)
+    already = st.session_state.pop("supervisor_flash_info", None)
+    if already:
+        st.info(already, icon=":material/info:")
 
     waiting = store.list_pending()
     if not waiting:
@@ -2351,13 +2436,103 @@ def supervisor_screen():
                 st.markdown(f"- **{p['time'].replace('T', ' ')}** · {t('ui.case')} {p['case_id']} · {p['where']}: "
                             f"{p['text']}" + (f" _({t('ui.sup.removed')} {p['removed']})_" if p.get("removed") else ""))
 
+    audit_records_box()
+
+
+AUDIT_COLUMNS = [("code", "aud.code"), ("case_type", "aud.case_type"), ("status", "aud.status"),
+                 ("sent_by", "aud.sent_by"), ("sent_on", "aud.sent_on"), ("decision_by", "aud.decision_by"),
+                 ("decision_on", "aud.decision_on"), ("ai_used", "aud.ai_used"), ("last_step", "aud.last_step")]
+HISTORY_COLUMNS = [("time", "aud.time"), ("event", "aud.event"), ("by", "aud.by"), ("details", "aud.details")]
+STATUS_COLOURS = {"waiting": ("#E0F2FE", "#0C4A6E"), "sent back": ("#FEF3C7", "#78350F"),
+                  "approved": ("#DCFCE7", "#14532D"), "deleted": ("#EEE9DF", "#4B5563")}  # the app's chip colours
+
+
+def audit_rows() -> list:
+    """One row per case, from the audit records, with the case code from the tracker."""
+    tracked = {r["id"]: r for r in tracker.all_records()}
+    pending = {r["id"]: r for r in storage.all_json("pending") if store.ID_PATTERN.match(r.get("id", ""))}
+    rows = []
+    for record in audit.list_records():
+        case_id = record["case_id"]
+        kind = (pending.get(case_id) or {}).get("case_type") or (tracked.get(case_id) or {}).get("case_type", "")
+        row = audit.summary_row(record, (tracked.get(case_id) or {}).get("code", ""), kind)
+        row["case_type"] = case_type_label(row["case_type"]) if row["case_type"] else "-"
+        row["status_label"] = t(f"aud.st.{row['status']}")
+        rows.append(row)
+    return rows
+
+
+def shown_table(rows: list, columns: list):
+    """A table of rows with translated headings; the status column as coloured chips."""
+    import pandas as pd
+    frame = pd.DataFrame([{t(h): (r["status_label"] if k == "status" else r.get(k, "")) for k, h in columns}
+                          for r in rows], columns=[t(h) for _, h in columns])
+    if any(k == "status" for k, _ in columns) and rows:
+        colours = {t(f"aud.st.{s}"): c for s, c in STATUS_COLOURS.items()}
+        frame = frame.style.map(lambda v: (f"background-color: {colours[v][0]}; color: {colours[v][1]}; "
+                                           "font-weight: 600") if v in colours else "", subset=[t("aud.status")])
+    return frame
+
+
+def open_audit_row():
+    """Clicking a row of the audit table opens that case's history below it."""
+    selection = (st.session_state.get("aud-table") or {}).get("selection", {})
+    picked = list(selection.get("rows", [])) or [cell[0] for cell in selection.get("cells", [])]  # tick box or any cell
+    ids = st.session_state.get("aud-ids", [])
+    st.session_state["aud-open"] = ids[picked[0]] if picked and picked[0] < len(ids) else None
+
+
+def audit_records_box():
+    """Audit records of all cases: one row per case (newest first), with search, status and date filters;
+    a row opens the case's full history; both download as CSV."""
     st.subheader(t("ui.sup.audit_all"))
-    records = audit.list_records()
-    if not records:
+    rows = audit_rows()
+    if not rows:
         st.caption(t("ui.sup.no_audit"))
-    for r in records:
-        with st.expander(t("ui.sup.audit_row", case_id=r["case_id"], model=r["model"], last=r["events"][-1]["event"])):
-            st.markdown(audit.describe(r))
+        return
+    with st.container(key="aud-filters", horizontal=True, gap="small"):
+        st.text_input(t("aud.search"), key="aud-q", max_chars=20, placeholder="K7M2QX")
+        st.selectbox(t("aud.status"), [""] + audit.STATUSES, key="aud-status",
+                     format_func=lambda s: t(f"aud.st.{s}") if s else t("aud.all"))
+        st.date_input(t("aud.dates"), value=(), key="aud-dates", format="DD/MM/YYYY", max_value=date.today())
+    dates = st.session_state.get("aud-dates") or ()
+    start = dates[0] if len(dates) > 0 else None
+    end = dates[1] if len(dates) > 1 else start
+    shown = audit.filter_rows(rows, st.session_state.get("aud-q", ""), st.session_state.get("aud-status") or "",
+                              start, end)
+    st.session_state["aud-ids"] = [r["case_id"] for r in shown]
+    st.caption(t("aud.count", n=len(shown), total=len(rows)) + " " + t("aud.click"))
+    with st.container(key="aud-table-box"):
+        st.dataframe(shown_table(shown, AUDIT_COLUMNS), key="aud-table", hide_index=True, width="stretch",
+                     on_select=open_audit_row, selection_mode=["single-row", "single-cell"])
+    st.download_button(t("aud.csv"), audit.to_csv([{**r, "status": r["status_label"]} for r in shown],
+                                                  [(k, t(h)) for k, h in AUDIT_COLUMNS]),
+                       file_name=f"audit-records-{date.today():%Y-%m-%d}.csv", mime="text/csv",
+                       key="aud-csv", icon=":material/download:")
+    case_id = st.session_state.get("aud-open")
+    record = audit.read_record(case_id) if case_id in st.session_state["aud-ids"] else None
+    if record:
+        row = next(r for r in shown if r["case_id"] == case_id)
+        st.markdown(f"**{t('aud.history_of', slip=row['code'], case_id=case_id)}**")
+        audit_ai_summary(record)
+        history_table(record, "aud-hist")
+
+
+def audit_ai_summary(record: dict):
+    """What the AI read and what the volunteer changed (kept with the history, as before)."""
+    lines = [line for line in audit.describe(record).splitlines()
+             if not re.match(r"- \d{4}-\d{2}-\d{2} ", line)]  # the events are in the table below
+    st.caption("  \n".join(line.lstrip("- ") for line in lines))
+
+
+def history_table(record: dict, key: str):
+    """One case's full history: Time, What happened, By, Details (the same table everywhere)."""
+    rows = audit.history_rows(record)
+    with st.container(key=f"{key}-box"):
+        st.dataframe(shown_table(rows, HISTORY_COLUMNS), key=key, hide_index=True, width="stretch")
+    st.download_button(t("aud.csv"), audit.to_csv(rows, [(k, t(h)) for k, h in HISTORY_COLUMNS]),
+                       file_name=f"audit-{record['case_id']}.csv", mime="text/csv", key=f"{key}-csv",
+                       icon=":material/download:")
 
 
 def short(text: str, n: int) -> str:
@@ -2563,7 +2738,7 @@ def delete_selected_case():
         st.session_state["del-msg"] = ("error", t("del.need_confirm"))
         return
     try:
-        store.delete_case(case_id)
+        store.delete_case(case_id, by=supervisor_name())
     except ValueError as err:
         st.session_state["del-msg"] = ("error", str(err))
         return
@@ -2643,32 +2818,58 @@ def review_one(record: dict):
             ledger_box(record["ledger"])
         audit_record = audit.read_record(case_id)
         with st.expander(t("ui.sup.audit_one")):
-            st.markdown(audit.describe(audit_record) if audit_record else t("ui.sup.no_audit_one"))
+            if audit_record:
+                audit_ai_summary(audit_record)
+                history_table(audit_record, f"hist-{case_id}")
+            else:
+                st.caption(t("ui.sup.no_audit_one"))
         if blocked:
             return
+        own = store.sent_this(record, supervisor_name())
+        if own:  # the supervisor sent (or last resent) this draft: someone else approves it
+            st.warning(t("ui.sup.own_draft"), icon=":material/block:")
         action = st.radio(t("ui.sup.decision"), ["Approve", "Edit then Approve", "Reject with a reason"],
                           index=None, horizontal=True, key=f"action-{case_id}", format_func=option_text("sup."))
-        try:
-            if action == "Approve":
-                if st.button(t("ui.sup.approve_save"), type="primary", key=f"approve-{case_id}"):
-                    store.approve(case_id)
-                    st.session_state["supervisor_flash"] = t("ui.sup.approved", case_id=case_id)
-                    st.rerun()
-            elif action == "Edit then Approve":
-                edited = st.text_area(t("ui.sup.edit"), value=record["draft"], height=500, key=f"edit-{case_id}")
-                st.caption(t("ui.sup.no_personal"))
-                if st.button(t("ui.sup.save_approve"), type="primary", key=f"edit-approve-{case_id}"):
-                    store.approve(case_id, edited_text=edited)
-                    st.session_state["supervisor_flash"] = t("ui.sup.edited_approved", case_id=case_id)
-                    st.rerun()
-            elif action == "Reject with a reason":
-                reason = st.text_area(t("ui.sup.reason"), key=f"reason-{case_id}")
-                if st.button(t("ui.sup.send_back"), key=f"reject-{case_id}"):
-                    store.reject(case_id, reason)
-                    st.session_state["supervisor_flash"] = t("ui.sup.sent_back", case_id=case_id)
-                    st.rerun()
-        except ValueError as err:
-            st.error(str(err))
+        busy = bool(st.session_state.get(f"deciding-{case_id}"))  # one click only
+        if action == "Approve":
+            st.button(t("ui.sup.approve_save"), type="primary", key=f"approve-{case_id}", disabled=busy or own,
+                      on_click=decide, args=(case_id, "approve"))
+        elif action == "Edit then Approve":
+            st.text_area(t("ui.sup.edit"), value=record["draft"], height=500, key=f"edit-{case_id}")
+            st.caption(t("ui.sup.no_personal"))
+            st.button(t("ui.sup.save_approve"), type="primary", key=f"edit-approve-{case_id}", disabled=busy or own,
+                      on_click=decide, args=(case_id, "edit"))
+        elif action == "Reject with a reason":
+            st.text_area(t("ui.sup.reason"), key=f"reason-{case_id}")
+            st.button(t("ui.sup.send_back"), key=f"reject-{case_id}", disabled=busy,
+                      on_click=decide, args=(case_id, "send back"))
+        err = st.session_state.pop(f"decide-err-{case_id}", None)
+        if err:
+            st.error(err)
+
+
+def decide(case_id: str, kind: str):
+    """Approve, edit-then-approve or send back, on the first click; the button is disabled from then on.
+    A case decided in the meantime (a double click, or another supervisor) shows a calm notice."""
+    get = st.session_state.get
+    st.session_state[f"deciding-{case_id}"] = True
+    try:
+        if kind == "approve":
+            store.approve(case_id, by=supervisor_name())
+            st.session_state["supervisor_flash"] = t("ui.sup.approved", case_id=case_id)
+        elif kind == "edit":
+            store.approve(case_id, edited_text=get(f"edit-{case_id}"), by=supervisor_name())
+            st.session_state["supervisor_flash"] = t("ui.sup.edited_approved", case_id=case_id)
+        else:
+            store.reject(case_id, get(f"reason-{case_id}") or "", by=supervisor_name())
+            st.session_state["supervisor_flash"] = t("ui.sup.sent_back", case_id=case_id)
+    except store.AlreadyDecided:
+        st.session_state["supervisor_flash_info"] = t("ui.sup.already_decided", case_id=case_id)
+    except store.OwnDraft:
+        st.session_state[f"decide-err-{case_id}"] = t("ui.sup.own_draft")
+    except ValueError as err:  # for example no reason given: the button works again
+        st.session_state[f"deciding-{case_id}"] = False
+        st.session_state[f"decide-err-{case_id}"] = str(err)
 
 
 # ---------- clinic sign-in, and the shared case tracker ----------
@@ -2701,6 +2902,10 @@ def clinic_ok() -> bool:
 def clinic_sign_in():
     typed = (st.session_state.get("gate-pass") or "").strip()  # spaces copied in by mistake are ignored
     name = (st.session_state.get("gate-name") or "").strip()
+    keys = guard_keys("volunteer")
+    if signin_guard.seconds_locked(keys):  # 5 wrong passcodes: wait 5 minutes
+        st.session_state["gate-msg"] = t("gate.too_many")
+        return
     if is_supervisor_password(typed) and not hmac.compare_digest(typed.encode(), clinic_passcode().strip().encode()):
         st.session_state.update(**{"gate-msg": t("gate.supervisor_here"), "gate-pass": ""})
         return
@@ -2708,8 +2913,10 @@ def clinic_sign_in():
         st.session_state["gate-msg"] = t("gate.need_name")
         return
     if not hmac.compare_digest(typed.encode(), clinic_passcode().strip().encode()):
-        st.session_state["gate-msg"] = t("gate.wrong")
+        signin_guard.failed(keys)
+        st.session_state["gate-msg"] = t("gate.too_many") if signin_guard.seconds_locked(keys) else t("gate.wrong")
         return
+    signin_guard.succeeded(keys)
     st.session_state.update(clinic_ok=True, volunteer=tracker.clean_text(name, 40), **{"gate-pass": ""})
 
 
@@ -2720,7 +2927,7 @@ def clinic_gate():
         st.text_input(t("gate.passcode"), type="password", key="gate-pass")
         st.text_input(t("gate.name"), key="gate-name", max_chars=40, help=t("gate.name_help"))
         st.form_submit_button(t("gate.go"), type="primary", key="gate-go", on_click=clinic_sign_in)
-    msg = st.session_state.pop("gate-msg", None)
+    msg = st.session_state.pop("gate-msg", None) or locked_message("volunteer")
     if msg:
         st.error(msg)
 
@@ -3514,12 +3721,15 @@ if st.query_params.get("code"):  # opened from the QR code on a case slip
     st.session_state["continue_code"] = st.query_params.get("code")
     st.session_state["screen"] = "New case"
     del st.query_params["code"]
+supervisor_idle_check()  # 30 minutes without activity: the supervisor is signed out
 choice = st.session_state["screen"] if st.session_state["screen"] in SCREENS else "Home"
 keep_place_in_address(choice)
 st.session_state["shown_drafts"] = []
 top_bar(choice)
 if storage.records_will_be_lost():  # online without Supabase: nothing saved would survive a restart
     st.error(t("online.no_supabase"), icon=":material/cloud_off:")
+if st.session_state.get("supervisor_ok"):
+    supervisor_idle_timer()
 if choice in ("Home", "Learn", "Supervisor") or clinic_ok():
     SCREENS[choice]()  # Supervisor has its own sign-in (the supervisor password only)
 else:

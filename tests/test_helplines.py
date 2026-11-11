@@ -68,7 +68,7 @@ SIGNED_IN = {"clinic_ok": True, "volunteer": "VA"}
     ("Supervisor", {}, "ui.sup.sign_in_title"),           # Supervisor sign-in
     ("New case", SIGNED_IN, "ui.new_case.title"),
     ("My cases", SIGNED_IN, "ui.cases.title"),
-    ("Supervisor", {"supervisor_ok": True, **SIGNED_IN}, "ui.sup.title"),
+    ("Supervisor", {"supervisor_ok": True, "supervisor_name": "SK", **SIGNED_IN}, "ui.sup.title"),
     ("Learn", {}, "ui.learn.title"),
 ])
 def test_helplines_under_every_page_heading(monkeypatch, code, screen_name, state, title_key):

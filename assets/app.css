@@ -533,3 +533,8 @@ div[class*="-actions"]:has(> [class*="-docx"]) iframe { width: 100% !important; 
     display: none !important; }
   .st-key-case_type label[data-baseweb="radio"] p { line-height: 1.35 !important; }
 }
+
+/* ---------- Supervisor: audit records (the tables scroll inside their own box, never the page) ---------- */
+.st-key-aud-filters { flex-wrap: wrap !important; align-items: flex-end; }
+.st-key-aud-filters > div { flex: 1 1 200px !important; min-width: 0; }
+div[class*="st-key-aud-table-box"], div[class*="st-key-hist-"][class*="-box"], .st-key-aud-hist-box { max-width: 100%; overflow-x: auto; }

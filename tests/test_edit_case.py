@@ -235,6 +235,8 @@ def test_editing_an_approved_case_on_screen_needs_review_again(monkeypatch):
     pw = next(t for t in at.text_input if t.label == "Supervisor password")
     pw.set_value("practice-sup")
     next(b for b in at.button if b.label == "Sign in").click().run()
+    at.text_input(key="sup-name").set_value("Supervisor S")  # then the name or initials
+    at.button(key="sup-name-go").click().run()
     at.button(key=f"reviewed-{case_id}").click().run()
     assert not at.exception, at.exception[0].stack_trace
     assert tracker.status_of(case_id) == store.APPROVED

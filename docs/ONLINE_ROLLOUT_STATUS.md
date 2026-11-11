@@ -17,6 +17,13 @@ individual accounts, handovers) is replaced by a simpler setup for **one institu
   a correct supervisor password also opens the volunteer screens for that session, and signing out as
   supervisor ends that access. If the supervisor password is typed into "Volunteer sign-in", the app
   says "This is the volunteer sign-in. Supervisors: use the Supervisor page."
+  After the password the supervisor types their name or initials; it is saved with every approval,
+  edit and send-back, and a supervisor cannot approve a draft they sent or last resent themselves.
+  After 5 wrong passwords (or passcodes) that sign-in is locked for 5 minutes. A supervisor is signed
+  out after 30 minutes without activity (shared computers at camps).
+- **Audit records.** The Supervisor page lists every case in one table (case code, type, status,
+  who sent it and when, who decided and when, AI used, last step), with search, a status filter, a
+  date range and "Download as CSV"; clicking a row shows that case's full history.
 - **Storage** (`storage.py`). Local folders by default. When `SUPABASE_URL` and
   `SUPABASE_SECRET_KEY` are set, the app saves cases, drafts, timelines, visit logs, audit records,
   problem reports, evaluation sessions and the impact log in one Supabase table, `raahi_records`
