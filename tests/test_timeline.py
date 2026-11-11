@@ -22,11 +22,11 @@ APPROVED_ON = date(2026, 11, 3)
 TODAY = date(2026, 11, 4)
 
 
-def approve_undertrial(base, **changes):
+def approve_undertrial(base, approved_on=APPROVED_ON, **changes):
     facts = practice_facts(**changes)
     text = drafts.make_undertrial_draft(facts, drafts.recalculate(facts))
     case_id = store.submit(text, facts, base=base)
-    store.approve(case_id, base=base, approved_on=APPROVED_ON)
+    store.approve(case_id, base=base, approved_on=approved_on)
     return case_id
 
 
@@ -215,7 +215,9 @@ def open_my_cases():
 
 
 def test_my_cases_shows_due_this_week_and_overdue_steps(my_cases):
-    approve_undertrial(my_cases)
+    # The screen uses the real date, so approve "today": with a fixed date the first follow-up step
+    # turned overdue (red) once the calendar passed it, and this test failed for no real reason.
+    approve_undertrial(my_cases, approved_on=date.today())
     at = open_my_cases()
     assert at.subheader[0].value == "Due this week"
     errors = [e.value for e in at.error]

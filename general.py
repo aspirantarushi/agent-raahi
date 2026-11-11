@@ -529,6 +529,9 @@ _NOT_NAMES = {
     "november", "december", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
     "mr", "mrs", "ms", "dr", "shri", "smt",
     "agent", "raahi",  # the app's own name, "Agent Raahi"
+    # apps and payment services people mention in stories (not names of people)
+    "whatsapp", "telegram", "facebook", "instagram", "youtube", "google", "gpay", "paytm", "phonepe", "bhim",
+    "amazon", "flipkart", "truecaller",
 }
 
 

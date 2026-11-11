@@ -127,7 +127,7 @@ def duration(g, today: date, code: str = "en") -> Optional[str]:
     elif days < 90:
         n, unit = round(days / 7), "week"
     elif days < 730:
-        n, unit = round(days / 30), "month"
+        n, unit = round(days / 30.44), "month"  # the average month length (676 days is 22 months, not 23)
     else:
         n, unit = round(days / 365), "year"
     return lang.t(f"cw.about_{unit}{'' if n == 1 else 's'}", code, n=n)

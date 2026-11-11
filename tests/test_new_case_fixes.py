@@ -59,3 +59,15 @@ def test_a_date_the_ai_already_asks_about_is_not_asked_again():
                                questions=["What is the full date of 30 September?"])
     qs = general.follow_up_questions(r)
     assert sum("30 September" in q for q in qs) == 1
+
+
+def test_month_count_uses_the_average_month_length():
+    # Found in the practice evaluation: 2 January 2025 to 9 November 2026 (676 days) showed "about 23 months"
+    g = facts(what_happened=["He was arrested."], timeline=[("2 January 2025", "Arrested")])
+    assert casework.duration(g, date(2026, 11, 9)) == "about 22 months"
+
+
+def test_app_names_are_not_flagged_as_names():
+    # Found in the practice evaluation: "WhatsApp" was flagged as a possible person's name
+    notes = "The worker has some WhatsApp messages and a Paytm receipt from the contractor."
+    assert general.possible_names("Has: WhatsApp messages; Paytm receipt", notes) == []
