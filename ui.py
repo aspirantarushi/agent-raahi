@@ -1,4 +1,4 @@
-"""Small building blocks for the look and feel: header, safety bar, step progress, status chips.
+"""Small building blocks for the look and feel: header, helplines, step progress, status chips.
 
 Plain HTML and CSS (assets/app.css); the logo files in assets/brand/ are drawn inline; no animations,
 no extra libraries.
@@ -57,11 +57,17 @@ def header(name: str, tagline: str, description: str = "") -> str:
             + '</div></header>')
 
 
-def safety_bar(danger: str, legal_aid: str) -> str:
-    """Always visible; tappable phone links on phones."""
-    return (f'<nav class="safety-bar" aria-label="Emergency and helplines">'
-            f'<a class="danger" href="tel:112">{html.escape(danger)}</a>'
-            f'<a href="tel:15100">{html.escape(legal_aid)}</a></nav>')
+def helpline_links(danger: str, aid: str) -> str:
+    """The two tap-to-call helplines, each with its own icon (the Home page style, used on every screen)."""
+    return (f'<p class="lines">'
+            f'<a class="danger" href="tel:112">{icon("call")}<span>{html.escape(danger)}</span></a>'
+            f'<a href="tel:15100">{icon("support_agent")}<span>{html.escape(aid)}</span></a></p>')
+
+
+def page_helplines(danger: str, aid: str) -> str:
+    """The helplines under a page heading (New case, Case tracker, Supervisor, sign-in pages...)."""
+    return (f'<nav class="helpline helpline-page" aria-label="Emergency and helplines">'
+            f'{helpline_links(danger, aid)}</nav>')
 
 
 def stepper(steps: List[str], current: int, step_word: str = "") -> str:
@@ -110,9 +116,7 @@ def hero(badge: str, kicker: str, lead: str, sub: str, name: str = "") -> str:
 
 def helpline(free: str, danger: str, aid: str) -> str:
     """"Free and open source.", then the two tap-to-call helplines below it, each with its own icon."""
-    return (f'<div class="helpline"><p>{html.escape(free)}</p><p class="lines">'
-            f'<a class="danger" href="tel:112">{icon("call")}<span>{html.escape(danger)}</span></a>'
-            f'<a href="tel:15100">{icon("support_agent")}<span>{html.escape(aid)}</span></a></p></div>')
+    return f'<div class="helpline"><p>{html.escape(free)}</p>{helpline_links(danger, aid)}</div>'
 
 
 def eyebrow(text: str) -> str:

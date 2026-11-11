@@ -147,6 +147,9 @@ div[class*="st-key-case-card-"] { background: var(--card); border: 1px solid var
 .helpline a span:not(.mi) { text-decoration: underline; text-underline-offset: 3px; }
 .helpline a .mi { font-size: 22px; text-decoration: none; }
 .helpline a.danger { color: var(--red); }
+/* the same helplines under each page heading (every screen but Home): same icons, size, spacing and colours */
+.helpline.helpline-page { text-align: left; margin: 2px 0 14px 0; }  /* wins over Home's phone margin too */
+.helpline-page .lines { justify-content: flex-start; margin: 0 !important; }
 
 /* ---------- Today vs With Agent Raahi ---------- */
 .compare { display: flex; flex-wrap: wrap; gap: 20px; }
@@ -214,10 +217,6 @@ div[class*="st-key-learn-card-"] > div:has(.stButton) { width: 100%; }
 .footer { margin-top: 72px; }
 
 /* ---------- inside the app: the same header, cards and buttons ---------- */
-.safety-bar { display: flex; flex-wrap: wrap; gap: .4rem 1.25rem; background: var(--teal-tint); color: var(--teal-dark);
-  padding: .45rem 1rem; border-radius: 999px; margin: .5rem 0 .5rem 0; font-size: .95rem; width: fit-content; }
-.safety-bar a { color: var(--teal-dark); font-weight: 600; text-underline-offset: 3px; }
-.safety-bar a.danger { color: var(--red); }
 .stepper { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: .5rem 0 1.25rem 0; list-style: none; padding: 0; }
 .stepper li { font-size: 15px; color: var(--muted2); padding-top: .5rem; border-top: 5px solid var(--line); white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis; }
@@ -425,6 +424,7 @@ div[class*="st-key-learn-card-"] > div:has(.stButton) { width: 100%; }
   .hero .kicker { font-size: 18px; }
   .hero-brand svg { width: 56px; height: 56px; } .hero-brand .word { font-size: 32px; }
   .helpline .lines { flex-direction: column; align-items: center; gap: 0; }
+  .helpline-page .lines { align-items: flex-start; }
   div[class*="st-key-learn-card-"] { height: auto; }
   .st-key-learnlinks [data-testid="stHorizontalBlock"] { gap: 14px !important; }
   div[class*="st-key-learn-card-"] .card h3 { min-height: 0; }
@@ -456,7 +456,6 @@ div[class*="st-key-learn-card-"] > div:has(.stButton) { width: 100%; }
   .stepper li { font-size: 14px; }
   .docpage { padding: 20px 16px 18px; font-size: 15px; border-radius: 4px; }
   .docpage .doc-title { font-size: 1.12rem !important; }
-  .safety-bar { border-radius: 16px; }
   h1 { font-size: 1.9rem !important; }
   div[class*="st-key-case-card-"] { padding: 16px; }
 }
@@ -486,7 +485,6 @@ div[class*="st-key-learn-card-"] > div:has(.stButton) { width: 100%; }
   .step-title .step-icon { width: 28px; height: 28px; font-size: 17px; border-radius: 9px; }
   /* shorter gaps above the story box */
   h1 { font-size: 1.45rem !important; padding: 0 !important; margin: 0 0 2px 0 !important; }
-  .safety-bar { padding: 6px 12px !important; margin: 0 0 6px 0 !important; font-size: 14px; gap: 0 1rem; }
   .st-key-case_type label[data-baseweb="radio"] { padding: 8px 10px !important; }
   .stepper { margin: .1rem 0 .2rem 0 !important; }
   .stepper li { padding-top: .3rem; border-top-width: 4px; }
@@ -519,7 +517,6 @@ div[class*="-actions"]:has(> [class*="-docx"]) iframe { width: 100% !important; 
   .stepper { display: none !important; }
   .stepper-phone { display: block; margin: .2rem 0 .3rem 0 !important; font-size: 14.5px; color: var(--ink);
     padding: 6px 12px; border-left: 4px solid var(--teal); background: #F4FAF8; border-radius: 8px; }
-  .safety-bar { margin-bottom: 14px !important; }
   div[class*="-actions"]:has(> [class*="-docx"]) { flex-wrap: wrap !important; }
   div[class*="-actions"]:has(> [class*="-docx"]) { column-gap: 8px !important; row-gap: 8px !important; }
   div[class*="-actions"]:has(> [class*="-docx"]) > div { flex: 0 0 calc(50% - 4px) !important; max-width: none; }

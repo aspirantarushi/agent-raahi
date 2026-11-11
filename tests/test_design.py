@@ -54,7 +54,11 @@ def test_phone_rules_and_speed():
     assert "Noto Sans" in config()["font"]
 
 
-def test_safety_bar_has_tappable_numbers():
+def test_page_helplines_have_tappable_numbers_and_icons_like_home():
     import ui
-    bar = ui.safety_bar("In danger? Call 112", "Free legal aid: 15100")
+    bar = ui.page_helplines("In danger? Call 112", "Free legal aid: 15100")
     assert 'href="tel:112"' in bar and 'href="tel:15100"' in bar
+    assert '>call</span>' in bar and '>support_agent</span>' in bar  # phone icon, support icon
+    home = ui.helpline("Free and open source.", "In danger? Call 112", "Free legal aid: 15100")
+    assert ui.helpline_links("In danger? Call 112", "Free legal aid: 15100") in home and \
+        ui.helpline_links("In danger? Call 112", "Free legal aid: 15100") in bar  # the very same links

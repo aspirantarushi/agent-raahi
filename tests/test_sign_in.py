@@ -123,3 +123,16 @@ def test_supervisor_page_without_a_password_set(monkeypatch):
     at.text_input(key="gate-name").set_value("RK")
     at.button(key="gate-go").click().run()  # the volunteer sign-in still works
     assert at.session_state["clinic_ok"] is True
+
+
+def test_enter_signs_in_on_both_pages():
+    # Both sign-ins are forms that Enter submits (AppTest can't press Enter, so the code is checked)
+    from pathlib import Path
+    source = (Path(__file__).resolve().parent.parent / "app.py").read_text(encoding="utf-8")
+    assert 'st.form("sup-form", enter_to_submit=True' in source
+    assert 'st.form("gate-form", enter_to_submit=True' in source
+
+
+def test_supervisor_password_with_spaces_opens_the_clinic(passwords):
+    at = supervisor_signs_in(open_screen("Supervisor"), f"  {SUPERVISOR} ")
+    assert at.session_state["supervisor_ok"] is True and at.session_state["clinic_ok"] is True

@@ -159,9 +159,15 @@ def ai_info_for_audit():
             "not_accepted": sorted({d.split(":")[0] for d in reading.dropped})}
 
 
+def page_title(text: str):
+    """A page heading with the two tap-to-call helplines right under it (the Home page style)."""
+    st.title(text)
+    st.markdown(ui.page_helplines(t("safety.bar112"), t("safety.bar15100")), unsafe_allow_html=True)
+
+
 def new_case_screen():
     open_by_code()
-    st.title(t("ui.new_case.title"))
+    page_title(t("ui.new_case.title"))
     with st.container(key="nc-caption"):  # hidden on phones: the story box repeats it
         st.caption(t("ui.new_case.caption"))
     st.markdown(f"<style>@media (max-width: 640px) {{ .st-key-camp-start button::after {{ content: \"{css_text(t('ui.camp_short'))}\"; }}"
@@ -1999,7 +2005,7 @@ def tracker_table(rows: list):
 def my_cases_screen():
     """The clinic's case tracker: every case with status, next step and due date (overdue in red),
     filters, and each case's file, visit log, slip and progress."""
-    st.title(t("ui.cases.title"))
+    page_title(t("ui.cases.title"))
     volunteer_line()
     msg = st.session_state.pop("case-msg", None)
     if msg:
@@ -2147,7 +2153,7 @@ def cancel_eval():
 
 
 def evaluation_screen():
-    st.title(t("eval.title"))
+    page_title(t("eval.title"))
     st.caption(t("eval.caption"))
     msg = st.session_state.pop("ev-msg", None)
     if msg:
@@ -2255,7 +2261,7 @@ def impact_box():
 
 
 def learn_screen():
-    st.title(t("ui.learn.title"))
+    page_title(t("ui.learn.title"))
     st.info(t("ui.learn.soon"))
 
 
@@ -2297,12 +2303,12 @@ def supervisor_sign_out():
 
 def supervisor_screen():
     if not supervisor_password():
-        st.title(t("ui.sup.sign_in_title"))
+        page_title(t("ui.sup.sign_in_title"))
         st.warning(t("ui.sup.no_password"))
         return
     if not st.session_state.get("supervisor_ok"):
         # Only the supervisor password: no clinic passcode and no name
-        st.title(t("ui.sup.sign_in_title"))
+        page_title(t("ui.sup.sign_in_title"))
         with st.form("sup-form", enter_to_submit=True, border=False):  # Enter signs in
             st.text_input(t("ui.sup.password"), type="password", key="sup-pass")
             st.form_submit_button(t("ui.sup.sign_in"), type="primary", key="sup-go", on_click=supervisor_sign_in)
@@ -2310,7 +2316,7 @@ def supervisor_screen():
         if msg:
             st.error(msg)
         return
-    st.title(t("ui.sup.title"))
+    page_title(t("ui.sup.title"))
     top1, top2 = st.columns([3, 1])
     top1.success(t("ui.sup.signed_in"))
     top2.button(t("ui.sup.sign_out"), type="primary", icon=":material/logout:", key="sup-out",
@@ -2709,7 +2715,7 @@ def clinic_sign_in():
 
 
 def clinic_gate():
-    st.title(t("gate.title"))
+    page_title(t("gate.title"))
     st.caption(t("gate.caption"))
     with st.form("gate-form", enter_to_submit=True, border=True):  # Enter signs in
         st.text_input(t("gate.passcode"), type="password", key="gate-pass")
@@ -3503,8 +3509,6 @@ st.session_state["shown_drafts"] = []
 top_bar(choice)
 if storage.records_will_be_lost():  # online without Supabase: nothing saved would survive a restart
     st.error(t("online.no_supabase"), icon=":material/cloud_off:")
-if choice != "Home":  # Home shows the helplines under its story box
-    st.markdown(ui.safety_bar(t("safety.bar112"), t("safety.bar15100")), unsafe_allow_html=True)
 if choice in ("Home", "Learn", "Supervisor") or clinic_ok():
     SCREENS[choice]()  # Supervisor has its own sign-in (the supervisor password only)
 else:
