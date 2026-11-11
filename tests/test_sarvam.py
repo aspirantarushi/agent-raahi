@@ -247,7 +247,7 @@ def test_progress_messages():
 
 def test_privacy_document_names_sarvam_and_its_settings():
     text = " ".join((ROOT / "docs" / "PRIVACY.md").read_text(encoding="utf-8").split())  # ignore line breaks
-    assert "Sarvam AI" in text and "training is turned off" in text and "1 day" in text
+    assert "Sarvam AI" in text and "model training turned off" in text and "1 day" in text
 
 
 # ---------- the live test (run by hand) ----------

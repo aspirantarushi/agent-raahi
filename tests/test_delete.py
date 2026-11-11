@@ -54,9 +54,13 @@ def test_new_case_files_stay_out_of_git():
 
 def test_privacy_note_covers_the_questions():
     text = (ROOT / "docs" / "PRIVACY.md").read_text(encoding="utf-8")
-    for heading in ["## Never stored", "## What is stored, and where", "## Sent outside the computer",
-                    "## For how long", "## Who can see it", "## How a case is deleted"]:
+    for heading in ["## In short", "## Never stored", "## What is stored, and where",
+                    "## Sent outside the clinic's computer", "## For how long", "## Who can see it",
+                    "## Closing a case", "## How a case is deleted", "## Consent before any real case",
+                    "## The person's rights (DPDP Act, 2023)", "## What could not be confirmed from the code"]:
         assert heading in text
+    assert "Prototype: practice data only. No real person's data has been entered." in text
+    assert "Streamlit Community Cloud" in text and "United States" in text and "1 year after it is" in text
 
 
 def test_supervisor_deletes_on_screen(monkeypatch, tmp_path):
