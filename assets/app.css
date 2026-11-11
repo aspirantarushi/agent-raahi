@@ -358,15 +358,6 @@ div[class*="st-key-learn-card-"] > div:has(.stButton) { width: 100%; }
 
 /* ---------- the worker bar on New case: who, Sign out, camp, Continue a case ---------- */
 .st-key-topmenu, .st-key-phonemenu, .st-key-names-warning-short { display: none !important; }
-.st-key-worker-bar { gap: 8px !important; margin-bottom: 10px; align-items: flex-start; }
-.st-key-worker-bar .who { color: var(--muted2); font-size: 15px; }
-.st-key-worker-bar .stButton, .st-key-worker-bar .stButton > button,
-.st-key-worker-bar [data-testid="stExpander"]:not(:has(details[open])) { width: 270px !important; max-width: 100%; }
-.st-key-worker-bar .stButton > button { justify-content: flex-start !important; min-height: 42px; }
-.st-key-worker-bar [data-testid="stExpander"] summary { min-height: 40px; padding-top: 0 !important; padding-bottom: 0 !important;
-  display: flex; align-items: center; }
-.st-key-worker-bar [data-testid="stExpander"] details { border-radius: 999px; }
-.st-key-worker-bar [data-testid="stExpander"] details[open] { border-radius: 16px; }
 
 /* ---------- narrower laptops and tablets ---------- */
 @media (max-width: 1100px) {
@@ -391,18 +382,11 @@ div[class*="st-key-learn-card-"] > div:has(.stButton) { width: 100%; }
   .st-key-names-warning-short p { font-size: 14px !important; }
   .st-key-topmenu button { min-height: 40px !important; padding: 0 12px !important; width: auto !important; }
   /* New case: one compact bar, the case type as two small tabs, the story box on the first screen */
-  .st-key-nc-caption { display: none !important; }
   h1 { margin-bottom: 0 !important; padding-bottom: 4px !important; }
-  .st-key-worker-bar { gap: 6px !important; }
-  .st-key-worker-bar .who { font-size: 13px; }
   .step-title.center { margin: .6rem 0 .4rem 0; font-size: 1.2rem; gap: 4px; }
   .step-title .step-icon { width: 36px; height: 36px; font-size: 20px; border-radius: 12px; }
   .brand .word { font-size: 1.05rem !important; }
   .stepper li.now { font-size: 13px; }
-  .st-key-worker-bar .stButton > button { min-height: 38px; padding: 0 12px !important; }
-  .st-key-worker-bar .stButton > button p { font-size: 14px; }
-  .st-key-worker-bar [data-testid="stExpander"] summary { padding: 6px 12px !important; min-height: 38px; }
-  .st-key-worker-bar [data-testid="stExpander"] summary p { font-size: 14px; }
   .case-head .code { font-size: 24px; }
   .st-key-case_type [role="radiogroup"] { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
   .st-key-case_type label[data-baseweb="radio"] { padding: 10px 10px 10px 12px !important; min-height: 0 !important; }
@@ -462,23 +446,6 @@ div[class*="st-key-learn-card-"] > div:has(.stButton) { width: 100%; }
 
 /* ---------- phones, New case: the story box on the first screen (laptop unchanged) ---------- */
 @media (max-width: 640px) {
-  /* Signed in, Sign out, Start today's camp, Continue a case: one row of small icon buttons */
-  .st-key-worker-bar { flex-direction: row !important; flex-wrap: wrap !important; align-items: center !important;
-    gap: 6px !important; margin-bottom: 4px; }
-  .st-key-worker-bar > div { width: auto !important; flex: 0 0 auto; }
-  .st-key-worker-bar > div:has(.who) { flex: 1 1 auto; min-width: 0; }
-  .st-key-worker-bar .who { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
-  .st-key-worker-bar .stButton, .st-key-worker-bar .stButton > button,
-  .st-key-worker-bar [data-testid="stExpander"]:not(:has(details[open])) { width: auto !important; }
-  .st-key-worker-bar .stButton > button, .st-key-worker-bar [data-testid="stExpander"]:not(:has(details[open])) summary {
-    min-height: 38px !important; height: 38px; min-width: 42px; padding: 0 10px !important; justify-content: center !important; }
-  /* the words stay for screen readers, hidden on screen */
-  .st-key-worker-bar .stButton > button [data-testid="stMarkdownContainer"],
-  .st-key-worker-bar [data-testid="stExpander"]:not(:has(details[open])) summary [data-testid="stMarkdownContainer"] {
-    position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  .st-key-worker-bar [data-testid="stExpander"]:not(:has(details[open])) summary svg { display: none; }
-  .st-key-worker-bar > div:has(details[open]), .st-key-worker-bar > div:has(.st-key-camp-form),
-  .st-key-worker-bar > div:has(.st-key-camp-row) { flex: 1 1 100% !important; }
   /* headings: smaller, the icon beside the words */
   .step-title.center { flex-direction: row; justify-content: center; gap: 8px; margin: .35rem 0 .3rem 0 !important;
     font-size: 1.05rem; }
@@ -520,21 +487,49 @@ div[class*="-actions"]:has(> [class*="-docx"]) iframe { width: 100% !important; 
   div[class*="-actions"]:has(> [class*="-docx"]) { flex-wrap: wrap !important; }
   div[class*="-actions"]:has(> [class*="-docx"]) { column-gap: 8px !important; row-gap: 8px !important; }
   div[class*="-actions"]:has(> [class*="-docx"]) > div { flex: 0 0 calc(50% - 4px) !important; max-width: none; }
-  /* Camp and Continue: the icon with a short word under it */
-  .st-key-camp-start button, .st-key-worker-bar [data-testid="stExpander"]:not(:has(details[open])) summary {
-    height: 52px !important; flex-direction: column !important; gap: 0 !important; padding: 2px 8px !important; }
-  .st-key-camp-start button::after, .st-key-worker-bar [data-testid="stExpander"]:not(:has(details[open])) summary::after {
-    font-size: 11px; line-height: 1.1; color: var(--muted); }
-  .st-key-gate-out button { height: 52px !important; }
 }
 
 .st-key-practice-note p { font-size: 13px !important; line-height: 1.4; margin: 0 0 6px 0 !important; color: var(--muted2) !important; }
+
+/* ---------- New case, top: one card (who, Sign out, camp, Continue a case) and, on laptops, the camp and a tip ---------- */
+.st-key-nc-top { gap: 32px !important; align-items: center !important; flex-wrap: nowrap !important; margin: 0 0 4px 0; }
+.st-key-nc-top > div:has(> .st-key-worker-bar), .st-key-nc-top > .st-key-worker-bar { flex: 0 0 auto !important; width: auto !important; }
+.st-key-worker-bar { flex: 0 0 auto !important; width: 360px !important; max-width: 100%; box-sizing: border-box;
+  background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 16px !important; gap: 8px !important; }
+.st-key-worker-bar > div, .st-key-worker-bar .stButton, .st-key-worker-bar .stButton > button,
+.st-key-worker-bar [data-testid="stExpander"], .st-key-worker-bar [data-testid="stTextInput"] { width: 100% !important; }
+.st-key-worker-bar .who { display: block; color: var(--muted2); font-size: 13.5px; margin: 0 0 2px 2px; }
+/* every control 44 px high, icon and words starting at the same place */
+.st-key-worker-bar .stButton > button, .st-key-worker-bar [data-testid="stExpander"] summary {
+  height: 44px !important; min-height: 44px !important; padding: 0 16px !important; justify-content: flex-start !important;
+  display: flex; align-items: center; gap: 10px !important; box-sizing: border-box; }
+.st-key-worker-bar [data-testid="stExpander"] details { border-radius: 999px; }
+.st-key-worker-bar [data-testid="stExpander"] details[open] { border-radius: 16px; }
+.st-key-worker-bar [data-testid="stExpander"] summary > span { gap: 10px !important; }
+.st-key-worker-bar .st-key-camp-form [data-testid="stHorizontalBlock"] { flex-wrap: wrap; }
+.st-key-nc-side { flex: 1 1 auto !important; min-width: 0; }
+.nc-side { color: var(--muted); font-size: 15px; max-width: 520px; }
+.nc-side p { display: flex; align-items: center; gap: 10px; margin: 0 0 12px 0 !important; }
+.nc-side p:last-child { margin-bottom: 0 !important; }
+.nc-side .mi { font-size: 22px; color: var(--muted2); }
+.nc-side .nc-camp.on .mi { color: var(--amber-ink); }
+.nc-side b { font-weight: 600; color: var(--ink); margin-right: 4px; }
+/* the gap above "What kind of case is it?" matches the gap above "Tell the story" */
+.st-key-nc-kind .step-title.center { margin-top: 1.4rem; }
+/* case type cards: the same height; the icon centred on the title's line; one-line descriptions on laptops */
+.st-key-case_type label[data-baseweb="radio"] > div:last-child { min-width: 0; width: 100%; }
+.st-key-case_type [data-testid="stRadio"] { width: 100% !important; }
+.st-key-case_type label[data-baseweb="radio"] p { line-height: 36px !important; margin: 0 !important; }
+.st-key-case_type label[data-baseweb="radio"]::before { top: 21px; }  /* centred on the title's line */
+.st-key-case_type [data-testid="stCaptionContainer"] p { white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  line-height: 1.5 !important; margin: 0 !important; }
 @media (max-width: 640px) {
-  .st-key-worker-bar { flex-wrap: nowrap !important; }
-  .st-key-worker-bar > div:has(.who) { flex: 1 1 0 !important; min-width: 0; }
-  .st-key-worker-bar .stButton > button, .st-key-worker-bar [data-testid="stExpander"]:not(:has(details[open])) summary {
-    min-width: 54px !important; padding: 2px 6px !important; }
-  .st-key-camp-start button::after, .st-key-worker-bar [data-testid="stExpander"]:not(:has(details[open])) summary::after {
-    font-size: 10.5px; white-space: nowrap; }
-  .st-key-worker-bar:has(details[open]), .st-key-worker-bar:has(.st-key-camp-form) { flex-wrap: wrap !important; }
+  .st-key-nc-top { flex-direction: column !important; gap: 8px !important; align-items: stretch !important; }
+  .st-key-nc-top > div:has(> .st-key-worker-bar) { width: 100% !important; }
+  .st-key-worker-bar { width: 100% !important; padding: 12px !important; }
+  .nc-side .nc-tip, .nc-side .nc-camp:not(.on) { display: none !important; }
+  .st-key-nc-top > div:has(> .st-key-nc-side) { flex: 0 0 auto !important; }
+  .st-key-nc-side:not(:has(.nc-camp.on)), .st-key-nc-top > div:has(> .st-key-nc-side:not(:has(.nc-camp.on))) {
+    display: none !important; }
+  .st-key-case_type label[data-baseweb="radio"] p { line-height: 1.35 !important; }
 }

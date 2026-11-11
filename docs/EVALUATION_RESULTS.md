@@ -60,7 +60,7 @@ improves outcomes or saves time for real volunteers, and they should not be read
 | 4 | PASS | 5 of 5 | Any 4.4 s, 479 3.3 s | Any: what the person wants; status of the other case. 479: delay by the accused | Flash-Lite | — |
 | 5 | FAIL | 3 of 5 (1 partly, 1 not) | Any 5.9 s, 479 3.8 s | Any: what the person wants; documents; court status; who needs help; in custody (then "rest not needed"). 479: offence date (hint "December 2023") | Flash-Lite | The IPC 506 deciding question (what was the threat?) is never asked: the Section 479 form uses only the first section (IPC 324). "Old IPC maximum" is said only after the volunteer picks a December 2023 date. |
 | 6 | FAIL | 3 of 5 (1 partly, 1 not) | Any 4.7 s, 479 3.5 s | Any: what the person wants; documents. 479: custody date, offence date, theft deciding question, delay | Flash-Lite | The Any flow did **not** say "Cannot conclude yet" and flagged none of the 3 contradictions. The 479 check refused to calculate ("custody date not known": the AI left out 3 March 2025), but did not name the other 2 contradictions; it quietly took "convicted before: yes" and "other case pending: yes". |
-| 7 | FAIL | 5 of 6 (1 not) | Any 4.1 s | What the person wants | Flash-Lite | The bank rule (tell the bank in writing within 3 working days, for transactions up to 31 Dec 2026) is not shown; the next step says only "tell the bank in writing". (The cyber fraud module was dropped from the pilot.) Optional line: the UPI ID was not removed. |
+| 7 | FAIL | 5 of 6 (1 not) | Any 4.1 s | What the person wants | Flash-Lite | The bank rule (tell the bank in writing within 3 working days, for transactions up to 31 Dec 2026) is not shown; the next step says only "tell the bank in writing". (The cyber fraud module was dropped from the planned pilot.) Optional line: the UPI ID was not removed. |
 | 8 | PASS | 6 of 6 | Any 29.9 s (Hindi app 29.6 s) | What she wants (Hindi app: 2 questions in Hindi) | Flash-Lite | — (Research from an official site named the domestic violence law, labelled "AI research, not yet checked by a lawyer"; no section numbers, not from memory.) |
 | 9 | FAIL | 6 of 8 (2 not) | Any 28.4 s | Attendance records; contacted the contractor or labour office before | Flash-Lite | "Ramesh" not flagged as a possible name (the AI described him by role, so the name never reached the drafts; the check only looks at the drafts). "WhatsApp" was wrongly flagged (fixed). Research named the Code on Wages, 2019: this matches the project's current research rule but not this older answer key line ("must NOT name a wages law"). |
 | 10 | PASS | 5 of 5 | Any 4.6 s, 479 3.6 s | Any: what the person wants; why in jail; which jail. 479: 7 questions one at a time, all "Don't know" | Flash-Lite | — |
@@ -135,7 +135,7 @@ Bigger changes (not clear-cut bug fixes):
    sentence)".
 7. **"Any case" drafts a DLSA application even when the person has a legal aid lawyer** (cases 2, 3, 4).
 8. **Cyber fraud bank rule not shown** (case 7): the 3-working-days rule from `knowledge/cyber_fraud.md`
-   is not used in the Any flow. The answer key expects it; the cyber module was dropped from the pilot.
+   is not used in the Any flow. The answer key expects it; the cyber module was dropped from the planned pilot.
 9. **Names are only checked in the drafts.** "Ramesh" was sent to the AI in the story (the screen warns
    that names can't be removed automatically) and was not flagged because it never reached the drafts.
 10. **Answer key older than the research flow** (cases 8 and 9): it expects no law to be named, but

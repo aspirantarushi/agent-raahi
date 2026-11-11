@@ -223,12 +223,13 @@ def test_todays_camp_button_chip_and_end(pretend_ai):
     at.text_input(key="camp-today-district").set_value("Patna")
     at.button(key="camp-save-today").click().run()
     ok(at)
-    assert "Camp: Rampur, Patna · " in texts(at)
+    assert "<b>Today&#x27;s camp:</b> Rampur, Patna · " in texts(at)  # shown beside the card
+    assert at.button(key="camp-end").label == "End camp"            # in the card, where "Start today's camp" was
     at.text_area(key="g_notes").set_value(STORY_A)
     button(at, "Read the story").click().run()
     assert tracker.load(at.session_state["case_id"])["camp"]["village"] == "Rampur"  # the new case is tagged
     at.button(key="camp-end").click().run()
-    assert "Camp: Rampur" not in texts(at) and at.button(key="camp-start")
+    assert "Rampur" not in texts(at) and "No camp started" in texts(at) and at.button(key="camp-start")
 
 
 def test_finish_intake_on_screen(pretend_ai):

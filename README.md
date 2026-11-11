@@ -7,6 +7,9 @@
 An AI casework agent for legal aid clinics and NGOs (Code for a Billion, Timely Justice track).
 Every draft is checked and approved by a supervising lawyer before it is used.
 
+**Status: a prototype, ready for a pilot.** Practice data only: do not enter real cases. The app says
+so on every story box ("Prototype: practice data only. Do not enter real cases.").
+
 ## Content files
 
 Version 1 content for the legal aid agent (Code for a Billion, Timely Justice track). Researched on 2 November 2026. Nothing here has been checked by a lawyer yet: every entry says "Lawyer checked: no" until it is.
@@ -110,7 +113,7 @@ the names of the secrets to paste (never the values) and what behaves differentl
 - **English and Hindi** are the checked languages. Their screen text is in `i18n/en.json` and
   `i18n/hi.json` (everyday Hindi). Hindi legal text is in `knowledge_hi/` and `templates_hi/`, marked
   "Hindi translation checked: no" until a Hindi speaker who knows the law has checked it.
-- **For the pilot, languages are frozen at English and Hindi** (`lang.PILOT_FREEZE`). The Bhashini code
+- **For the planned pilot, languages are frozen at English and Hindi** (`lang.PILOT_FREEZE`). The Bhashini code
   below is kept for later.
 - **The other 21 scheduled languages** use Bhashini (MeitY). `scripts/translate_ui.py` translates
   the screen text once into `i18n/<code>.json`, marked "machine translated by Bhashini, not checked".

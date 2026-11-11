@@ -168,23 +168,22 @@ def page_title(text: str):
 def new_case_screen():
     open_by_code()
     page_title(t("ui.new_case.title"))
-    with st.container(key="nc-caption"):  # hidden on phones: the story box repeats it
-        st.caption(t("ui.new_case.caption"))
-    st.markdown(f"<style>@media (max-width: 640px) {{ .st-key-camp-start button::after {{ content: \"{css_text(t('ui.camp_short'))}\"; }}"
-                f" .st-key-worker-bar [data-testid=\"stExpander\"]:not(:has(details[open])) summary::after"
-                f" {{ content: \"{css_text(t('ui.continue_short'))}\"; }} }}</style>", unsafe_allow_html=True)
-    with st.container(key="worker-bar", gap="small"):
-        volunteer_line()  # who is signed in, then Sign out, today's camp and Continue a case, one below the other
-        continue_box("new")
+    with st.container(key="nc-top", horizontal=True, vertical_alignment="center"):
+        with st.container(key="worker-bar", gap="small"):  # one card: who, Sign out, camp, Continue a case
+            volunteer_line(card=True)
+            continue_box("new")
+        with st.container(key="nc-side"):  # laptop: today's camp and a tip beside the card
+            st.markdown(new_case_side(), unsafe_allow_html=True)
     msg = st.session_state.pop("case-msg", None)
     if msg:
         st.error(msg[1])
     current_case_panel()
 
-    st.markdown(ui.step_heading("category", t("ui.new_case.kind")), unsafe_allow_html=True)
+    with st.container(key="nc-kind"):
+        st.markdown(ui.step_heading("category", t("ui.new_case.kind")), unsafe_allow_html=True)
     case_type = st.radio(t("ui.new_case.kind"), CASE_TYPES, horizontal=True, key="case_type",
                          format_func=option_text("case_type."), label_visibility="collapsed",
-                         captions=[t("case_type.cap.any"), t("case_type.cap.479")])
+                         captions=[t("case_type.cap.any"), t("case_type.cap.479")], width="stretch")
     if case_type == ANY_CASE:
         general_screen()
     else:
@@ -580,7 +579,7 @@ def general_screen():
             st.warning(t("ui.general.names_warning"))
         with st.container(key="names-warning-short"):  # phones: the same rule, short
             st.warning(t("ui.general.names_warning_short"))
-        with st.container(key="practice-note"):  # the pilot uses practice stories only: one small line
+        with st.container(key="practice-note"):  # a prototype: practice stories only, one small line
             st.caption(t("ui.practice_only"))
         if llm.available():
             st.text_area(t("ui.general.story_label"), key="g_notes", height=220,
@@ -2726,8 +2725,17 @@ def clinic_gate():
         st.error(msg)
 
 
-def volunteer_line():
-    """Who is acting, and today's camp (optional, tagged on new cases)."""
+def new_case_side() -> str:
+    """Beside the New case card (laptop): today's camp, or "No camp started", and a short tip."""
+    camp = st.session_state.get("camp_today")
+    text = (t("nc.camp_value", village=camp["village"], district=camp["district"],
+              date=show_date(date.fromisoformat(camp["on"]))) if camp else t("nc.no_camp"))
+    return ui.new_case_side(t("nc.camp_label"), text, bool(camp), t("nc.tip"))
+
+
+def volunteer_line(card: bool = False):
+    """Who is acting, and today's camp (optional, tagged on new cases). card: the New case card, where
+    every control is one full-width button and the camp itself is shown beside the card."""
     if clinic_passcode():
         st.markdown(f'<span class="who" title="{html.escape(t("gate.name_help"))}">'
                     f'{html.escape(t("gate.signed_in_short", name=who()))}</span>', unsafe_allow_html=True)
@@ -2737,7 +2745,7 @@ def volunteer_line():
             st.rerun()
     else:
         st.text_input(t("gate.name"), key="volunteer", max_chars=40, help=t("gate.name_help"))
-    camp_bar()
+    camp_bar(card)
 
 
 def open_camp_form():
@@ -2764,11 +2772,14 @@ def end_todays_camp():
     st.session_state.pop("camp_today", None)
 
 
-def camp_bar():
+def camp_bar(card: bool = False):
     """Today's camp: "Start today's camp" opens village, district and date; once saved, a small chip
-    "Camp: <village>, <district> · <date>" with "End camp". New cases are tagged with it."""
+    "Camp: <village>, <district> · <date>" with "End camp" (in the New case card: just "End camp", the
+    camp itself is shown beside the card). New cases are tagged with it."""
     camp = st.session_state.get("camp_today")
-    if camp:
+    if camp and card:
+        st.button(t("camp.end"), key="camp-end", icon=":material/close:", on_click=end_todays_camp)
+    elif camp:
         with st.container(key="camp-row", horizontal=True, vertical_alignment="center", gap="small"):
             st.markdown(ui.chip("camp", t("camp.chip", village=camp["village"], district=camp["district"],
                                           date=show_date(date.fromisoformat(camp["on"])))), unsafe_allow_html=True)
@@ -2776,7 +2787,7 @@ def camp_bar():
     elif st.session_state.get("camp-open"):
         with st.container(border=True, key="camp-form"):
             st.caption(t("camp.today_caption"))
-            c1, c2, c3 = st.columns(3)
+            c1, c2, c3 = (st, st, st) if card else st.columns(3)  # the narrow card: one below the other
             c1.text_input(t("camp.village"), key="camp-today-village", max_chars=60)
             c2.text_input(t("camp.district"), key="camp-today-district", max_chars=60)
             c3.date_input(t("camp.date"), key="camp-today-date", format="DD/MM/YYYY", max_value=date.today(),

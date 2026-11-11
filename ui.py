@@ -64,6 +64,13 @@ def helpline_links(danger: str, aid: str) -> str:
             f'<a href="tel:15100">{icon("support_agent")}<span>{html.escape(aid)}</span></a></p>')
 
 
+def new_case_side(camp_label: str, camp_text: str, camp_on: bool, tip: str) -> str:
+    """Beside the New case card on a laptop: today's camp (or "No camp started") and one short tip."""
+    return (f'<div class="nc-side"><p class="nc-camp{" on" if camp_on else ""}">{icon("holiday_village")}'
+            f'<span><b>{html.escape(camp_label)}</b> {html.escape(camp_text)}</span></p>'
+            f'<p class="nc-tip">{icon("lightbulb")}<span>{html.escape(tip)}</span></p></div>')
+
+
 def page_helplines(danger: str, aid: str) -> str:
     """The helplines under a page heading (New case, Case tracker, Supervisor, sign-in pages...)."""
     return (f'<nav class="helpline helpline-page" aria-label="Emergency and helplines">'

@@ -1,5 +1,8 @@
 # Online plan: one clinic, one shared case tracker
 
+**Status: a prototype, ready for a pilot.** Practice data only until the steps in "Before real cases"
+below are done.
+
 Changed on 5 November 2026 (Arushi's decision): the paused multi-organisation plan (organisations,
 individual accounts, handovers) is replaced by a simpler setup for **one institution**.
 `supabase/schema.sql` and `db.py` from that plan stay in the repository for later but are **not used**.

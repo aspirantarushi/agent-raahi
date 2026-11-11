@@ -72,7 +72,7 @@ note name the model, and Groq models are named "groq:..." (for example groq:open
   only the state and the problem in plain words (numbers removed), searched on the official-site list.
   The brief is then written by Gemini (or Groq if Gemini is busy) only from those results. Which search
   was used is in the audit record and the problems log.
-- **Bhashini** (MeitY): not used in the pilot (languages are frozen at English and Hindi).
+- **Bhashini** (MeitY): not used in this prototype or the planned pilot (languages are frozen at English and Hindi).
 
 ## For how long
 Until a supervisor deletes the case. The app does not delete cases on its own. Agree a retention
