@@ -11,6 +11,7 @@ import readiness
 import store
 from test_drafts import practice_facts
 from test_general import UPI, UPI_ANSWER, WAGES, WAGES_ANSWER, summarise
+from volunteer import calculate, choose_language, language_of, make_drafts  # noqa: F401
 
 DETAILS = {"court": "Saket Court", "cnr": "DLST010012342024", "fir": "123/2024", "police_station": "Saket",
            "jail": "Tihar", "district": "South Delhi"}
@@ -112,6 +113,7 @@ def test_screen_checklist_and_send_label(monkeypatch, tmp_path):
     at.date_input(key="f_offence_date").set_value(date(2024, 2, 15))
     at.date_input(key="f_custody").set_value(date(2024, 3, 15))
     at.checkbox(key="f_never").check().run()
+    calculate(at.run())  # "Calculate the dates"
     at.radio(key="f_lawyer").set_value("Legal aid lawyer").run()
     next(b for b in at.button if b.label == "Make draft").click().run()
     assert at.button(key="send-f").label == "Send to supervisor — Not ready: 5 items missing"
@@ -131,6 +133,7 @@ def test_screen_cannot_obtain(monkeypatch):
     at.text_input(key="f_section").set_value("380")
     at.date_input(key="f_offence_date").set_value(date(2024, 2, 15))
     at.date_input(key="f_custody").set_value(date(2024, 3, 15)).run()
+    calculate(at.run())  # "Calculate the dates"
     at.radio(key="f_lawyer").set_value("Legal aid lawyer").run()
     next(b for b in at.button if b.label == "Make draft").click().run()
     for field, value in DETAILS.items():

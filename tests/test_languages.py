@@ -15,6 +15,7 @@ import lang
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 import translate_ui  # noqa: E402
+from volunteer import calculate, choose_language, language_of, make_drafts  # noqa: F401
 
 ENGLISH = lang.strings("en")
 MACHINE_FILES = sorted(p for p in (ROOT / "i18n").glob("*.json") if p.stem not in ("en", "hi"))
@@ -118,6 +119,7 @@ def test_drafts_offered_only_in_english_and_hindi(monkeypatch):
     at.text_input(key="f_section").set_value("380")
     at.date_input(key="f_offence_date").set_value(date(2024, 2, 15))
     at.date_input(key="f_custody").set_value(date(2024, 3, 15)).run()
+    calculate(at.run())  # "Calculate the dates"
     at.radio(key="f_lawyer").set_value("Legal aid lawyer").run()
     assert not at.exception, at.exception[0].stack_trace
     assert at.radio(key="f_draft_lang").options == ["English", "हिंदी"]

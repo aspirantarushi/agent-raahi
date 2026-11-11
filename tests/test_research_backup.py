@@ -12,6 +12,7 @@ import audit
 import llm
 import research
 import tracker
+from volunteer import calculate, choose_language, language_of, make_drafts  # noqa: F401
 
 REAL_TAVILY = llm.tavily_search  # tests/conftest.py replaces it in every test; one test needs the real one
 
@@ -146,6 +147,7 @@ def test_nyaya_setu_button_opens_whatsapp_only(monkeypatch):
                         lambda notes, output_lang="en", known=None: llm.NotesReading(raw, notes, {}, MODEL))
     at = AppTest.from_file("../app.py", default_timeout=30).run()
     at.text_area(key="g_notes").set_value(STORY)
+    choose_language(at, "g_notes", language_of(STORY))
     next(b for b in at.button if b.label == "Read the story").click().run()
     assert not at.exception, at.exception[0].stack_trace
     buttons = [e for e in at.get("link_button")]
@@ -170,5 +172,7 @@ def test_story_typed_on_home_survives_the_clinic_sign_in(monkeypatch):
     at.button(key="gate-go").click().run()
     assert not at.exception, at.exception[0].stack_trace
     assert at.text_area(key="g_notes").value == "Bhai ko 15 March 2024 ko pakda gaya."
-    assert at.selectbox(key="g_notes_lang").value == "hi-Latn"  # detected: Hinglish (Hindi in English letters)
+    assert at.selectbox(key="g_notes_lang").value is None       # only suggested: the volunteer confirms it
+    at.button(key="g_notes_lang-use").click().run()               # "Use Hinglish (Hindi in English letters)"
+    assert at.selectbox(key="g_notes_lang").value == "hi-Latn"
     assert "held_story" not in at.session_state          # held only until it is back in the box

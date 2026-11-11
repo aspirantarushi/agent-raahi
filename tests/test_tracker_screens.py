@@ -11,6 +11,7 @@ import store
 import tracker
 import ui
 from test_general import MODEL, answer, yn
+from volunteer import calculate, choose_language, language_of, make_drafts  # noqa: F401
 
 STORY_A = "Practice case. A worker from Bihar was not paid wages for three months."
 STORY_B = "Practice case. She now lives in Uttar Pradesh with her sister."
@@ -60,6 +61,7 @@ def as_volunteer(name):
 def volunteer_a_starts():
     at = as_volunteer("Volunteer A")
     at.text_area(key="g_notes").set_value(STORY_A)
+    choose_language(at, "g_notes", language_of(STORY_A))
     button(at, "Read the story").click().run()
     ok(at)
     case_id = at.session_state["case_id"]
@@ -108,8 +110,8 @@ def test_second_volunteer_continues_without_re_asking(pretend_ai):
     at.button(key="q-not-needed-go").click().run()  # legal aid decided: the app says so, the volunteer continues
     facts = tracker.load(case_id)["facts"]
     assert facts["woman"]["by"] == "Volunteer B" and facts["state"]["by"] == "Volunteer A"
-    assert at.session_state["shown_drafts"], "eligible as a woman: the summary is shown with no more questions"
-    assert "The worker was not paid wages for three months." in at.session_state["shown_drafts"][0]
+    assert make_drafts(at).session_state["shown_drafts"], "eligible as a woman: the summary is shown with no more questions"
+    assert "The worker was not paid wages for three months." in make_drafts(at).session_state["shown_drafts"][0]
 
 
 def test_a_contradiction_stops_the_summary_until_resolved(pretend_ai):
@@ -118,6 +120,7 @@ def test_a_contradiction_stops_the_summary_until_resolved(pretend_ai):
     at.text_input(key="cont-code-new").set_value(code)
     button(at, "Open the case").click().run()
     at.text_area(key="g_notes").set_value(STORY_B)
+    choose_language(at, "g_notes", language_of(STORY_B))
     button(at, "Read the story").click().run()
     ok(at)
     errors = " ".join(e.value for e in at.error)
@@ -140,7 +143,12 @@ def test_sending_uses_the_slip_case_number(pretend_ai, monkeypatch, tmp_path):
     button(at, "Open the case").click().run()
     at.radio(key="ge-woman").set_value("Yes")
     button(at, "Next").click().run()
-    at.button(key="q-not-needed-go").click().run()
+    if any(s.key == "ge-state" for s in at.selectbox):  # the story names no state: it is asked
+        at.selectbox(key="ge-state").set_value("Bihar")
+        button(at, "Next").click().run()
+    if any(b.key == "q-not-needed-go" for b in at.button):
+        at.button(key="q-not-needed-go").click().run()
+    make_drafts(at)  # "Make the drafts"
     if any(t.key == "g_send_reason" for t in at.text_input):  # unticked items: a short reason is needed
         at.text_input(key="g_send_reason").set_value("practice: the rest is collected at the next visit")
     at.checkbox(key="g_checked").check().run()
@@ -226,6 +234,7 @@ def test_todays_camp_button_chip_and_end(pretend_ai):
     assert "<b>Today&#x27;s camp:</b> Rampur, Patna · " in texts(at)  # shown beside the card
     assert at.button(key="camp-end").label == "End camp"            # in the card, where "Start today's camp" was
     at.text_area(key="g_notes").set_value(STORY_A)
+    choose_language(at, "g_notes", language_of(STORY_A))
     button(at, "Read the story").click().run()
     assert tracker.load(at.session_state["case_id"])["camp"]["village"] == "Rampur"  # the new case is tagged
     at.button(key="camp-end").click().run()

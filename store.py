@@ -239,6 +239,7 @@ def replace_letter(case_id: str, letter: str, base: Path = HERE) -> None:
              if not any(m in p for m in LETTER_MARKERS)]
     parts.insert(1 if parts else 0, letter.strip() + "\n")
     record["draft"] = casework.DOC_SEPARATOR.join(parts)
+    record["letter_rebuilt"] = True  # the supervisor rebuilt it from the approved points
     _save_pending(record, base)
     audit.add_event(case_id, "complaint letter added from approved research", audit.SUPERVISOR,
                     "built only from the facts of the case and the approved points", base=base)
@@ -251,6 +252,7 @@ def remove_letter(case_id: str, base: Path = HERE) -> None:
     if record["status"] != WAITING:
         return
     parts = [p.strip() + "\n" for p in casework.split_bundle(record["draft"]) if not any(m in p for m in LETTER_MARKERS)]
+    record["letter_rebuilt"] = True
     if len(parts) != len(casework.split_bundle(record["draft"])):
         record["draft"] = casework.DOC_SEPARATOR.join(parts)
         _save_pending(record, base)

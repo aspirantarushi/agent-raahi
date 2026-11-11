@@ -12,6 +12,7 @@ from streamlit.testing.v1 import AppTest
 
 import evaluation
 import privacy
+from volunteer import calculate, choose_language, language_of, make_drafts  # noqa: F401
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -135,6 +136,7 @@ def test_screen_with_agent_stops_when_sent(eval_folder, monkeypatch, tmp_path):
     at.date_input(key="f_offence_date").set_value(date(2025, 6, 1))
     at.date_input(key="f_custody").set_value(date(2025, 6, 3))
     at.checkbox(key="f_never").check().run()
+    calculate(at.run())  # "Calculate the dates"
     at.radio(key="f_lawyer").set_value("Legal aid lawyer").run()
     next(b for b in at.button if b.label == "Make draft").click().run()
     at.button(key="send-f").click().run()

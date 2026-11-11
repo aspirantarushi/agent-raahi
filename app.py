@@ -7,6 +7,7 @@ the code checks (for example "Yes", "Undertrial", "None") stay in English; only 
 is translated.
 """
 
+import hashlib
 import hmac
 import html
 import json
@@ -110,6 +111,7 @@ FORM_DEFAULTS = {
     "f_law": "IPC", "f_section": "", "f_offence_date": None, "f_custody": None,
     "f_today": None, "f_never": False, "f_other": False, "f_many": False, "f_delay": 0,
     "f_answer": "", "f_confirm": False, "f_lawyer": None, "f_checked": False, "f_offence_month": None,
+    "f_calc_sig": None, "f_confirmed": set(),
 }
 FACT_TO_KEY = {
     "law": "f_law", "section": "f_section", "offence_date": "f_offence_date",
@@ -220,11 +222,20 @@ def finish_intake_box(case_id: str):
 
 # ----- voice: "Speak the story" -----
 
+def recording_digest(audio_key: str) -> str:
+    recording = st.session_state.get(audio_key)
+    return hashlib.sha256(recording.getvalue()).hexdigest()[:16] if recording is not None else ""
+
+
 def recording_stopped(audio_key: str):
-    """Runs by itself when a recording stops: the speech is turned into text on this run, just before
-    the story box is drawn (so the progress can be shown: "part 2 of 4")."""
+    """Runs when a recording stops: nothing is sent yet; "Turn speech into text" does that."""
     st.session_state.pop(f"{audio_key}-msg", None)
-    if st.session_state.get(audio_key) is not None:  # cleared: nothing to do
+
+
+def convert_recording(audio_key: str):
+    """"Turn speech into text": the work runs on this run, just before the story box is drawn (so the
+    progress can be shown: "part 2 of 4")."""
+    if st.session_state.get(audio_key) is not None:
         st.session_state[f"{audio_key}-pending"] = True
 
 
@@ -244,7 +255,7 @@ def run_pending_voice(audio_key: str, target_key: str):
                    icon=":material/graphic_eq:")
     progress(1, 1)
     try:
-        language = st.session_state.get(NOTES_LANGUAGE_KEYS.get(target_key, ""), code())
+        language = st.session_state.get(NOTES_LANGUAGE_KEYS.get(target_key, "")) or code()
         transcript = multilingual.speech_to_text(recording.getvalue(),
                                                  getattr(recording, "type", None) or "audio/wav", language, progress)
     except (llm.AIUnavailable, bhashini.BhashiniUnavailable):
@@ -252,6 +263,7 @@ def run_pending_voice(audio_key: str, target_key: str):
         st.session_state[f"{audio_key}-msg"] = ("error", f"{t('ui.voice.failed')} {t('ui.voice.type_instead')}")
         return
     shown.empty()
+    st.session_state[f"{audio_key}-converted"] = recording_digest(audio_key)  # this recording is done
     if not transcript.text:
         st.session_state[f"{audio_key}-msg"] = ("error", t("ui.voice.nothing_heard"))
         return
@@ -268,8 +280,8 @@ def run_pending_voice(audio_key: str, target_key: str):
 
 
 def voice_box(audio_key: str, target_key: str):
-    """"Speak the story": one tap on the mic starts recording (with a timer), one tap stops it; the
-    speech then becomes text in the story box by itself. No dropdown to open first."""
+    """"Speak the story": one tap on the mic starts recording (with a timer), one tap stops it; then
+    "Turn speech into text" puts the text in the story box. No dropdown to open first."""
     st.session_state.pop(f"{audio_key}-open", None)
     with st.container(key=f"{audio_key}-box"):
         if not (sarvam.configured() or llm.gemini_available()):  # Sarvam, or Gemini as the backup (never Groq)
@@ -280,6 +292,10 @@ def voice_box(audio_key: str, target_key: str):
         st.markdown(f"<style>.st-key-{audio_key}-box [data-testid=\"stAudioInput\"]:has(button[aria-label=\"Stop recording\"])"
                     f" [data-testid=\"stWidgetLabel\"] p::after {{ content: \" \\2014  {css_text(t('ui.voice.recording'))}\"; "
                     f"color: var(--red); font-weight: 700; }}</style>", unsafe_allow_html=True)
+        if st.session_state.get(audio_key) is not None and \
+                st.session_state.get(f"{audio_key}-converted") != recording_digest(audio_key):
+            st.button(t("ui.voice.convert"), key=f"{audio_key}-convert", type="primary", icon=":material/text_fields:",
+                      on_click=convert_recording, args=(audio_key,))
         st.caption(t("ui.voice.warning") + " " + t("ui.voice.caption"))
         msg = st.session_state.pop(f"{audio_key}-msg", None)
         if msg:
@@ -313,23 +329,28 @@ NOTES_LANGUAGE_KEYS = {"g_notes": "g_notes_lang", "f_notes": "f_notes_lang"}
 
 
 def notes_language_choice(key: str):
+    """The language of the notes: the volunteer chooses it. The app may suggest one from the text
+    ("Use हिंदी"), but never sets it by itself; the notes are read only once a language is chosen."""
     options = multilingual.note_languages()
-    st.session_state.setdefault(key, code() if code() in options else "en")
-    st.selectbox(t("ui.lang.notes_language"), list(options), format_func=options.get, key=key,
-                 on_change=lambda: st.session_state.update({f"{key}-chosen": True}))
-    if st.session_state.get(f"{key}-detected") and not st.session_state.get(f"{key}-chosen"):
-        st.caption(t("ui.lang.detected", language=options.get(st.session_state[key], st.session_state[key])))
+    st.selectbox(t("ui.lang.notes_language"), list(options), format_func=options.get, key=key, index=None,
+                 placeholder=t("ui.lang.choose"), on_change=lambda: st.session_state.update({f"{key}-chosen": True}))
+    suggested = st.session_state.get(f"{key}-suggested")
+    if suggested in options and suggested != st.session_state.get(key):
+        with st.container(horizontal=True, gap="small", vertical_alignment="center", key=f"{key}-suggest"):
+            st.caption(t("ui.lang.suggested", language=options[suggested]))
+            st.button(t("ui.lang.use", language=options[suggested]), key=f"{key}-use", type="tertiary",
+                      on_click=lambda: st.session_state.update({key: suggested, f"{key}-chosen": True}))
+    elif not st.session_state.get(key):
+        st.caption(t("ui.lang.choose_first"))
 
 
 def detect_notes_language(text_key: str = "g_notes"):
-    """Pre-select the story's language (English, Hindi or Hinglish), unless the volunteer chose one."""
+    """Suggest the story's language (English, Hindi or Hinglish) from its text. Only a suggestion: the
+    volunteer confirms it ("Use ...") or chooses another."""
     key = NOTES_LANGUAGE_KEYS[text_key]
-    if st.session_state.get(f"{key}-chosen"):
-        return
     found = multilingual.detect_language(st.session_state.get(text_key) or "")
     if found and found in multilingual.note_languages():
-        st.session_state[key] = found
-        st.session_state[f"{key}-detected"] = True
+        st.session_state[f"{key}-suggested"] = found
 
 
 def language_name(language: str) -> str:
@@ -338,7 +359,7 @@ def language_name(language: str) -> str:
 
 def prepare_notes(text_key: str, error_key: str):
     """Filter, and translate to English with Bhashini if needed. None (with an error shown) if it can't."""
-    language = st.session_state.get(NOTES_LANGUAGE_KEYS[text_key], "en")
+    language = st.session_state.get(NOTES_LANGUAGE_KEYS[text_key]) or "en"
     try:
         return multilingual.prepare(st.session_state.get(text_key, ""), language)
     except bhashini.BhashiniUnavailable as err:
@@ -430,6 +451,7 @@ def open_section479():
     """Hand the same story to the undertrial reader, so the Section 479 form is filled in."""
     st.session_state["case_type"] = "Undertrial"
     st.session_state["f_notes"] = st.session_state.get("g_notes", "")
+    st.session_state["f_notes_lang"] = st.session_state.get("g_notes_lang")  # the language already confirmed
     read_notes()
 
 
@@ -594,7 +616,7 @@ def restore_held_story():
     if not current or current == held["text"].strip():
         st.session_state["g_notes"] = held["text"]
     if held.get("lang"):
-        st.session_state["g_notes_lang"] = held["lang"]
+        st.session_state["g_notes_lang-suggested"] = held["lang"]  # a suggestion: the volunteer confirms it
 
 
 def general_screen():
@@ -625,8 +647,9 @@ def general_screen():
             voice_box("g_audio", "g_notes")
             col1, col2 = st.columns(2)
             busy = bool(st.session_state.get("g_reading"))
-            col1.button(t("ui.general.read"), type="primary", key="g-read", disabled=busy,
-                        on_click=lambda: (detect_notes_language(), st.session_state.update(g_reading=True)))
+            col1.button(t("ui.general.read"), type="primary", key="g-read",
+                        disabled=busy or not st.session_state.get("g_notes_lang"),  # the language comes first
+                        on_click=lambda: st.session_state.update(g_reading=True))
             if gen:
                 col2.button(t("ui.general.clear"), on_click=clear_general)
                 if st.session_state.get("g_story_open"):
@@ -806,7 +829,7 @@ def general_summary(gen):
         st.button(t("ui.back_questions"), key="g-back-questions", type="tertiary", icon=":material/arrow_back:",
                   on_click=back_to_questions)
 
-    # Research: once per case, by itself, when our files don't cover a problem (and again only on request)
+    # Research: when our files don't cover a problem, only when the volunteer presses "Run research"
     case_id = st.session_state.get("case_id")
     state = gen["facts"].get("state")
     try:
@@ -816,14 +839,14 @@ def general_summary(gen):
         facts.research = []
     uncovered = general.uncovered_issues(facts)
     record = tracker.load(case_id) if case_id else None
-    again = st.session_state.pop("rs-again", None)
+    again = st.session_state.pop("rs-again", None) or st.session_state.pop("rs-run", None)
     research_now = None  # research runs last, in its own box, after the cards and drafts are on screen
-    if uncovered and state and (llm.gemini_available() or llm.tavily_key()) \
-            and (again or (not (record or {}).get("research_runs") and not research.for_case(case_id))):
+    if again and uncovered and state and (llm.gemini_available() or llm.tavily_key()):
         case_id = case_id or ensure_case(general.CASE_TYPE)
-        research_now = (case_id, again[1] if again else uncovered[0], state)
+        research_now = (case_id, again[1] if again[1] else uncovered[0], state)
     status = research_status(case_id, record) if (uncovered or facts.research) else "none"
-    facts.research_state = {"not started": "none" if not uncovered else "failed"}.get(status, status)
+    # research not run yet is not a failure: the next steps then say the problem is not in our files yet
+    facts.research_state = {"not started": "none" if not uncovered else "not started"}.get(status, status)
 
     draft_lang = draft_language_choice("g_draft_lang")
     if draft_lang == "hi":
@@ -836,20 +859,35 @@ def general_summary(gen):
     approved = research.approved_points(case_id) if case_id else []
     issue = (uncovered[0] if uncovered else "; ".join(n for _, n in facts.issues)) or t("ui.general.problem_described")
 
-    documents = [(t("cw.doc_summary"), readiness.add_gaps_to_draft(
-        general.make_summary_draft(facts, gen["model"], draft_lang), items, draft_lang, send_reason))]
     waiting_rs = research.waiting_for_case(case_id) if not approved else None
     rs_ticks, rs_reasons = research_ticks(waiting_rs)
     letter_points = approved or research.points_for_letter(waiting_rs, rs_ticks)
-    if letter_points:  # drafted straight away from the volunteer's ticked points (or the approved ones)
+    # Nothing is drafted by itself: "Make the drafts" (summary and DLSA application) and "Draft the letter"
+    # (from the ticked points, or facts only). A change to what a draft is made from clears it until the
+    # button is pressed again.
+    facts_sig = json.dumps([facts.to_dict(), [(i.key, i.status, i.note) for i in items], draft_lang,
+                            eligibility.status], default=str, sort_keys=True)
+    letter_wanted = bool(uncovered or letter_points)
+    research_done = status in ("waiting", "approved", "failed") or bool(approved)
+    letter_sig = json.dumps([facts_sig, sorted(rs_ticks.items()), [p.get("id") or p.get("text") for p in approved]],
+                            default=str, sort_keys=True)
+    drafts_made = st.session_state.get("g_drafts_sig") == facts_sig
+    letter_made = letter_wanted and st.session_state.get("g_letter_sig") == letter_sig
+    documents = []
+    if drafts_made:
+        documents.append((t("cw.doc_summary"), readiness.add_gaps_to_draft(
+            general.make_summary_draft(facts, gen["model"], draft_lang), items, draft_lang, send_reason)))
+    if letter_made and letter_points:  # from the volunteer's ticked points (or the approved ones)
         documents.append((t("cw.doc_letter") if approved else t("cw.doc_letter_draft"),
                           casework.complaint_letter(facts, letter_points, issue, gen["model"], draft_lang)))
-    elif uncovered and not research_now:  # no point ticked (or research failed): a facts-only request letter
+    elif letter_made:  # no point ticked (or research failed): a facts-only request letter
         documents.append((t("cw.doc_letter_facts"), casework.facts_only_letter(facts, issue, gen["model"], draft_lang)))
-    if eligibility.status == "eligible":
+    if drafts_made and eligibility.status == "eligible":
         documents.append((t("cw.doc_dlsa"), casework.dlsa_application(facts, eligibility, issue, gen["model"],
                                                                        draft_lang)))
     documents = [(title, st.session_state.get(f"doc-edit-{i}", text)) for i, (title, text) in enumerate(documents)]
+    letter_state = {"wanted": letter_wanted, "made": letter_made, "research_done": research_done,
+                    "sig": letter_sig, "changed": bool(st.session_state.get("g_letter_sig")) and not letter_made}
 
     col_cards, col_check = st.columns([3, 2], gap="medium")
     with col_cards:
@@ -858,12 +896,14 @@ def general_summary(gen):
         fix_checklist(app_items, facts, eligibility, kind, missing_years, approved, gen)
     research_slot = st.container(key="research-slot")
     with research_slot:
-        research_panel(facts, uncovered, "loading" if research_now else status, case_id, state, waiting_rs)
-    drafts_panel(documents, "loading" if research_now else status, uncovered)
+        research_panel(facts, uncovered, "loading" if research_now else status, case_id, state, waiting_rs,
+                       letter_state)
+    drafts_panel(documents, "loading" if research_now else status, uncovered, facts_sig, drafts_made)
     entries = ledger.general(facts, reading.facts, eligibility, ai_checked=bool(gen["model"]))
     ledger_box(entries)
-    packet = casework.bundle(documents)
-    reading_copy_box("summary", documents[0][1])
+    packet = casework.bundle(documents) if documents else ""
+    if documents:
+        reading_copy_box("summary", documents[0][1])
     names = general.possible_names(packet, st.session_state.get("g_notes", ""))
     if names:
         st.warning(t("ui.general.possible_names", names=", ".join(names)))
@@ -890,8 +930,11 @@ def general_summary(gen):
                                                           else t("ready.button_ready"))
         if unticked and checked and not send_reason:
             st.caption(t("ready.send_reason_needed"))
+        not_made = not drafts_made or (letter_wanted and research_done and not letter_made)
+        if not_made:
+            st.caption(t("cw.make_first"))
         if st.button(label, disabled=not checked or bool(research_now) or (bool(unticked) and not send_reason)
-                     or bool(no_reason), key="send-g", type="primary", icon=":material/send:"):
+                     or bool(no_reason) or not_made, key="send-g", type="primary", icon=":material/send:"):
             ai = None
             if gen["model"]:
                 ai = {"model": gen["model"], "read_at": gen["read_at"], "extracted": dict(reading.facts),
@@ -983,8 +1026,8 @@ def eligibility_text(eligibility) -> str:
 
 
 def choose_research_state():
-    """The state chosen in the research box: saved like the checklist's State (the same saved value), so
-    research runs by itself on this run (only once, as always)."""
+    """The state chosen in the research box: saved like the checklist's State (the same saved value).
+    Research then runs when the volunteer presses "Run research"."""
     state = st.session_state.get("rs-state")
     if state:
         save_fix("g", "state", state)
@@ -1128,13 +1171,16 @@ def research_points_for_volunteer(record: dict):
                 st.text_input(t("rs.left_out_reason"), key=f"rsvr-{record['id']}-{p['id']}", max_chars=200)
 
 
-def research_panel(g, uncovered, status, case_id, state, waiting_rs=None):
-    if not uncovered and status in ("none", "not started"):
+def research_panel(g, uncovered, status, case_id, state, waiting_rs=None, letter=None):
+    letter = letter or {}
+    if not uncovered and status in ("none", "not started") and not letter.get("wanted"):
         return
     with st.container(border=True, key="research-panel"):
         st.markdown(ui.step_heading("travel_explore", t("rs.title")), unsafe_allow_html=True)
+        can_search = llm.gemini_available() or llm.tavily_key()
         msg = {"approved": "rs.status_approved", "failed": "rs.failed",
-               "not started": "rs.need_state" if not state else "rs.status_not_started"}.get(status)
+               "not started": "rs.need_state" if not state else ("rs.ready_to_run" if can_search
+                                                                 else "rs.status_not_started")}.get(status)
         if status == "loading":
             st.caption(t("rs.loading_caption"))
             return
@@ -1142,19 +1188,33 @@ def research_panel(g, uncovered, status, case_id, state, waiting_rs=None):
             research_points_for_volunteer(waiting_rs)
             ticked = any(st.session_state.get(f"rsv-{waiting_rs['id']}-{p['id']}") for p in waiting_rs["points"]
                          if p.get("kind") != "letter")
-            st.success(t("rs.letter_drafted" if ticked else "rs.letter_facts_only"), icon=":material/task_alt:")
+            if letter.get("made"):
+                st.success(t("rs.letter_drafted" if ticked else "rs.letter_facts_only"), icon=":material/task_alt:")
+            else:
+                st.caption(t("rs.tick_then_draft"))
         elif msg:
             (st.error if status == "failed" else st.info)(t(msg), icon=":material/travel_explore:")
-        if not state and status == "not started":  # choose it here: saved to the case, research starts at once
+        if not state and status == "not started":  # choose it here: saved to the case (the same value as the checklist)
             st.selectbox(t("rs.choose_state"), general.state_names(), index=None, key="rs-state",
                          placeholder=t("rs.choose_state_placeholder"), on_change=choose_research_state)
         with st.container(horizontal=True, gap="small", key="research-actions"):
-            if uncovered and state and case_id:
-                st.button(t("rs.again"), key="rs-again-go", icon=":material/refresh:",
-                          disabled=not (llm.gemini_available() or llm.tavily_key()),
+            if uncovered and status == "not started":
+                st.button(t("rs.run"), key="rs-run-go", type="primary", icon=":material/travel_explore:",
+                          disabled=not (state and can_search),
+                          on_click=lambda: st.session_state.update({"rs-run": (case_id, uncovered[0], state)}))
+            elif uncovered and state and case_id:
+                st.button(t("rs.again"), key="rs-again-go", icon=":material/refresh:", disabled=not can_search,
                           on_click=research_again, args=(case_id, uncovered[0], state))
+            if letter.get("wanted"):  # the letter, from the ticked points (or facts only), when asked for
+                st.button(t("cw.letter_go"), key="letter-go", type="primary" if not letter.get("made") else "secondary",
+                          icon=":material/edit_document:", disabled=not letter.get("research_done"),
+                          on_click=lambda s=letter.get("sig"): st.session_state.update(g_letter_sig=s))
             if status != "approved":  # research failed or the problem isn't covered: two free helplines
                 nyaya_setu_button()
+        if letter.get("wanted") and not letter.get("research_done"):
+            st.caption(t("cw.letter_after_research"))
+        elif letter.get("changed"):
+            st.info(t("cw.letter_changed"), icon=":material/edit_note:")
 
 
 NYAYA_SETU_URL = "https://wa.me/917217711814"  # opens WhatsApp only; the story is never pre-filled
@@ -1164,11 +1224,17 @@ def nyaya_setu_button():
     st.link_button(t("rs.nyaya_setu"), NYAYA_SETU_URL, icon=":material/chat:")
 
 
-def drafts_panel(documents, status, uncovered):
-    """Each draft as a readable letter, with Edit and Download; the plain text to copy below it."""
+def drafts_panel(documents, status, uncovered, facts_sig="", drafts_made=True):
+    """Each draft as a readable letter, with Edit and Download; the plain text to copy below it. The
+    summary and the DLSA application are made only when "Make the drafts" is pressed."""
     st.markdown(f'<div class="step-title" style="text-align:left;font-size:1.3rem">{html.escape(t("cw.drafts"))}</div>',
                 unsafe_allow_html=True)
     st.caption(t("cw.drafts_caption"))
+    if not drafts_made:
+        if st.session_state.get("g_drafts_sig"):
+            st.info(t("cw.drafts_changed"), icon=":material/edit_note:")
+        st.button(t("cw.make_drafts"), key="drafts-go", type="primary", icon=":material/description:",
+                  on_click=lambda: st.session_state.update(g_drafts_sig=facts_sig))
     if uncovered and status == "loading":  # only while research is still running
         st.info(t("cw.letter_waiting"), icon=":material/hourglass_top:")
     for i, (title, text) in enumerate(documents):
@@ -1362,7 +1428,8 @@ def notes_box():
         st.text_area(t("ui.notes.label"), key="f_notes", height=220, placeholder=t("ui.notes.placeholder"))
         col1, col2 = st.columns(2)
         busy = bool(st.session_state.get("f_reading"))
-        col1.button(t("ui.notes.read"), type="primary", key="f-read", disabled=busy,
+        col1.button(t("ui.notes.read"), type="primary", key="f-read",
+                    disabled=busy or not st.session_state.get("f_notes_lang"),  # the language comes first
                     on_click=lambda: st.session_state.update(f_reading=True))
         if ai:
             col2.button(t("ui.notes.clear"), on_click=clear_notes)
@@ -1500,6 +1567,38 @@ def read_answer(fact: str):
 
 # ----- the undertrial form -----
 
+def remember_confirmation(fact: str):
+    confirmed = set(st.session_state.get("f_confirmed") or set())
+    (confirmed.add if st.session_state.get(f"confirm-{fact}") else confirmed.discard)(fact)
+    st.session_state["f_confirmed"] = confirmed
+
+
+def calculate_card(used: dict, offence, signature: str):
+    """The fields the dates will be worked out from, an Edit button and "Calculate the dates"."""
+    def yes_no(v):
+        return t("yes") if v else t("no")
+    when = show_value(used["offence_date"]) if used["offence_date"] else (
+        show_value(used["offence_month"]) if used["offence_month"] else t("calc.not_given"))
+    rows = [(t("fact.section"), f"{used['law']} {used['section']} ({offence.offence})"),
+            (t("fact.offence_date"), when),
+            (t("fact.custody_began"), show_value(used["custody_began"]) if used["custody_began"] else t("calc.not_given")),
+            (t("fact.today"), show_value(used["today"]) if used["today"] else t("calc.not_given")),
+            (t("fact.never_convicted"), yes_no(used["never_convicted"])),
+            (t("fact.other_cases_pending"), yes_no(used["other_cases_pending"])),
+            (t("fact.more_than_one_section"), yes_no(used["more_than_one_section"])),
+            (t("fact.delay_days_by_accused"), str(used["delay_days_by_accused"]))]
+    if offence.ask_to_decide:
+        rows.append((t("fact.answer"), used["answer"] or t("calc.not_given")))
+    with st.container(border=True, key="f-calc-card"):
+        st.markdown(f"**{t('calc.title')}**")
+        st.markdown("\n".join(f"- {html.escape(k)}: **{html.escape(str(v))}**" for k, v in rows))
+        with st.container(horizontal=True, gap="small", key="f-calc-actions"):
+            st.button(t("calc.go"), key="f-calc", type="primary", icon=":material/calculate:",
+                      on_click=lambda: st.session_state.update(f_calc_sig=signature))
+            st.button(t("calc.edit"), key="f-edit", icon=":material/edit:",
+                      on_click=lambda: st.session_state.update(f_checked=False, f_calc_sig=None))
+
+
 def checked_by_volunteer() -> bool:
     """After an AI reading, the volunteer must check every field before the calculator runs."""
     ai = st.session_state.get("ai")
@@ -1537,9 +1636,9 @@ def cannot_conclude(problems) -> None:
             params["fact"] = fact_label(params["fact"])
         st.error(t("abstain.title", reason=t("abstain." + p.reason, **params)))
         st.caption(t("abstain.needed." + p.needed))
-        if p.confirm_fact:
+        if p.confirm_fact:  # kept in "f_confirmed": the box itself is not drawn once the problem is settled
             st.checkbox(t("abstain.confirm_box", fact=fact_label(p.confirm_fact), form=p.params["form"]),
-                        key=f"confirm-{p.confirm_fact}")
+                        key=f"confirm-{p.confirm_fact}", on_change=remember_confirmation, args=(p.confirm_fact,))
 
 
 def undertrial_form():
@@ -1606,13 +1705,24 @@ def undertrial_form():
             "section": section.strip(), "never_convicted": never_convicted, "other_cases_pending": other_cases,
             "delay_days_by_accused": int(delay_days), "answer": answer.strip(),
             "lawyer": st.session_state.get("f_lawyer")}
-    confirmed = {k[len("confirm-"):] for k, v in st.session_state.items()
-                 if isinstance(k, str) and k.startswith("confirm-") and v}
+    confirmed = set(st.session_state.get("f_confirmed") or set())  # the volunteer's "the form is right"
     problems = consistency.undertrial_problems(
         form, dict(ai_state["reading"].values) if ai_state else {},
         ai_state.get("translation", "") if ai_state else "", confirmed)
     if problems:
         cannot_conclude(problems)
+        return
+
+    # The facts that will be used, with Edit; the dates appear only after "Calculate the dates", and any
+    # change to a field clears them until it is pressed again.
+    used = {**{k: v for k, v in form.items() if k != "lawyer"},  # the lawyer is asked later, for the draft
+            "offence": offence.offence, "offence_month": month, "more_than_one_section": many_sections,
+            "question_answered": question_answered}
+    signature = json.dumps(used, default=str, sort_keys=True)
+    calculate_card(used, offence, signature)
+    if st.session_state.get("f_calc_sig") != signature:
+        if st.session_state.get("f_calc_sig"):
+            st.info(t("calc.changed"), icon=":material/edit_note:")
         return
 
     try:
@@ -2706,13 +2816,22 @@ def decide_research_point(research_id: str, point_id: str):
     decision = {"Approve": research.APPROVE, "Edit then approve": research.EDIT, "Reject": research.REJECT}.get(choice)
     try:
         point = research.decide(research_id, point_id, decision, st.session_state.get(f"rse-{research_id}-{point_id}"))
-        record = research.load(research_id)
-        if record["status"] == research.REVIEWED:
-            add_letter_to_pending(record["case_id"], record["issue"])
     except (research.ResearchFailed, storage.StorageError, ValueError) as err:
         st.session_state["supervisor_flash"] = str(err)
         return
     st.session_state["supervisor_flash"] = t("rs.decided", point=point_id, status=point["status"])
+
+
+def letter_rebuild_needed(record: dict) -> bool:
+    """Every research point is decided: the supervisor rebuilds the letter from the approved points (a
+    button, not by itself) before the draft can be approved. True while that is still to do."""
+    reviewed = [r for r in research.for_case(record["id"]) if r["status"] == research.REVIEWED]
+    if not reviewed or record.get("letter_rebuilt") or record.get("case_type") != general.CASE_TYPE:
+        return False
+    st.info(t("rs.rebuild_first"), icon=":material/edit_document:")
+    st.button(t("rs.rebuild"), key=f"rebuild-{record['id']}", type="primary", icon=":material/edit_document:",
+              on_click=add_letter_to_pending, args=(record["id"], reviewed[-1]["issue"]))
+    return True
 
 
 def add_letter_to_pending(case_id: str, issue: str):
@@ -2951,7 +3070,7 @@ def review_case(record: dict):
         for n, part in enumerate(casework.split_bundle(record["draft"])):  # the same page previews as the volunteer's
             with st.container(border=True, key=f"sup-draft-{case_id}-{n}"):
                 document_view(part.strip(), f"sup-{case_id}-{n}", f"{case_id} draft {n + 1}")
-        blocked = review_research_inside(case_id)
+        blocked = review_research_inside(case_id) or letter_rebuild_needed(record)
         if record.get("readiness"):
             rows = [r for r in record["readiness"] if r["key"] != "send_reason"]
             unticked = [r for r in rows if r.get("note") == readiness.NOT_TICKED]
@@ -3732,11 +3851,7 @@ def home_to_case(speak: bool):
         st.session_state["g_notes"] = story
         # Also held apart (in this browser session only, never saved), because the clinic sign-in may
         # come in between and the story box is not drawn while it shows.
-        found = multilingual.detect_language(story)
-        st.session_state["held_story"] = {"text": story, "lang": found or st.session_state.get("g_notes_lang")
-                                          or (code() if code() in multilingual.note_languages() else "en")}
-        if found:
-            st.session_state["g_notes_lang-detected"] = True
+        st.session_state["held_story"] = {"text": story, "lang": multilingual.detect_language(story)}
     if speak:
         st.session_state["g_audio-open"] = True
 

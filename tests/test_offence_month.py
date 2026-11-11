@@ -14,6 +14,7 @@ import intake
 import llm
 import section479
 from test_intake import field, practice_answer
+from volunteer import calculate, choose_language, language_of, make_drafts  # noqa: F401
 
 CASE2 = (Path(__file__).resolve().parent.parent / "practice_stories" / "test_set" / "case02_old_ipc_maximum.txt"
          ).read_text(encoding="utf-8")
@@ -87,12 +88,14 @@ def test_case2_on_screen_no_day_asked_ipc_dates(monkeypatch):
     at.run()
     at.radio(key="case_type").set_value("Undertrial").run()
     at.text_area(key="f_notes").set_value(CASE2)
+    choose_language(at, "f_notes", language_of(CASE2))
     next(b for b in at.button if b.label == "Read notes").click().run()
     assert not any(b.key == "skip-offence_date" for b in at.button)  # the day is never asked: the month decides
     if any(b.key == "skip-all" for b in at.button):  # other facts this fake reading left out: skip them
         at.button(key="skip-all").click().run()
     at.session_state["f_today"] = date(2026, 11, 4)
     at.checkbox(key="f_checked").check().run()
+    calculate(at)
     assert not at.exception, at.exception[0].stack_trace
     md = " ".join(m.value for m in at.markdown)
     assert "36 months, as per IPC 384" in md and "5 February 2026" in md  # the IPC maximum: one-half reached

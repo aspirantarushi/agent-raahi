@@ -13,6 +13,7 @@ import store
 from test_drafts import practice_facts
 from test_general import UPI, UPI_ANSWER, WAGES, WAGES_ANSWER, summarise, yn
 from test_intake import NOTES, field, practice_answer
+from volunteer import calculate, choose_language, language_of, make_drafts  # noqa: F401
 
 AI_READ = {"custody_began": date(2024, 3, 15), "law": "IPC", "section": "380", "never_convicted": True,
            "other_cases_pending": False, "delay_days_by_accused": 0, "lawyer": "Legal aid lawyer"}
@@ -89,10 +90,12 @@ def test_ledger_saved_with_case_and_shown(monkeypatch, tmp_path):
     at = AppTest.from_file("../app.py", default_timeout=20).run()
     at.radio(key="case_type").set_value("Undertrial").run()
     at.text_area(key="f_notes").set_value(NOTES)
+    choose_language(at, "f_notes", language_of(NOTES))
     next(b for b in at.button if b.label == "Read notes").click().run()
     at.date_input(key="q-offence_date").set_value(date(2024, 2, 15))
     next(b for b in at.button if b.label == "Next").click().run()
     at.checkbox(key="f_checked").check().run()
+    calculate(at)
     next(b for b in at.button if b.label == "Make draft").click().run()
     shown = " ".join(m.value for m in at.markdown)
     assert "read from notes by AI, checked by volunteer" in shown and "calculated by rule-based code" in shown

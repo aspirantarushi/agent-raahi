@@ -17,6 +17,7 @@ import store
 import tracker
 import casework
 import storage
+from volunteer import calculate, choose_language, language_of, make_drafts  # noqa: F401
 
 R = "https://vertexaisearch.cloud.google.com/grounding-api-redirect/"
 REAL_RESEARCH = llm.research_issue  # tests/conftest.py replaces it in every test; this test file needs it once
@@ -224,13 +225,17 @@ def test_research_on_screen(monkeypatch, fake_ai):
     at = AppTest.from_file("../app.py", default_timeout=30).run()
     at.text_input(key="volunteer").set_value("Volunteer A").run()
     at.text_area(key="g_notes").set_value(STORY)
+    choose_language(at, "g_notes", language_of(STORY))
     next(b for b in at.button if b.label == "Read the story").click().run()
     assert not at.exception, at.exception[0].stack_trace
-    # Research started by itself, once, with only the state and the issue in plain words
+    # Nothing by itself: research runs when the volunteer presses "Run research", with only the state
+    # and the issue in plain words
+    assert fake_ai == [] and not at.session_state["shown_drafts"]
+    at.button(key="rs-run-go").click().run()
     assert fake_ai == [("Bihar", "electricity connection cut")]
     at.run()
     assert len(fake_ai) == 1                                       # not again on a page reload
-    shown = at.session_state["shown_drafts"]
+    shown = make_drafts(at).session_state["shown_drafts"]          # "Make the drafts", "Draft the letter"
     assert "Not covered by our verified files yet" in shown[0]
     # New order: the research is shown to the volunteer and the letter is drafted straight away from it
     assert len(shown) == 3                                         # summary + draft letter + free legal aid application
@@ -246,7 +251,8 @@ def test_research_on_screen(monkeypatch, fake_ai):
     at.run()
     rid = research.for_case(case_id)[0]["id"]
     at.checkbox(key=f"rsv-{rid}-p2").uncheck().run()               # the volunteer thinks p2 is wrong
-    letter = at.session_state["shown_drafts"][1]
+    assert len(at.session_state["shown_drafts"]) == 2              # the letter is cleared until drafted again
+    letter = make_drafts(at).session_state["shown_drafts"][1]      # "Draft the letter" again
     assert "Consumer Grievance Redressal Forum" not in letter       # unticked: out of the letter
     at.checkbox(key="g_checked").check().run()
     assert next(b for b in at.button if b.key == "send-g").disabled  # a reason is needed for the left-out point
@@ -271,6 +277,9 @@ def test_research_on_screen(monkeypatch, fake_ai):
         at.radio(key=f"rsd-{rid}-{point}").set_value(choice).run()
         at.button(key=f"rss-{rid}-{point}").click().run()
     assert not at.exception, at.exception[0].stack_trace
+    # not by itself: the supervisor rebuilds the letter from the approved points before approving
+    assert not any(r.key == f"action-{case_id}" for r in at.radio)
+    at.button(key=f"rebuild-{case_id}").click().run()
     packet = store.get_pending(case_id)["draft"]
     assert packet.count("DRAFT — to be checked by a lawyer") == 3   # the letter, rebuilt from the approved points
     letter = next(p for p in casework.split_bundle(packet) if "Complaint about" in p)

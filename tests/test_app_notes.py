@@ -7,6 +7,7 @@ from streamlit.testing.v1 import AppTest
 
 import llm
 from test_intake import NOTES, field, practice_answer
+from volunteer import calculate, choose_language, language_of, make_drafts  # noqa: F401
 
 APP = "../app.py"
 
@@ -45,6 +46,7 @@ def test_notes_fill_the_practice_case(pretend_ai):
     at = open_app()
     ok(at)
     at.text_area(key="f_notes").set_value(NOTES)
+    choose_language(at, "f_notes", language_of(NOTES))
     button(at, "Read notes").click().run()
     ok(at)
 
@@ -63,6 +65,7 @@ def test_notes_fill_the_practice_case(pretend_ai):
     # No dates until the volunteer has checked every field.
     assert not any("One-third" in m.value for m in at.markdown)
     at.checkbox(key="f_checked").check().run()
+    calculate(at)
     ok(at)
     results = " ".join(m.value for m in at.markdown)
     assert "15 July 2026" in results and "reached" in results
@@ -76,6 +79,7 @@ def test_dont_know_skips_a_question(pretend_ai, monkeypatch):
         practice_answer(offence_date=field(None, None)), notes, {}, "pretend-model"))
     at = open_app()
     at.text_area(key="f_notes").set_value(NOTES)
+    choose_language(at, "f_notes", language_of(NOTES))
     button(at, "Read notes").click().run()
     button(at, "Don't know").click().run()
     ok(at)
@@ -92,6 +96,7 @@ def test_no_key_the_form_still_works(monkeypatch):
     at.date_input(key="f_custody").set_value(date(2024, 3, 15))
     at.date_input(key="f_today").set_value(date(2026, 11, 2))
     at.checkbox(key="f_never").check().run()
+    calculate(at)  # "Calculate the dates"
     ok(at)
     assert "15 July 2026" in " ".join(m.value for m in at.markdown)
 
@@ -105,6 +110,7 @@ def test_ai_failure_shows_message_and_form_works(monkeypatch):
     monkeypatch.setattr(llm, "read_undertrial_notes", fail)
     at = open_app()
     at.text_area(key="f_notes").set_value(NOTES)
+    choose_language(at, "f_notes", language_of(NOTES))
     button(at, "Read notes").click().run()
     ok(at)
     assert any("free-tier limit" in e.value and "by hand" in e.value for e in at.error)
@@ -112,6 +118,7 @@ def test_ai_failure_shows_message_and_form_works(monkeypatch):
     at.date_input(key="f_custody").set_value(date(2024, 3, 15))
     at.date_input(key="f_today").set_value(date(2026, 11, 2))
     at.run()
+    calculate(at)  # "Calculate the dates"
     ok(at)
     assert "15 September 2027" in " ".join(m.value for m in at.markdown)
 
@@ -122,6 +129,7 @@ def test_empty_reading_asks_every_fact_in_intake_order(monkeypatch):
     monkeypatch.setattr(llm, "read_undertrial_notes", lambda notes: llm.NotesReading({}, notes, {}, "pretend-model"))
     at = open_app()
     at.text_area(key="f_notes").set_value("Nothing useful here.")
+    choose_language(at, "f_notes", language_of("Nothing useful here."))
     button(at, "Read notes").click().run()
 
     def asked():
@@ -166,6 +174,7 @@ def test_next_without_an_answer_stays_on_the_question(monkeypatch):
     monkeypatch.setattr(llm, "read_undertrial_notes", lambda notes: llm.NotesReading({}, notes, {}, "pretend-model"))
     at = open_app()
     at.text_area(key="f_notes").set_value("Nothing useful here.")
+    choose_language(at, "f_notes", language_of("Nothing useful here."))
     button(at, "Read notes").click().run()
     button(at, "Next").click().run()
     ok(at)

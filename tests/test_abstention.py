@@ -8,6 +8,7 @@ import consistency
 import general
 import llm
 from test_intake import NOTES, field, practice_answer
+from volunteer import calculate, choose_language, language_of, make_drafts  # noqa: F401
 
 FORM = {"custody_began": date(2024, 3, 15), "offence_date": date(2024, 2, 15), "today": date(2026, 11, 2),
         "law": "IPC", "section": "380", "never_convicted": True, "other_cases_pending": False,
@@ -58,7 +59,7 @@ def test_case1_custody_before_offence():
     assert "Cannot conclude yet: the offence date (2024-05-01) is after the date custody began (2024-03-15)." in errors(at)
     assert not results_shown(at) and not any(b.label == "Make draft" for b in at.button)
     at.date_input(key="f_offence_date").set_value(date(2024, 2, 15)).run()  # corrected
-    assert results_shown(at)
+    assert results_shown(calculate(at))  # after "Calculate the dates"
 
 
 # ---------- case 2: "no other cases", then "another case" ----------
@@ -77,10 +78,12 @@ def test_case2_another_case_mentioned_later(monkeypatch):
     monkeypatch.setattr(llm, "read_undertrial_notes", lambda notes: llm.NotesReading(answer, notes, {}, "m"))
     at = open_form()
     at.text_area(key="f_notes").set_value(NOTES_ANOTHER_CASE)
+    choose_language(at, "f_notes", language_of(NOTES_ANOTHER_CASE))
     next(b for b in at.button if b.label == "Read notes").click().run()
     next(b for b in at.button if b.label == "Skip the rest and check the form").click().run()
     at.date_input(key="f_offence_date").set_value(date(2024, 2, 15))
     at.checkbox(key="f_checked").check().run()
+    calculate(at)
     ok(at)
     assert "the notes mention another case" in errors(at) and not results_shown(at)
 
@@ -97,14 +100,16 @@ def test_case3_ai_and_volunteer_disagree(monkeypatch):
     monkeypatch.setattr(llm, "read_undertrial_notes", lambda notes: llm.NotesReading(practice_answer(), notes, {}, "m"))
     at = open_form()
     at.text_area(key="f_notes").set_value(NOTES)
+    choose_language(at, "f_notes", language_of(NOTES))
     next(b for b in at.button if b.label == "Read notes").click().run()  # "February 2024": the month decides, no day asked
     at.date_input(key="f_custody").set_value(date(2023, 3, 15))  # the volunteer changes the AI's reading
     at.checkbox(key="f_checked").check().run()
+    calculate(at)
     ok(at)
     assert "the notes say Date custody began is \"2024-03-15\", but the form says \"2023-03-15\"" in errors(at)
     assert not results_shown(at)
     at.checkbox(key="confirm-custody_began").check().run()  # the volunteer checked: the form is right
-    assert results_shown(at)
+    assert results_shown(calculate(at))  # after "Calculate the dates"
 
 
 # ---------- case 4: "never convicted", but the notes mention a conviction ----------

@@ -12,6 +12,7 @@ from streamlit.testing.v1 import AppTest
 
 import audit
 import llm
+from volunteer import calculate, choose_language, language_of, make_drafts  # noqa: F401
 
 MAIN, BACKUP = llm.DEFAULT_MODEL, llm.FALLBACK_MODEL
 GOOD = {"candidates": [{"content": {"parts": [{"text": json.dumps({"ok": True})}]}}]}
@@ -139,6 +140,7 @@ def test_any_case_form_opens_when_the_ai_is_busy(monkeypatch):
     monkeypatch.setattr(llm, "read_general_notes", busy_ai)
     at = AppTest.from_file("../app.py", default_timeout=20).run()
     at.text_area(key="g_notes").set_value("Practice case. The worker was not paid for three months.")
+    choose_language(at, "g_notes", language_of("Practice case. The worker was not paid for three months."))
     next(b for b in at.button if b.label == "Read the story").click().run()
     assert not at.exception, at.exception[0].stack_trace
     assert any("The AI is busy; continue with the form." in w.value for w in at.warning)

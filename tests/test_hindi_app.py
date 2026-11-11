@@ -18,6 +18,7 @@ import lang
 import llm
 import privacy
 import store
+from volunteer import calculate, choose_language, language_of, make_drafts  # noqa: F401
 
 ROOT = Path(__file__).resolve().parent.parent
 NOTES_HI = (ROOT / "case_notes_hi.txt").read_text(encoding="utf-8")
@@ -118,6 +119,7 @@ def test_hindi_practice_case_on_screen(monkeypatch, tmp_path):
     at = open_app("hi")
     at.radio(key="case_type").set_value("Undertrial").run()
     at.text_area(key="f_notes").set_value(NOTES_HI)
+    choose_language(at, "f_notes", language_of(NOTES_HI))
     next(b for b in at.button if b.label == "नोट्स पढ़ें").click().run()
     assert any("अपराध किस तारीख़ को हुआ बताया गया है?" in m.value for m in at.markdown)
     assert any("फ़रवरी 2024" in c.value for c in at.caption)
@@ -125,11 +127,12 @@ def test_hindi_practice_case_on_screen(monkeypatch, tmp_path):
     next(b for b in at.button if b.label == "आगे").click().run()
     assert at.text_input(key="f_section").value == "380"
     at.checkbox(key="f_checked").check().run()
+    calculate(at)
     shown = " ".join(m.value for m in at.markdown)
     assert "15 जुलाई 2026" in shown and "पूरा हुआ" in shown and "15 सितंबर 2027" in shown
     assert at.radio(key="f_draft_lang").value == "hi"  # draft language follows the screen language
     next(b for b in at.button if b.label == "ड्राफ़्ट बनाएँ").click().run()
-    draft = at.session_state["shown_drafts"][0]
+    draft = make_drafts(at).session_state["shown_drafts"][0]
     assert draft.startswith("DRAFT — to be checked by a lawyer\nड्राफ़्ट — वकील से जाँच करवाना ज़रूरी है\n"
                             "हिंदी अनुवाद की जाँच: नहीं (Hindi translation checked: no)")
     assert "तथ्य केस नोट्स से AI की मदद (gemini-3.5-flash-lite) से पढ़े गए" in draft
@@ -147,10 +150,11 @@ def test_english_draft_from_hindi_screen(monkeypatch):
     at.date_input(key="f_custody").set_value(date(2024, 3, 15))
     at.date_input(key="f_today").set_value(date(2026, 11, 2))
     at.checkbox(key="f_never").check().run()
+    calculate(at.run())  # "Calculate the dates"
     at.radio(key="f_lawyer").set_value("Legal aid lawyer").run()
     at.radio(key="f_draft_lang").set_value("en").run()
     next(b for b in at.button if b.label == "ड्राफ़्ट बनाएँ").click().run()
-    assert at.session_state["shown_drafts"][0].startswith("DRAFT — to be checked by a lawyer\n\nNOT READY FOR REVIEW")
+    assert make_drafts(at).session_state["shown_drafts"][0].startswith("DRAFT — to be checked by a lawyer\n\nNOT READY FOR REVIEW")
 
 
 def test_general_screen_in_hindi_shows_1930_and_no_names_box(monkeypatch, tmp_path):
@@ -162,12 +166,13 @@ def test_general_screen_in_hindi_shows_1930_and_no_names_box(monkeypatch, tmp_pa
                             general_answer_for_hinglish(), notes, {}, MODEL))
     at = open_app("hi")
     at.text_area(key="g_notes").set_value(UPI_HINGLISH)
+    choose_language(at, "g_notes", language_of(UPI_HINGLISH))
     next(b for b in at.button if b.label == "कहानी पढ़ें").click().run()
     assert at.error[0].value.endswith("अभी 1930 पर कॉल करें।")
     while any(b.label == "पता नहीं" for b in at.button):
         next(b for b in at.button if b.label == "पता नहीं").click().run()
     assert at.checkbox(key="g_checked").label == "मैंने यह सार नोट्स से मिलाकर जाँच लिया है, और इसमें किसी का नाम नहीं है"
-    summary = at.session_state["shown_drafts"][0]
+    summary = make_drafts(at).session_state["shown_drafts"][0]
     assert "ऑनलाइन धोखाधड़ी" in summary and "(हिंदी अनुवाद की जाँच: नहीं)" in summary
     assert "Source: Ministry of Home Affairs" in summary  # Source lines stay in English
 

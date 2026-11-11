@@ -13,6 +13,7 @@ import llm
 import multilingual
 import privacy
 from test_intake import NOTES, practice_answer
+from volunteer import calculate, choose_language, language_of, make_drafts  # noqa: F401
 
 TAMIL_NOTES = "பயிற்சி வழக்கு. அவரது சகோதரர் 15 மார்ச் 2024 அன்று கைது செய்யப்பட்டார். தொலைபேசி ௯௮௭௬௫௪௩௨௧௦."
 

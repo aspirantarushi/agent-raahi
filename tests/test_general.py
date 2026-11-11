@@ -15,6 +15,7 @@ import llm
 import section479
 import store
 from drafts import DRAFT_HEADER
+from volunteer import calculate, choose_language, language_of, make_drafts  # noqa: F401
 
 ROOT = Path(__file__).resolve().parent.parent
 UNDERTRIAL = (ROOT / "case_notes.txt").read_text(encoding="utf-8")
@@ -338,6 +339,7 @@ def read_story(notes):
     ok(at)
     assert at.radio(key="case_type").value == "Any case (start here)"  # the first choice
     at.text_area(key="g_notes").set_value(notes)
+    choose_language(at, "g_notes", language_of(notes))
     button(at, "Read the story").click().run()
     ok(at)
     return at
@@ -357,7 +359,7 @@ def test_screen_wages_questions_one_at_a_time_then_send(pretend_ai):
     at.text_input(key="gq-2").set_value("His three months' wages")
     button(at, "Next").click().run()
     # Eligible on income, so no eligibility questions: straight to the summary.
-    draft = at.session_state["shown_drafts"][0]
+    draft = make_drafts(at).session_state["shown_drafts"][0]
     assert "— His three months' wages" in draft
     assert "- Asked: Does the worker have any messages from the contractor about wages? " \
            "— Yes, on his phone" in draft
@@ -401,7 +403,7 @@ def test_screen_eligibility_questions_when_needed(pretend_ai, monkeypatch):
     assert not at.session_state["shown_drafts"]
     assert "these 4 planned question(s) are not needed" in at.info[0].value
     at.button(key="q-not-needed-go").click().run()
-    assert "Qualifies for free legal aid whatever the income, as a woman." in at.session_state["shown_drafts"][0]
+    assert "Qualifies for free legal aid whatever the income, as a woman." in make_drafts(at).session_state["shown_drafts"][0]
 
 
 def test_screen_custody_offers_section_479_check(pretend_ai, monkeypatch):
@@ -425,7 +427,7 @@ def test_screen_without_ai(monkeypatch, tmp_path):
     ok(at)
     assert any("jail or police custody" in m.value for m in at.markdown)  # eligibility, one at a time
     button(at, "Skip the rest and see the summary").click().run()
-    draft = at.session_state["shown_drafts"][0]
+    draft = make_drafts(at).session_state["shown_drafts"][0]
     assert "facts were entered by a volunteer" in draft and "The landlord locked the tenant out" in draft
 
 

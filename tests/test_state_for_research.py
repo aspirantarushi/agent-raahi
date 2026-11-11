@@ -1,6 +1,7 @@
 """Bug: on the live app research never ran when the story gave no state, and the research box said "Choose
 the state first" with no way to choose it. Now the state is asked in step 2, can be chosen in the research
-box, and the checklist and the research box share one saved value. Fake data only (no real research)."""
+box, and the checklist and the research box share one saved value. Research itself runs only when the
+volunteer presses "Run research" (nothing that produces a result happens by itself). Fake data only."""
 
 import pytest
 from streamlit.testing.v1 import AppTest
@@ -8,6 +9,7 @@ from streamlit.testing.v1 import AppTest
 import llm
 import research
 from test_general import MODEL, answer, yn
+from volunteer import calculate, choose_language, language_of, make_drafts  # noqa: F401
 
 STORY = "Practice case. A woman's employer has not paid her wages for three months. She works as a cook."
 NO_STATE = answer(person_needing_help="the woman", what_happened=["The employer has not paid her wages for three months."],
@@ -32,6 +34,7 @@ def screen(monkeypatch):
     at.session_state["screen"] = "New case"
     at.run()
     at.text_area(key="g_notes").set_value(STORY)
+    choose_language(at, "g_notes", language_of(STORY))
     next(b for b in at.button if b.label == "Read the story").click().run()
     return at, runs
 
@@ -75,9 +78,11 @@ def test_state_is_asked_research_runs_and_the_checklist_shows_state_done(screen)
     if any(b.key == "q-not-needed-go" for b in at.button):
         at.button(key="q-not-needed-go").click().run()
     ok(at)
-    assert runs == ["Bihar"]          # research ran by itself, with the state, once
+    assert runs == []                 # not by itself
     assert state_tick(at) is True     # the checklist: State done
     assert not any(s.key == "rs-state" for s in at.selectbox)  # the research box needs no dropdown now
+    at.button(key="rs-run-go").click().run()  # "Run research"
+    assert runs == ["Bihar"]          # with the state, once
     at.run()
     assert runs == ["Bihar"]          # not again on the next run
 
@@ -92,16 +97,19 @@ def test_state_skipped_then_chosen_in_the_research_box(screen):
     assert runs == [] and state_tick(at) is False
     assert any("Choose the state first" in i.value for i in at.info)
     assert any(s.key == "rs-state" for s in at.selectbox)       # now the state can be chosen right there
+    assert at.button(key="rs-run-go").disabled                   # "Run research" needs the state first
     at.selectbox(key="rs-state").set_value("Kerala").run()
     ok(at)
-    assert runs == ["Kerala"]                                    # saved and research started at once
     assert at.session_state["gen"]["facts"]["state"] == "Kerala"
     assert state_tick(at) is True                                # the checklist uses the same saved value
+    assert runs == []                                            # saved; research waits for the button
+    at.button(key="rs-run-go").click().run()
+    assert runs == ["Kerala"]
     at.run()
     assert runs == ["Kerala"]                                    # once only
 
 
-def test_state_fixed_in_the_checklist_also_starts_research(screen):
+def test_state_fixed_in_the_checklist_readies_research(screen):
     at, runs = screen
     to_summary(at)
     next(b for b in at.button if b.key and b.key.startswith("gskip-") and b.key != "gskip-all").click().run()
@@ -110,5 +118,8 @@ def test_state_fixed_in_the_checklist_also_starts_research(screen):
     at.selectbox(key="fix-case_state").set_value("Punjab")
     at.button(key="fix-case_state-go").click().run()
     ok(at)
-    assert runs == ["Punjab"] and state_tick(at) is True
+    assert runs == [] and state_tick(at) is True
     assert not any(s.key == "rs-state" for s in at.selectbox)   # the research box shows the same value
+    assert not at.button(key="rs-run-go").disabled               # and "Run research" is ready
+    at.button(key="rs-run-go").click().run()
+    assert runs == ["Punjab"]

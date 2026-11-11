@@ -10,6 +10,7 @@ from streamlit.testing.v1 import AppTest
 import general
 import llm
 import names
+from volunteer import calculate, choose_language, language_of, make_drafts  # noqa: F401
 
 ROOT = Path(__file__).resolve().parent.parent
 CASE9 = (ROOT / "practice_stories" / "test_set" / "case09_unpaid_wages_privacy.txt").read_text(encoding="utf-8")
@@ -64,6 +65,7 @@ def test_case9_story_name_warning_on_screen(monkeypatch):
     at.session_state["screen"] = "New case"
     at.run()
     at.text_area(key="g_notes").set_value(CASE9)
+    choose_language(at, "g_notes", language_of(CASE9))
     next(b for b in at.button if b.label == "Read the story").click().run()
     for _ in range(10):  # the questions: "Don't know"
         skip = [b for b in at.button if b.key and b.key.startswith("gskip-") and b.key != "gskip-all"]

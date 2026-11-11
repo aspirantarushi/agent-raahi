@@ -15,6 +15,7 @@ import store
 from drafts import DRAFT_HEADER, UndertrialFacts
 from test_drafts import practice_facts
 from test_intake import NOTES, practice_answer
+from volunteer import calculate, choose_language, language_of, make_drafts  # noqa: F401
 
 ROOT = Path(__file__).resolve().parent.parent
 MODEL = "gemini-3.5-flash-lite"
@@ -226,8 +227,10 @@ def test_draft_made_after_ai_reading_names_the_model(monkeypatch):
     at = AppTest.from_file("../app.py", default_timeout=20).run()
     at.radio(key="case_type").set_value("Undertrial").run()
     at.text_area(key="f_notes").set_value(NOTES)
+    choose_language(at, "f_notes", language_of(NOTES))
     next(b for b in at.button if b.label == "Read notes").click().run()  # "February 2024": no day asked
     at.checkbox(key="f_checked").check().run()
+    calculate(at)
     next(b for b in at.button if b.label == "Make draft").click().run()
     assert not at.exception
     assert at.session_state["shown_drafts"][0].rstrip().endswith(AI_SENTENCE)
