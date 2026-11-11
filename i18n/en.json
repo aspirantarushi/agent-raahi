@@ -1146,5 +1146,7 @@
  "fact.offence_month": "Month of the offence (day not known)",
  "ui.form.month_decides": "The notes give the month: {month}. That is enough to know which law applies (the day is not needed).",
  "ui.form.month_ask_day": "The notes give the month: {month}. That is close to 1 July 2024, when the BNS began, so pick the day of the offence above.",
- "ui.names_in_story": "The story seems to contain a person's name: {names}. Names are never needed. Check that no name is in the drafts before you tick \"no names\", and next time describe people by their role (\"the worker\", \"the husband\")."
+ "ui.names_in_story": "The story seems to contain a person's name: {names}. Names are never needed. Check that no name is in the drafts before you tick \"no names\", and next time describe people by their role (\"the worker\", \"the husband\").",
+ "rs.choose_state": "State or union territory where the person lives",
+ "rs.choose_state_placeholder": "Choose the state: research starts at once"
 }

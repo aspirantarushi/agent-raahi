@@ -393,9 +393,13 @@ def test_screen_eligibility_questions_when_needed(pretend_ai, monkeypatch):
     assert "Question 3 of 8" in counter  # 1 AI question + 7 planned legal aid questions, fixed from the start
     at.radio(key="ge-woman").set_value("Yes")
     button(at, "Next").click().run()
-    ok(at)  # a woman qualifies whatever the income: the app says the rest is not needed and waits
+    ok(at)  # a woman qualifies whatever the income, but research needs the state: it is asked next
+    assert any("Which state or union territory does the person live in?" in m.value for m in at.markdown)
+    at.selectbox(key="ge-state").set_value("Punjab")
+    button(at, "Next").click().run()
+    ok(at)  # then the app says the rest is not needed and waits
     assert not at.session_state["shown_drafts"]
-    assert "these 5 planned question(s) are not needed" in at.info[0].value
+    assert "these 4 planned question(s) are not needed" in at.info[0].value
     at.button(key="q-not-needed-go").click().run()
     assert "Qualifies for free legal aid whatever the income, as a woman." in at.session_state["shown_drafts"][0]
 
@@ -405,7 +409,8 @@ def test_screen_custody_offers_section_479_check(pretend_ai, monkeypatch):
     monkeypatch.setattr(llm, "read_undertrial_notes",  # no offence date in the notes: it is asked first
                         lambda notes: llm.NotesReading(practice_answer(offence_date=field(None, None)), notes, {}, MODEL))
     at = read_story(UNDERTRIAL)
-    button(at, "Don't know").click().run()
+    while any(b.label == "Don't know" for b in at.button):  # the AI's question, then the state
+        button(at, "Don't know").click().run()
     button(at, "Open Section 479 check").click().run()
     ok(at)
     assert at.radio(key="case_type").value == "Undertrial"

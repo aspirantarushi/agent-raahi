@@ -447,22 +447,33 @@ def general_question(gen):
         if missing[0] not in plan:
             plan.append(missing[0])  # needed after all (the count grows, and says so by its new total)
         return ("eligibility", missing[0], t(f"elig.q.{missing[0]}"))
+    if state_still_needed(gen):  # research and free legal aid both depend on the state: always asked
+        if "state" not in plan:
+            plan.append("state")
+        return ("eligibility", "state", t("elig.q.state"))
     # Free legal aid is decided before every planned question was asked: say so; never move on silently
     if not_needed(gen) and not gen.get("elig_ack"):
         return ("not_needed", None, "")
     return None
 
 
+def state_still_needed(gen) -> bool:
+    """The story did not give the state, and it was not answered or skipped yet."""
+    return not gen["facts"].get("state") and "state" not in gen["skipped"]
+
+
 def elig_plan(gen) -> list:
-    """The free legal aid questions planned when the questions start: fixed, so the count stays right."""
+    """The free legal aid questions planned when the questions start (and the state, if the story did not
+    give it): fixed, so the count stays right."""
     if gen.get("elig_plan") is None:
-        gen["elig_plan"] = [m for m in general.check_eligibility(gen["facts"]).missing if m not in gen["skipped"]]
+        plan = [m for m in general.check_eligibility(gen["facts"]).missing if m not in gen["skipped"]]
+        gen["elig_plan"] = plan + (["state"] if state_still_needed(gen) and "state" not in plan else [])
     return gen["elig_plan"]
 
 
 def not_needed(gen) -> list:
     asked = set(gen.get("elig_asked", [])) | set(gen["skipped"])
-    return [m for m in elig_plan(gen) if m not in asked]
+    return [m for m in elig_plan(gen) if m not in asked and not (m == "state" and gen["facts"].get("state"))]
 
 
 def question_position(gen, kind: str, ref) -> tuple:
@@ -971,6 +982,14 @@ def eligibility_text(eligibility) -> str:
     return general.eligibility_text(eligibility, code()) if code() != "en" else eligibility.reason
 
 
+def choose_research_state():
+    """The state chosen in the research box: saved like the checklist's State (the same saved value), so
+    research runs by itself on this run (only once, as always)."""
+    state = st.session_state.get("rs-state")
+    if state:
+        save_fix("g", "state", state)
+
+
 def save_fix(gen_key: str, field: str, value):
     gen = st.session_state["gen"]
     fixes = gen.setdefault("fixes", {})
@@ -1126,6 +1145,9 @@ def research_panel(g, uncovered, status, case_id, state, waiting_rs=None):
             st.success(t("rs.letter_drafted" if ticked else "rs.letter_facts_only"), icon=":material/task_alt:")
         elif msg:
             (st.error if status == "failed" else st.info)(t(msg), icon=":material/travel_explore:")
+        if not state and status == "not started":  # choose it here: saved to the case, research starts at once
+            st.selectbox(t("rs.choose_state"), general.state_names(), index=None, key="rs-state",
+                         placeholder=t("rs.choose_state_placeholder"), on_change=choose_research_state)
         with st.container(horizontal=True, gap="small", key="research-actions"):
             if uncovered and state and case_id:
                 st.button(t("rs.again"), key="rs-again-go", icon=":material/refresh:",
