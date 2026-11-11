@@ -10,6 +10,10 @@ individual accounts, handovers) is replaced by a simpler setup for **one institu
   `.streamlit/secrets.toml` on this computer and in the host's secret settings online, never in git.
   Volunteers type their name or initials when they sign in; it is saved with every action (facts
   added, visits logged, contradictions resolved, drafts sent). Home and Learn need no passcode.
+  The Supervisor menu opens "Supervisor sign-in" (the supervisor password only, no passcode or name);
+  a correct supervisor password also opens the volunteer screens for that session, and signing out as
+  supervisor ends that access. If the supervisor password is typed into "Volunteer sign-in", the app
+  says "This is the volunteer sign-in. Supervisors: use the Supervisor page."
 - **Storage** (`storage.py`). Local folders by default. When `SUPABASE_URL` and
   `SUPABASE_SECRET_KEY` are set, the app saves cases, drafts, timelines, visit logs, audit records,
   problem reports, evaluation sessions and the impact log in one Supabase table, `raahi_records`

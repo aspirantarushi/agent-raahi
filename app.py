@@ -2266,29 +2266,55 @@ def supervisor_password() -> str:
     return storage.setting("SUPERVISOR_PASSWORD")
 
 
+SUPERVISOR_ACTOR = "Supervisor"  # the name saved with actions when the supervisor signed in without one
+
+
+def is_supervisor_password(typed: str) -> bool:
+    """True if typed is the supervisor password (spaces copied in by mistake around it are ignored)."""
+    expected = supervisor_password().strip()
+    return bool(expected) and hmac.compare_digest((typed or "").strip().encode(), expected.encode())
+
+
+def supervisor_sign_in():
+    """Runs when the supervisor clicks Sign in. The supervisor password alone is enough: it also opens
+    the clinic's other screens for this session (no clinic passcode or name needed)."""
+    if not is_supervisor_password(st.session_state.get("sup-pass") or ""):
+        st.session_state["sup-msg"] = t("ui.sup.wrong")
+        return
+    st.session_state.update(supervisor_ok=True, **{"sup-pass": ""})
+    if not st.session_state.get("clinic_ok"):  # clinic access came with the supervisor sign-in
+        st.session_state.update(clinic_ok=True, clinic_via_supervisor=True)
+        if not (st.session_state.get("volunteer") or "").strip():
+            st.session_state["volunteer"] = SUPERVISOR_ACTOR  # saved with what they do (same in every language)
+
+
+def supervisor_sign_out():
+    st.session_state["supervisor_ok"] = False
+    if st.session_state.pop("clinic_via_supervisor", False):  # the clinic access ends with it
+        for key in ("clinic_ok", "volunteer", "case_id"):
+            st.session_state.pop(key, None)
+
+
 def supervisor_screen():
-    st.title(t("ui.sup.title"))
-    expected = supervisor_password()
-    if not expected:
+    if not supervisor_password():
+        st.title(t("ui.sup.sign_in_title"))
         st.warning(t("ui.sup.no_password"))
         return
     if not st.session_state.get("supervisor_ok"):
+        # Only the supervisor password: no clinic passcode and no name
+        st.title(t("ui.sup.sign_in_title"))
         with st.form("sup-form", enter_to_submit=True, border=False):  # Enter signs in
-            typed = st.text_input(t("ui.sup.password"), type="password", key="sup-pass")
-            go = st.form_submit_button(t("ui.sup.sign_in"), type="primary", key="sup-go")
-        if go:
-            # spaces copied in by mistake around the password are ignored
-            if hmac.compare_digest((typed or "").strip().encode(), expected.strip().encode()):
-                st.session_state["supervisor_ok"] = True
-                st.rerun()
-            else:
-                st.error(t("ui.sup.wrong"))
+            st.text_input(t("ui.sup.password"), type="password", key="sup-pass")
+            st.form_submit_button(t("ui.sup.sign_in"), type="primary", key="sup-go", on_click=supervisor_sign_in)
+        msg = st.session_state.pop("sup-msg", None)
+        if msg:
+            st.error(msg)
         return
+    st.title(t("ui.sup.title"))
     top1, top2 = st.columns([3, 1])
     top1.success(t("ui.sup.signed_in"))
-    if top2.button(t("ui.sup.sign_out"), type="primary", icon=":material/logout:"):
-        st.session_state["supervisor_ok"] = False
-        st.rerun()
+    top2.button(t("ui.sup.sign_out"), type="primary", icon=":material/logout:", key="sup-out",
+                on_click=supervisor_sign_out)
 
     flash = st.session_state.pop("supervisor_flash", None)
     if flash:
@@ -2670,6 +2696,9 @@ def clinic_ok() -> bool:
 def clinic_sign_in():
     typed = (st.session_state.get("gate-pass") or "").strip()  # spaces copied in by mistake are ignored
     name = (st.session_state.get("gate-name") or "").strip()
+    if is_supervisor_password(typed) and not hmac.compare_digest(typed.encode(), clinic_passcode().strip().encode()):
+        st.session_state.update(**{"gate-msg": t("gate.supervisor_here"), "gate-pass": ""})
+        return
     if not name:
         st.session_state["gate-msg"] = t("gate.need_name")
         return
@@ -3476,8 +3505,8 @@ if storage.records_will_be_lost():  # online without Supabase: nothing saved wou
     st.error(t("online.no_supabase"), icon=":material/cloud_off:")
 if choice != "Home":  # Home shows the helplines under its story box
     st.markdown(ui.safety_bar(t("safety.bar112"), t("safety.bar15100")), unsafe_allow_html=True)
-if choice in ("Home", "Learn") or clinic_ok():
-    SCREENS[choice]()
+if choice in ("Home", "Learn", "Supervisor") or clinic_ok():
+    SCREENS[choice]()  # Supervisor has its own sign-in (the supervisor password only)
 else:
     clinic_gate()  # every other screen needs the clinic passcode (when one is set)
 st.markdown(ui.footer(t("app.name"), [t("footer.open_source"), t("footer.built_on")], t("footer.privacy")),

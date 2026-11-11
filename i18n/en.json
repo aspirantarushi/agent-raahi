@@ -651,7 +651,7 @@
  "gate.no_name": "volunteer (no name typed)",
  "gate.need_name": "Type your name or initials. It is saved with what you do.",
  "gate.wrong": "That passcode is not right. Ask your clinic coordinator.",
- "gate.title": "Clinic sign-in",
+ "gate.title": "Volunteer sign-in",
  "gate.caption": "For the clinic's volunteers. Type the clinic passcode and your name or initials.",
  "gate.passcode": "Clinic passcode",
  "gate.name": "Your name or initials",
@@ -1087,5 +1087,7 @@
  "rs.letter_drafted": "Letter drafted from the ticked points (see the drafts below).",
  "rs.letter_facts_only": "No point is ticked, so a facts-only letter is drafted (see the drafts below).",
  "ui.camp_short": "Camp",
- "ui.continue_short": "Continue"
+ "ui.continue_short": "Continue",
+ "ui.sup.sign_in_title": "Supervisor sign-in",
+ "gate.supervisor_here": "This is the volunteer sign-in. Supervisors: use the Supervisor page."
 }

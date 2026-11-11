@@ -64,7 +64,9 @@ Version 1 content for the legal aid agent (Code for a Billion, Timely Justice tr
 Set up for one institution (details and setup steps: docs/ONLINE_ROLLOUT_STATUS.md).
 - **Access**: one clinic passcode for volunteers, a separate supervisor password for approving,
   editing and sending back drafts. Both only in `.streamlit/secrets.toml` / the host's secret settings.
-  Volunteers type their name or initials; it is saved with every action.
+  Volunteers sign in on "Volunteer sign-in" with the passcode and their name or initials (saved with
+  every action). Supervisors sign in on the Supervisor page with the supervisor password only; that also
+  opens the volunteer screens for the session.
 - **Case slip**: a case opens when intake starts and gets a case number and a 6-character code
   (no 0/O or 1/I). The slip shows only the clinic, the case number, the code, a QR code, "Bring this
   next time / अगली बार यह साथ लाएँ" and 112 / 15100: never the case type or the problem. Print it, or

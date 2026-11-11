@@ -164,7 +164,7 @@ def test_story_typed_on_home_survives_the_clinic_sign_in(monkeypatch):
     at.radio(key="ui_lang").set_value("hi").run()
     at.text_area(key="home_story").set_value("Bhai ko 15 March 2024 ko pakda gaya.")
     at.button(key="home-go").click().run()
-    assert at.title[0].value == "क्लिनिक साइन-इन"          # the sign-in comes in between
+    assert at.title[0].value == "वॉलंटियर साइन-इन"          # the sign-in comes in between
     at.text_input(key="gate-pass").set_value("practice-pass-123")
     at.text_input(key="gate-name").set_value("VA")
     at.button(key="gate-go").click().run()

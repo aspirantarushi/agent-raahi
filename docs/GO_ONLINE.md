@@ -82,10 +82,10 @@ edit, **Save**. The app restarts within a minute.
 1. Open the app address on your phone and on a laptop. Home loads.
 2. **No red "Not ready for real cases" notice at the top.** That notice means the Supabase settings
    are missing or mistyped: anything saved would be lost when the app restarts.
-3. New case > sign in with the clinic passcode > paste a practice story (from `practice_stories/`) >
+3. New case > "Volunteer sign-in" with the clinic passcode and a name > paste a practice story (from `practice_stories/`) >
    Read the story. If it reads, the Gemini key works.
 4. Send it to the supervisor. In Supabase > Table Editor > `raahi_records` you should see new rows.
-5. Supervisor > sign in > the practice case is waiting. Reject it with the reason "practice" (or
+5. Supervisor > "Supervisor sign-in" with the supervisor password only > the practice case is waiting. Reject it with the reason "practice" (or
    delete it in "Delete a case").
 6. Print or open a case slip and scan its QR code with a phone camera: it should open the app's
    address (if `APP_URL` is right).
@@ -110,7 +110,8 @@ edit, **Save**. The app restarts within a minute.
   The QR code on slips opens `APP_URL`, so slips printed before `APP_URL` was set won't open the
   app (the 6-character code still works when typed).
 - **Who can see it.** "Public app" means anyone with the link sees Home and Learn. New case, Case
-  tracker and Supervisor still need the clinic passcode and the supervisor password. (In the app's
+  tracker need the clinic passcode (or the supervisor password), and Supervisor needs the supervisor
+  password. (In the app's
   Settings > Sharing you can instead allow only invited email addresses.)
 - **Saved data lives in Supabase only.** The online server's own disk is wiped at every restart, so
   nothing is kept there. The practice cases in this repository's folders don't show online.

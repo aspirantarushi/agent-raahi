@@ -155,7 +155,7 @@ def test_clinic_passcode_and_name_are_needed(monkeypatch):
     monkeypatch.setenv("CLINIC_PASSCODE", "practice-pass-123")
     at = AppTest.from_file("../app.py", default_timeout=20).run()
     ok(at)
-    assert at.title[0].value == "Clinic sign-in"
+    assert at.title[0].value == "Volunteer sign-in"
     assert not any(t.key == "g_notes" for t in at.text_area)           # nothing of New case is shown
     at.text_input(key="gate-pass").set_value("practice-pass-123")
     button(at, "Sign in").click().run()
