@@ -505,7 +505,7 @@ i18n/hi.json · ui.voice.title,"Speak the story: tap the mic to record, tap agai
 i18n/hi.json · ui.voice.warning,"Don't say names, phone numbers or Aadhaar numbers aloud.","नाम, फ़ोन नंबर या आधार नंबर बोलकर न बताएँ।",screen text,,
 i18n/hi.json · ui.voice.record,Record,रिकॉर्ड करें,screen text,,
 i18n/hi.json · ui.voice.convert,Turn speech into text,बोली को लिखाई में बदलें,screen text,,
-i18n/hi.json · ui.voice.caption,"The recording is sent to the AI (Google Gemini) only to turn it into text, in Hindi, Hinglish or English. It is never saved. Read the text in the box below and correct it.","रिकॉर्डिंग सिर्फ़ लिखाई में बदलने के लिए AI (Google Gemini) को भेजी जाती है, हिंदी, हिंग्लिश या अंग्रेज़ी में। इसे कभी सेव नहीं किया जाता। नीचे बॉक्स में लिखाई पढ़ें और ठीक करें।",screen text,,
+i18n/hi.json · ui.voice.caption,"The recording is sent to Sarvam AI (an Indian speech service; Google Gemini as a backup) only to turn it into text, in Hindi, Hinglish or English. It is never saved. Read the text in the box below and correct it.","रिकॉर्डिंग सिर्फ़ लिखाई में बदलने के लिए Sarvam AI (एक भारतीय स्पीच सेवा; बैकअप के रूप में Google Gemini) को भेजी जाती है, हिंदी, हिंग्लिश या अंग्रेज़ी में। इसे कभी सेव नहीं किया जाता। नीचे बॉक्स में लिखाई पढ़ें और ठीक करें।",screen text,,
 i18n/hi.json · ui.voice.no_ai,"AI is not set up on this computer, so speech can't be turned into text. Please type the story instead.","इस कंप्यूटर पर AI चालू नहीं है, इसलिए बोली लिखाई में नहीं बदल सकती। कृपया कहानी टाइप करें।",screen text,,
 i18n/hi.json · ui.voice.nothing,Record the story first.,पहले कहानी रिकॉर्ड करें।,screen text,,
 i18n/hi.json · ui.voice.nothing_heard,Nothing could be heard in the recording. Please try again or type the story.,रिकॉर्डिंग में कुछ सुनाई नहीं दिया। फिर से कोशिश करें या कहानी टाइप करें।,screen text,,
@@ -1240,6 +1240,11 @@ i18n/hi.json · learn.hindi_checked,Hindi translation checked.,हिंदी �
 i18n/hi.json · learn.quiz,Test yourself: {n} questions,ख़ुद को परखें: {n} सवाल,screen text,,
 i18n/hi.json · learn.answer,Show the answer,जवाब देखें,screen text,,
 i18n/hi.json · learn.practice,Practice cases,अभ्यास केस,screen text,,
+i18n/hi.json · ui.voice.working,Turning speech into text…,बोली को लिखाई में बदला जा रहा है…,screen text,,
+i18n/hi.json · ui.voice.part,Turning speech into text… (part {n} of {total}),बोली को लिखाई में बदला जा रहा है… (भाग {n} / {total}),screen text,,
+i18n/hi.json · ui.voice.backup_working,"Turning speech into text… (using the backup, Google Gemini)","बोली को लिखाई में बदला जा रहा है… (बैकअप, Google Gemini से)",screen text,,
+i18n/hi.json · ui.voice.backup_used,"Sarvam could not do it this time, so the backup (Google Gemini) turned the speech into text.","इस बार Sarvam से नहीं हो पाया, इसलिए बैकअप (Google Gemini) ने बोली को लिखाई में बदला।",screen text,,
+i18n/hi.json · ui.voice.failed,"Sorry, the speech could not be turned into text just now (the speech service and its backup are both unavailable).","माफ़ करें, अभी बोली लिखाई में नहीं बदल सकी (स्पीच सेवा और उसका बैकअप दोनों उपलब्ध नहीं हैं)।",screen text,,
 case_notes_hi.txt,(fake practice story; check that it reads naturally),"अभ्यास केस (कोई असली व्यक्ति नहीं)।
 बोलने वाली: एक विचाराधीन क़ैदी की बड़ी बहन।
 उसके भाई को 15 मार्च 2024 को गिरफ़्तार किया गया था। अपराध फ़रवरी 2024 में हुआ था।

@@ -20,6 +20,7 @@ os.environ.pop("CLINIC_PASSCODE", None)
 # key from .env. The one live Groq test reads the key itself (tests/test_groq.py).
 os.environ["GROQ_API_KEY"] = ""
 os.environ["TAVILY_API_KEY"] = ""  # never the real Tavily search either (tests use fake search results)
+os.environ["SARVAM_API_KEY"] = ""  # never the real Sarvam speech service (tests use fake audio results)
 
 
 import pytest  # noqa: E402
@@ -44,3 +45,16 @@ def fresh_sign_in_counts():
     signin_guard.reset_all()
     yield
     signin_guard.reset_all()
+
+
+@pytest.fixture(autouse=True)
+def no_real_sarvam(monkeypatch, request):
+    """Speech to text never reaches the real Sarvam service in tests (tests that need it give fake
+    answers); the one live test, run by hand, is marked "live_sarvam"."""
+    if request.node.get_closest_marker("live_sarvam"):
+        return
+    import sarvam
+
+    def not_in_tests(*a, **k):
+        raise sarvam.SarvamUnavailable("Sarvam is not called in tests.", "network")
+    monkeypatch.setattr(sarvam, "_post", not_in_tests)

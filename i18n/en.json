@@ -211,7 +211,7 @@
  "ui.voice.warning": "Don't say names, phone numbers or Aadhaar numbers aloud.",
  "ui.voice.record": "Record",
  "ui.voice.convert": "Turn speech into text",
- "ui.voice.caption": "The recording is sent to the AI (Google Gemini) only to turn it into text, in Hindi, Hinglish or English. It is never saved. Read the text in the box below and correct it.",
+ "ui.voice.caption": "The recording is sent to Sarvam AI (an Indian speech service; Google Gemini as a backup) only to turn it into text, in Hindi, Hinglish or English. It is never saved. Read the text in the box below and correct it.",
  "ui.voice.no_ai": "AI is not set up on this computer, so speech can't be turned into text. Please type the story instead.",
  "ui.voice.nothing": "Record the story first.",
  "ui.voice.nothing_heard": "Nothing could be heard in the recording. Please try again or type the story.",
@@ -1130,5 +1130,10 @@
  "learn.hindi_checked": "Hindi translation checked.",
  "learn.quiz": "Test yourself: {n} questions",
  "learn.answer": "Show the answer",
- "learn.practice": "Practice cases"
+ "learn.practice": "Practice cases",
+ "ui.voice.working": "Turning speech into text…",
+ "ui.voice.part": "Turning speech into text… (part {n} of {total})",
+ "ui.voice.backup_working": "Turning speech into text… (using the backup, Google Gemini)",
+ "ui.voice.backup_used": "Sarvam could not do it this time, so the backup (Google Gemini) turned the speech into text.",
+ "ui.voice.failed": "Sorry, the speech could not be turned into text just now (the speech service and its backup are both unavailable)."
 }

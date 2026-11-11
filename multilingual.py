@@ -3,7 +3,8 @@
 - English, Hindi and Hinglish notes go straight to the AI reader (Gemini), as before.
 - Notes in another scheduled language are filtered for personal numbers, translated to English by
   Bhashini, and then read by the AI; the volunteer checks every fact as before.
-- Recordings: Bhashini speech-to-text where it supports the language, otherwise Gemini.
+- Recordings in English, Hindi or Hinglish: Sarvam AI (saaras:v4) first, Gemini as the backup, then
+  typing. Other languages: Bhashini where it supports the language, otherwise Gemini.
 If Bhashini is not set up or fails, BhashiniUnavailable is raised: the app then says so and asks for
 English or Hindi.
 """
@@ -11,12 +12,14 @@ English or Hindi.
 import io
 import wave
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Callable, Dict, Optional
 
+import audit
 import bhashini
 import lang
 import llm
 import privacy
+import sarvam
 
 HINGLISH = "hi-Latn"  # Hindi written in English letters
 DIRECT = ("en", "hi", HINGLISH)  # the AI reads these itself (drafts stay in English or Hindi)
@@ -78,7 +81,8 @@ def prepare(notes: str, language: str) -> PreparedNotes:
 class SpokenText:
     text: str
     removed: Dict[str, int]
-    by: str  # "Bhashini" or the Gemini model
+    by: str              # "Sarvam AI (saaras:v4)", "Bhashini" or the Gemini model
+    backup: bool = False  # True when Sarvam failed (or was not set up) and Gemini answered instead
 
 
 def _wav_rate(audio: bytes) -> Optional[int]:
@@ -89,10 +93,31 @@ def _wav_rate(audio: bytes) -> Optional[int]:
         return None
 
 
-def speech_to_text(audio: bytes, mime_type: str, language: str) -> SpokenText:
-    """Bhashini where it supports the language (a WAV recording), otherwise Gemini.
+def speech_to_text(audio: bytes, mime_type: str, language: str,
+                   progress: Optional[Callable[[int, int], None]] = None) -> SpokenText:
+    """English, Hindi and Hinglish: Sarvam first (in parts under 30 seconds; progress(n, total) before
+    each), then Gemini as the backup (progress(0, 0)); if both fail, llm.AIUnavailable (the volunteer
+    types instead). A Sarvam failure, or a missing key, is written in the problems log.
+    Other languages: Bhashini where it supports the language (a WAV recording), otherwise Gemini.
     The recording is never saved; the text is filtered for personal numbers."""
-    if language not in DIRECT and bhashini.configured():
+    if language in DIRECT:
+        try:
+            result = sarvam.transcribe(audio, mime_type, language, progress)
+            return SpokenText(result.text, result.removed, result.by)
+        except sarvam.SarvamUnavailable as err:
+            failed = {"model": sarvam.NAME, "error": err.kind, "code": err.code}
+        if progress:
+            progress(0, 0)  # the backup
+        script = "en" if language == HINGLISH else language
+        try:
+            backup = llm.transcribe(audio, mime_type, script=script)
+        except llm.AIUnavailable:
+            _log_voice([failed, {"model": "Gemini (backup)", "error": "unavailable"}],
+                       "speech to text failed; the volunteer was asked to type the story")
+            raise
+        _log_voice([failed], f"speech to text by the backup ({backup.model})")
+        return SpokenText(backup.text, backup.removed, backup.model, backup=True)
+    if bhashini.configured():
         rate = _wav_rate(audio)
         if rate and bhashini.supports("asr", language):
             result = bhashini.speech_to_text(audio, language, "wav", rate)
@@ -148,3 +173,11 @@ def reading_copy(text: str, language: str, translate=None) -> ReadingCopy:
         else:
             out.append("\n".join(l if KEEP_IN_ENGLISH.search(l) else next(translated) for l in lines))
     return ReadingCopy("\n\n".join(out), kept)
+
+
+def _log_voice(attempts, outcome: str) -> None:
+    """In the problems log: which voice service failed and why (no audio, no text)."""
+    try:
+        audit.log_ai_failure(attempts, outcome)
+    except Exception:  # the log must never stop the volunteer
+        pass

@@ -49,6 +49,7 @@ APP_URL = "..."
 # Backups (recommended)
 GROQ_API_KEY = "..."
 TAVILY_API_KEY = "..."
+SARVAM_API_KEY = "..."
 ```
 
 What each one is:
@@ -64,6 +65,7 @@ What each one is:
 | `APP_URL` | the app's address from step 4, e.g. `https://agent-raahi.streamlit.app` | you chose it |
 | `GROQ_API_KEY` | the Groq key (backup for reading stories) | `.env` |
 | `TAVILY_API_KEY` | the Tavily key (backup search for research) | `.env` |
+| `SARVAM_API_KEY` | the Sarvam AI key (speech to text; Gemini is the backup) | `.env` |
 
 Optional, only if you want them (leave them out otherwise): `GEMINI_MODEL`,
 `GEMINI_FALLBACK_MODEL`, `GROQ_MODEL` (to change the AI models), `BHASHINI_USER_ID` and

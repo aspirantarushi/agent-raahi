@@ -37,6 +37,7 @@ import multilingual
 import ledger
 import readiness
 import research
+import sarvam
 import section479
 import signin_guard
 import storage
@@ -218,21 +219,38 @@ def finish_intake_box(case_id: str):
 
 # ----- voice: "Speak the story" -----
 
-def transcribe_recording(audio_key: str, target_key: str):
-    """Runs by itself when a recording stops. The recording is only sent to Gemini to become text; it
-    is never saved. The text goes through the privacy filter, then into the notes box."""
+def recording_stopped(audio_key: str):
+    """Runs by itself when a recording stops: the speech is turned into text on this run, just before
+    the story box is drawn (so the progress can be shown: "part 2 of 4")."""
     st.session_state.pop(f"{audio_key}-msg", None)
-    recording = st.session_state.get(audio_key)
-    if recording is None:  # the recording was cleared: nothing to do
+    if st.session_state.get(audio_key) is not None:  # cleared: nothing to do
+        st.session_state[f"{audio_key}-pending"] = True
+
+
+def run_pending_voice(audio_key: str, target_key: str):
+    """Call before the story box is drawn. The recording goes to Sarvam AI (Gemini as the backup) only
+    to become text; it is never saved. The text goes through the privacy filter, then into the box."""
+    if not st.session_state.pop(f"{audio_key}-pending", False):
         return
+    recording = st.session_state.get(audio_key)
+    if recording is None:
+        return
+    shown = st.empty()
+
+    def progress(n: int, total: int):
+        shown.info(t("ui.voice.backup_working") if total == 0 else
+                   t("ui.voice.part", n=n, total=total) if total > 1 else t("ui.voice.working"),
+                   icon=":material/graphic_eq:")
+    progress(1, 1)
     try:
         language = st.session_state.get(NOTES_LANGUAGE_KEYS.get(target_key, ""), code())
         transcript = multilingual.speech_to_text(recording.getvalue(),
-                                                 getattr(recording, "type", None) or "audio/wav", language)
-    except (llm.AIUnavailable, bhashini.BhashiniUnavailable) as err:
-        shown = t("ui.ai_busy") if getattr(err, "busy", False) else str(err)
-        st.session_state[f"{audio_key}-msg"] = ("error", f"{shown} {t('ui.voice.type_instead')}")
+                                                 getattr(recording, "type", None) or "audio/wav", language, progress)
+    except (llm.AIUnavailable, bhashini.BhashiniUnavailable):
+        shown.empty()
+        st.session_state[f"{audio_key}-msg"] = ("error", f"{t('ui.voice.failed')} {t('ui.voice.type_instead')}")
         return
+    shown.empty()
     if not transcript.text:
         st.session_state[f"{audio_key}-msg"] = ("error", t("ui.voice.nothing_heard"))
         return
@@ -241,6 +259,8 @@ def transcribe_recording(audio_key: str, target_key: str):
     if target_key in NOTES_LANGUAGE_KEYS:
         detect_notes_language(target_key)
     msg = t("ui.voice.done")
+    if transcript.backup:
+        msg = t("ui.voice.backup_used") + " " + msg
     if transcript.removed:
         msg += " " + t("ui.voice.removed", what=", ".join(f"{n} × {k}" for k, n in transcript.removed.items()))
     st.session_state[f"{audio_key}-msg"] = ("ok", msg)
@@ -251,11 +271,10 @@ def voice_box(audio_key: str, target_key: str):
     speech then becomes text in the story box by itself. No dropdown to open first."""
     st.session_state.pop(f"{audio_key}-open", None)
     with st.container(key=f"{audio_key}-box"):
-        if not llm.gemini_available():  # voice needs Gemini (Groq is only for reading stories)
+        if not (sarvam.configured() or llm.gemini_available()):  # Sarvam, or Gemini as the backup (never Groq)
             st.info(t("ui.voice.no_ai"))
             return
-        st.audio_input(t("ui.voice.title"), key=audio_key, on_change=transcribe_recording,
-                       args=(audio_key, target_key))
+        st.audio_input(t("ui.voice.title"), key=audio_key, on_change=recording_stopped, args=(audio_key,))
         # While recording, the label says so (Streamlit's recorder shows the timer and the stop button)
         st.markdown(f"<style>.st-key-{audio_key}-box [data-testid=\"stAudioInput\"]:has(button[aria-label=\"Stop recording\"])"
                     f" [data-testid=\"stWidgetLabel\"] p::after {{ content: \" \\2014  {css_text(t('ui.voice.recording'))}\"; "
@@ -587,6 +606,7 @@ def general_screen():
         with st.container(key="practice-note"):  # a prototype: practice stories only, one small line
             st.caption(t("ui.practice_only"))
         if llm.available():
+            run_pending_voice("g_audio", "g_notes")  # a recording just stopped: its text goes into the box
             st.text_area(t("ui.general.story_label"), key="g_notes", height=220,
                          placeholder=t("ui.general.story_placeholder"), on_change=detect_notes_language)
             notes_language_choice("g_notes_lang")
@@ -1309,6 +1329,7 @@ def notes_box():
             st.info(t("ui.notes.no_ai"))
             return
         notes_language_choice("f_notes_lang")
+        run_pending_voice("f_audio", "f_notes")
         voice_box("f_audio", "f_notes")
         st.text_area(t("ui.notes.label"), key="f_notes", height=220, placeholder=t("ui.notes.placeholder"))
         col1, col2 = st.columns(2)
