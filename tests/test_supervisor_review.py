@@ -354,7 +354,7 @@ def test_never_sent_case_is_intake_in_progress_not_waiting(tmp_path):
 def test_stage_labels_and_count_line(monkeypatch):
     import lang
     assert [lang.t(f"aud.st.{s}") for s in audit.STATUSES] == ["Intake in progress", "Waiting for review", "Sent back",
-                                                                "Approved", "Deleted"]
+                                                                "Approved", "Closed", "Deleted"]
     intake = tracker.open_case("General", "Volunteer N")  # opened, nothing recorded yet
     sent, sent_code = waiting_case(by="Volunteer M")
     at = supervisor_screen(monkeypatch)

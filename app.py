@@ -73,7 +73,7 @@ def show_date(d: date) -> str:
 # Choice buttons (radios) and lists whose wording changes with the language. In Streamlit, a radio's
 # identity includes its label and option wording, so a new language would reset it to its default.
 # When the language is switched, these are saved again first, so the new-language widgets keep them.
-KEEP_ON_LANGUAGE_SWITCH = ("ev-method", "evs-accepted", "ho-how-", "ho-by-", "case_type", "screen", "f_lawyer", "f_draft_lang", "g_draft_lang", "f_offence_pick",
+KEEP_ON_LANGUAGE_SWITCH = ("doc-st-", "close-reason-", "ev-method", "evs-accepted", "ho-how-", "ho-by-", "case_type", "screen", "f_lawyer", "f_draft_lang", "g_draft_lang", "f_offence_pick",
                            "ge-", "q-never", "q-other_cases_pending", "q-delay_days_by_accused", "q-lawyer",
                            "tl-action-", "tl-step-", "action-")
 LANGUAGE_LABEL = "Language / \u092d\u093e\u0937\u093e"  # the same in every language, so the switch never resets
@@ -767,8 +767,51 @@ def apply_fixes(gen, facts):
     dates = fix.get("dates", {})
     facts.timeline = [(dates.get(w) or w, x) for w, x in facts.timeline]
     facts.coming_dates = [(dates.get(w) or w, x) for w, x in facts.coming_dates]
-    facts.documents_held = list(dict.fromkeys(facts.documents_held + fix.get("documents", [])))
+    # Documents, as marked in the checklist: "Has it", "Still to get" or "Can't get" (with a reason)
+    status = fix.get("doc_status", {})
+    held = [d for d in facts.documents_held + fix.get("documents", []) if status.get(d, {}).get("status", "has") == "has"]
+    held += [d for d, s in status.items() if s.get("status") == "has"]
+    facts.documents_held = list(dict.fromkeys(held))
+    facts.documents_cannot = {d: s.get("reason", "") for d, s in status.items()
+                              if s.get("status") == "cannot" and s.get("reason")}
     return facts
+
+
+DOC_CHOICES = ["has", "to_get", "cannot"]
+
+
+def doc_key(doc: str) -> str:
+    return hashlib.sha256(doc.encode("utf-8")).hexdigest()[:10]
+
+
+def save_doc_status(doc: str):
+    """A document marked in the checklist: kept with the case's fixes (the one place documents are listed)."""
+    k = doc_key(doc)
+    choice = st.session_state.get(f"doc-st-{k}")
+    reason = tracker.clean_text(st.session_state.get(f"doc-why-{k}") or "", 120) if choice == "cannot" else ""
+    st.session_state["gen"].setdefault("fixes", {}).setdefault("doc_status", {})[doc] = {"status": choice,
+                                                                                         "reason": reason}
+
+
+def documents_rows(g, approved):
+    """Each document for this case with "Has it" / "Still to get" / "Can't get" (with a reason)."""
+    docs = casework.document_checklist(g, approved, code())
+    held = {d.casefold() for d in g.documents_held}
+    with st.container(key="doc-list"):
+        if not docs:
+            st.caption(t("cw.nothing_more"))
+        for doc in docs:
+            k = doc_key(doc)
+            if f"doc-st-{k}" not in st.session_state:
+                st.session_state[f"doc-st-{k}"] = ("has" if doc.casefold() in held else
+                                                   "cannot" if doc in g.documents_cannot else "to_get")
+            st.radio(doc, DOC_CHOICES, key=f"doc-st-{k}", horizontal=True, on_change=save_doc_status, args=(doc,),
+                     format_func=option_text("docs."))
+            if st.session_state.get(f"doc-st-{k}") == "cannot":
+                st.session_state.setdefault(f"doc-why-{k}", g.documents_cannot.get(doc, ""))
+                st.text_input(t("docs.why"), key=f"doc-why-{k}", max_chars=120, on_change=save_doc_status, args=(doc,))
+                if not (st.session_state.get(f"doc-why-{k}") or "").strip():
+                    st.caption(t("docs.why_needed"))
 
 
 def research_status(case_id, record) -> str:
@@ -853,7 +896,11 @@ def general_summary(gen):
         st.caption(t("ui.hindi_label_note"))
     kind = casework.problem_type(facts)
     missing_years = casework.missing_years(facts)
-    app_items = readiness.case_items(facts, eligibility, kind, missing_years, cannot_marks("g"))
+    approved_now = research.approved_points(case_id) if case_id else []
+    facts.documents_to_get = [d for d in casework.document_checklist(facts, approved_now, code())
+                              if d not in facts.documents_held and d not in facts.documents_cannot]
+    app_items = readiness.case_items(facts, eligibility, kind, missing_years, cannot_marks("g"),
+                                     documents_done=casework.documents_done(facts, approved_now, code()))
     items = readiness.with_ticks(app_items, volunteer_ticks(app_items))  # the volunteer decides
     send_reason = tracker.clean_text(st.session_state.get("g_send_reason") or "", 200)
     approved = research.approved_points(case_id) if case_id else []
@@ -993,13 +1040,7 @@ def case_cards(g, eligibility, approved, kind, code_):
         tl = [f'<b>{e(w)}</b> \u2014 {rich(x)}' for w, x in g.timeline + g.coming_dates]
         tl += [f'<span class="miss">{e(t("cw.year_missing"))}: {e(w)}</span>' for w, _ in casework.missing_years(g)]
         st.markdown(ui.info_card(t("cw.timeline"), [bullets(tl)], icon_name="calendar_month"), unsafe_allow_html=True)
-    needed, origin = casework.documents_needed(g, approved, code_)
-    docs = [kv(t("cw.docs_has"), bullets([rich(d) for d in g.documents_held]) if g.documents_held
-               else e(t("sum.none_mentioned_short"))),
-            kv(t("cw.docs_needed"), bullets([rich(d) for d in needed]) if needed else e(t("cw.nothing_more")))]
-    if origin == "plain":
-        docs.append(f'<span class="src">{e(t("cw.docs_plain_note"))}</span>')
-    st.markdown(ui.info_card(t("cw.documents"), docs, icon_name="folder"), unsafe_allow_html=True)
+    # (Documents are in the readiness checklist, one row each: the one place they are listed.)
     aid = [rich(eligibility_text(eligibility)),
            *[f'<span class="src">{document.linked_html(s)}</span>' for s in eligibility.sources[:1]]]
     st.markdown(ui.info_card(t("sum.legal_aid_short"), aid, icon_name="balance"), unsafe_allow_html=True)
@@ -1063,10 +1104,11 @@ def volunteer_ticks(items) -> dict:
 
 def tick_why(item, g, eligibility) -> str:
     """Why the app pre-ticked an item (or what is missing)."""
+    if item.key == "case_documents":  # done when nothing is "still to get"
+        return t("ready.why.docs_count", has=len(g.documents_held), get=len(g.documents_to_get or []),
+                 cannot=len(g.documents_cannot))
     if item.status != readiness.PRESENT:
         return t("ready.why.missing") if item.status != readiness.CANNOT else item.note
-    if item.key == "case_documents":
-        return t("ready.why.case_documents", docs="; ".join(g.documents_held))
     if item.key == "case_legal_aid":
         return t("ready.why.case_legal_aid", reason=eligibility_text(eligibility))
     key = f"ready.why.{item.key}"
@@ -1083,6 +1125,9 @@ def fix_checklist(items, g, eligibility, kind, missing_years, approved, gen):
         st.checkbox(item.label(code()), key=key,
                     on_change=lambda k=key: st.session_state.update({f"{k}-touched": True}))
         st.markdown(f'<p class="tick-why">{html.escape(tick_why(item, g, eligibility))}</p>', unsafe_allow_html=True)
+        if item.key == "case_documents":  # the documents themselves, here and nowhere else
+            documents_rows(g, approved)
+            continue
         done = item.status == readiness.PRESENT
         if done or item.status == readiness.CANNOT or st.session_state.get(key):
             continue
@@ -2225,11 +2270,14 @@ def tracker_card(row: dict, approved_text: dict):
                     else f" · {e(t('cf.due', due=due))}")
         st.markdown(f'<div class="case-head">{head} {status_chip(row["status"])}</div>'
                     + (f'<div class="case-sub">{sub}</div>' if sub else ""), unsafe_allow_html=True)
+        closed = row["status"] == tracker.CLOSED  # read-only until the supervisor reopens it
+        if closed and record and record.get("closed"):
+            st.caption(closed_line(record["closed"]))
         with st.container(horizontal=True, gap="small"):
             st.button(t("tr.close") if is_open else t("tr.open"), key=f"tr-open-{case_id}",
                       icon=":material/close:" if is_open else ":material/folder_open:",
                       type="secondary" if is_open else "primary", on_click=toggle_open, args=(case_id,))
-            if record:
+            if record and not closed:
                 st.button(t("tr.edit"), key=f"tr-edit-{case_id}", icon=":material/edit:", on_click=start_edit,
                           args=(case_id,))
             if row["status"] == tracker.INTAKE:
@@ -2238,14 +2286,17 @@ def tracker_card(row: dict, approved_text: dict):
         if row["status"] == store.SENT_BACK:
             st.warning(t("ui.cases.reason", reason=store.get_pending(case_id).get("reason", "")))
             fix_and_resend(case_id)
-        if record and (is_open or st.session_state.get(f"editing-{case_id}")):
+        if record and closed and is_open:
+            case_file_view(case_id, record, editable=False)
+        elif record and (is_open or st.session_state.get(f"editing-{case_id}")):
             case_file_or_edit(case_id, record, edit_button=False)  # "Edit case" is already on the card
             slip_box(record)
             visit_form(case_id)
             camp_form(case_id, record)
-        if is_open and case_id in approved_text:
+        if is_open and case_id in approved_text and not closed:
             handoff_box(case_id)
             timeline_box(case_id)
+        if is_open and case_id in approved_text:
             with st.expander(t("ui.cases.case_file")):
                 st.markdown(approved_text[case_id])
             approved = store.approved_draft(case_id)
@@ -2676,7 +2727,7 @@ AUDIT_COLUMNS = [("code", "aud.code"), ("case_type", "aud.case_type"), ("status"
 HISTORY_COLUMNS = [("time", "aud.time"), ("event", "aud.event"), ("by", "aud.by"), ("details", "aud.details")]
 STATUS_COLOURS = {"intake": ("#EEE9DF", "#4B5563"), "waiting": ("#E0F2FE", "#0C4A6E"),
                   "sent back": ("#FEF3C7", "#78350F"), "approved": ("#DCFCE7", "#14532D"),
-                  "deleted": ("#E5E7EB", "#374151")}  # the app's chip colours; intake in progress grey
+                  "closed": ("#E0E7FF", "#312E81"), "deleted": ("#E5E7EB", "#374151")}  # the app's chip colours; intake in progress grey
 
 
 def audit_records() -> dict:
@@ -2741,6 +2792,7 @@ def audit_records_box():
     line = [t("aud.n_cases", n=len(rows)), t("aud.n_waiting", n=n["waiting"]), t("aud.n_intake", n=n["intake"]),
             t("aud.n_approved", n=n["approved"])]
     line += [t("aud.n_sent_back", n=n["sent back"])] if n["sent back"] else []
+    line += [t("aud.n_closed", n=n["closed"])] if n["closed"] else []
     line += [t("aud.n_deleted", n=n["deleted"])] if n["deleted"] else []
     st.markdown(f'<p class="aud-counts">{html.escape(" · ".join(line))}</p>', unsafe_allow_html=True)
     st.session_state["aud-waiting"] = [r["case_id"] for r in rows if r["status"] == "waiting"]
@@ -2770,6 +2822,61 @@ def audit_records_box():
         st.markdown(f"**{t('aud.history_of', slip=row['code'], case_id=case_id)}**")
         audit_ai_summary(record)
         history_table(record, "aud-hist")
+        close_or_reopen_box(case_id, row["status"])
+
+
+def closed_line(closed: dict) -> str:
+    """"Closed: resolved · the note · by SK on 11 November 2026"."""
+    when = show_date(date.fromisoformat(closed["on"][:10]))
+    return t("close.line", reason=t(f"close.reason.{closed['reason']}"), note=(" · " + closed["note"]) if closed.get("note")
+             else "", by=closed["by"], on=when)
+
+
+def close_case_now(case_id: str):
+    get = st.session_state.get
+    try:
+        tracker.close_case(case_id, get(f"close-reason-{case_id}") or "", get(f"close-note-{case_id}") or "",
+                           supervisor_name())
+    except (tracker.TrackerError, storage.StorageError) as err:
+        st.session_state[f"close-msg-{case_id}"] = ("error", str(err))
+        return
+    st.session_state["supervisor_flash"] = t("close.done", case_id=case_id)
+
+
+def reopen_case_now(case_id: str):
+    try:
+        tracker.reopen_case(case_id, st.session_state.get(f"reopen-reason-{case_id}") or "", supervisor_name())
+    except (tracker.TrackerError, storage.StorageError) as err:
+        st.session_state[f"close-msg-{case_id}"] = ("error", str(err))
+        return
+    st.session_state["supervisor_flash"] = t("close.reopened", case_id=case_id)
+
+
+def close_or_reopen_box(case_id: str, status: str):
+    """Supervisor only: close an approved case (reason and a short note, no names), or reopen a closed
+    one (with a reason). Both go in the audit record with the supervisor's name."""
+    if status not in ("approved", "closed") or tracker.load(case_id) is None:
+        return
+    with st.container(border=True, key=f"close-box-{case_id}"):
+        if status == "approved":
+            st.markdown(f"**{t('close.title')}**")
+            st.selectbox(t("close.reason"), tracker.CLOSE_REASONS, index=None, key=f"close-reason-{case_id}",
+                         format_func=lambda r: t(f"close.reason.{r}"), placeholder=t("close.choose"))
+            st.text_input(t("close.note"), key=f"close-note-{case_id}", max_chars=200, help=t("close.note_help"))
+            st.button(t("close.go"), key=f"close-go-{case_id}", type="primary", icon=":material/lock:",
+                      disabled=not st.session_state.get(f"close-reason-{case_id}"), on_click=close_case_now,
+                      args=(case_id,))
+        else:
+            record = tracker.load(case_id) or {}
+            if record.get("closed"):
+                st.markdown(f"**{html.escape(closed_line(record['closed']))}**")
+            st.text_input(t("close.reopen_reason"), key=f"reopen-reason-{case_id}", max_chars=200,
+                          help=t("close.note_help"))
+            st.button(t("close.reopen"), key=f"reopen-go-{case_id}", icon=":material/lock_open:",
+                      on_click=reopen_case_now, args=(case_id,))
+        msg = st.session_state.pop(f"close-msg-{case_id}", None)
+        if msg:
+            st.error(msg[1])
 
 
 def audit_ai_summary(record: dict):
@@ -3349,7 +3456,11 @@ def open_by_code():
     if not typed:
         return
     try:
-        open_existing(tracker.find_by_code(typed))
+        record = tracker.find_by_code(typed)
+        if record.get("closed"):  # read-only: it can't be continued until the supervisor reopens it
+            st.session_state["case-msg"] = ("error", t("close.cannot_continue"))
+            return
+        open_existing(record)
     except (tracker.TrackerError, storage.StorageError) as err:
         st.session_state["case-msg"] = ("error", str(err))
 
@@ -3795,7 +3906,8 @@ STATUS_CHIPS = {tracker.INTAKE: ("intake", "ui.status.intake"), store.WAITING: (
                 tracker.INTAKE_DONE: ("intake-done", "ui.status.intake_done"),
                 store.SENT_BACK: ("sent-back", "ui.status.sent_back"), store.APPROVED: ("approved", "ui.status.approved"),
                 tracker.SUBMITTED: ("submitted", "ui.status.submitted"), tracker.CHANGED: ("changed", "ui.status.changed"),
-                tracker.ACKNOWLEDGED: ("acknowledged", "ui.status.acknowledged")}
+                tracker.ACKNOWLEDGED: ("acknowledged", "ui.status.acknowledged"),
+                tracker.CLOSED: ("closed", "ui.status.closed")}
 
 
 def status_text(status: str) -> str:

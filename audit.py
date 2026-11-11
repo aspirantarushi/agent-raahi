@@ -132,8 +132,9 @@ DELETED = "case deleted"
 # them was never sent to the supervisor: its intake is still in progress.
 INTAKE = "intake"
 STATUS_EVENTS = {SENT: "waiting", "sent to the supervisor": "waiting", RESENT: "waiting",
-                 SENT_BACK: "sent back", APPROVED: "approved", DELETED: "deleted"}
-STATUSES = [INTAKE, "waiting", "sent back", "approved", "deleted"]
+                 SENT_BACK: "sent back", APPROVED: "approved", DELETED: "deleted",
+                 "case closed": "closed", "case reopened": "approved"}
+STATUSES = [INTAKE, "waiting", "sent back", "approved", "closed", "deleted"]
 NOT_RECORDED = "not recorded"
 
 
@@ -161,7 +162,7 @@ def summary_row(record: dict, code: str = "", case_type: str = "", ai_model: str
             status = STATUS_EVENTS[e["event"]]
             if status == "waiting":
                 sent = e  # the last send or resend (older records: the second copy, which has the name)
-            else:
+            elif e["event"] not in ("case reopened", "case closed"):  # closing is not a decision on the draft
                 decision = e
     return {"case_id": record["case_id"], "code": code or record["case_id"],
             "case_type": record.get("case_type") or case_type, "status": status or INTAKE,

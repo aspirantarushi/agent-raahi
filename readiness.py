@@ -116,7 +116,7 @@ TYPE_ITEMS = {
 }
 
 
-def case_items(g, eligibility, kind: str, missing_years, cannot=None) -> List[Item]:
+def case_items(g, eligibility, kind: str, missing_years, cannot=None, documents_done=None) -> List[Item]:
     """The checklist for step 3 in plain words, with only the items that fit the problem type
     (no "in custody" for an electricity case). The consumer / application number is recorded only as
     "has it: yes or no"; the number itself is never typed or stored."""
@@ -128,7 +128,8 @@ def case_items(g, eligibility, kind: str, missing_years, cannot=None) -> List[It
         Item("case_state", PRESENT if _given(f.get("state")) else MISSING),
         Item("case_dates", PRESENT if not missing_years else MISSING,
              "" if not missing_years else "; ".join(w for w, _ in missing_years)),
-        Item("case_documents", PRESENT if g.documents_held else MISSING),
+        Item("case_documents", PRESENT if (documents_done if documents_done is not None else g.documents_held)
+             else MISSING),  # every document "Has it" or "Can't get" (the list is in the checklist)
         Item("case_legal_aid", PRESENT if eligibility.status != "not decided yet" else MISSING),
         Item("case_questions", PRESENT if not g.still_to_ask else MISSING,
              "" if not g.still_to_ask else str(len(g.still_to_ask))),

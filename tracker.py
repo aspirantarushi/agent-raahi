@@ -42,7 +42,10 @@ SUBMITTED, ACKNOWLEDGED = "submitted", "acknowledged"
 CHANGED = "changed after approval"
 REVIEW_AGAIN = "Changed after approval: needs supervisor review again"
 APPROVED_STATUSES = (store.APPROVED, SUBMITTED, ACKNOWLEDGED)
-STATUSES = [INTAKE, INTAKE_DONE, store.WAITING, store.SENT_BACK, store.APPROVED, CHANGED, SUBMITTED, ACKNOWLEDGED]
+CLOSED = "closed"  # closed by the supervisor: read-only until reopened
+STATUSES = [INTAKE, INTAKE_DONE, store.WAITING, store.SENT_BACK, store.APPROVED, CHANGED, SUBMITTED, ACKNOWLEDGED,
+            CLOSED]
+CLOSE_REASONS = ["resolved", "referred elsewhere", "person withdrew", "could not contact", "other"]
 VISIT_WAYS = ["camp visit", "phone call", "clinic meeting", "jail visit", "other"]
 
 # Facts that are dates (saved as YYYY-MM-DD), and facts never merged: today's date changes at every visit.
@@ -103,10 +106,13 @@ def load(case_id: str, base: Path = HERE) -> Optional[dict]:
     return storage.read_json("tracker", case_id, base)
 
 
-def _must_load(case_id: str, base: Path) -> dict:
+def _must_load(case_id: str, base: Path, closed_ok: bool = False) -> dict:
+    """The case, for a change. A closed case is read-only: every change is refused until it is reopened."""
     record = load(case_id, base)
     if record is None:
         raise TrackerError("No such case in the tracker.")
+    if record.get("closed") and not closed_ok:
+        raise TrackerError("This case is closed, so it can't be changed. The supervisor can reopen it.")
     return record
 
 
@@ -356,6 +362,8 @@ def _status(case_id: str, listed: Optional[dict], base: Path) -> str:
 
 
 def _with_review(status: str, record: Optional[dict]) -> str:
+    if (record or {}).get("closed"):  # closed by the supervisor: read-only until reopened
+        return CLOSED
     if status == INTAKE and (record or {}).get("intake_finished"):
         return INTAKE_DONE
     return CHANGED if status in APPROVED_STATUSES and (record or {}).get("review_needed") else status
@@ -363,9 +371,62 @@ def _with_review(status: str, record: Optional[dict]) -> str:
 
 def status_of(case_id: str, base: Path = HERE) -> str:
     """intake not finished -> waiting / sent back -> approved (or changed after approval) -> submitted ->
-    acknowledged."""
+    acknowledged -> closed (by the supervisor; it can be reopened)."""
+    record = load(case_id, base)
+    if (record or {}).get("closed"):
+        return CLOSED
     listed = next((c for c in _here(store.list_cases, base=base) if c["id"] == case_id), None)
-    return _with_review(_status(case_id, listed, base), load(case_id, base))
+    return _with_review(_status(case_id, listed, base), record)
+
+
+def _no_names(text: str, what: str) -> str:
+    import names
+    text = clean_text(text, 200)
+    if names.found_in(text):
+        raise TrackerError(f"The {what} seems to contain a person's name ({', '.join(names.found_in(text))}). "
+                           "Write it without names.")
+    return text
+
+
+def close_case(case_id: str, reason: str, note: str, by: str, base: Path = HERE) -> dict:
+    """The supervisor closes an approved case (reason from CLOSE_REASONS, a short note without names). The
+    case is then read-only. Recorded in the audit record with the supervisor's name."""
+    by = clean_name(by)
+    if reason not in CLOSE_REASONS:
+        raise TrackerError("Choose why the case is closed.")
+    note = _no_names(note, "note")
+    if reason == "other" and not note:
+        raise TrackerError("Write a short note when the reason is \"other\".")
+    status = status_of(case_id, base)
+    if status == CLOSED:
+        raise TrackerError("This case is already closed.")
+    if status not in APPROVED_STATUSES + (CHANGED,):
+        raise TrackerError("Only an approved case can be closed.")
+    record = _must_load(case_id, base)
+    closed = {"reason": reason, "note": note, "by": by, "on": now()}
+    record["closed"] = closed
+    record.setdefault("closures", []).append({"closed": closed})
+    _note(record, by, f"case closed ({reason})")
+    _save(record, base)
+    audit.add_event(case_id, "case closed", by, f"reason: {reason}" + (f"; note: {note}" if note else ""),
+                    base=base, role="supervisor")
+    return closed
+
+
+def reopen_case(case_id: str, reason: str, by: str, base: Path = HERE) -> None:
+    """The supervisor reopens a closed case, with a reason (no names). Recorded in the audit record."""
+    by = clean_name(by)
+    reason = _no_names(reason, "reason")
+    if not reason:
+        raise TrackerError("Write why the case is reopened.")
+    record = _must_load(case_id, base, closed_ok=True)
+    if not record.get("closed"):
+        raise TrackerError("This case is not closed.")
+    record["closures"][-1]["reopened"] = {"reason": reason, "by": by, "on": now()}
+    record["closed"] = None
+    _note(record, by, "case reopened")
+    _save(record, base)
+    audit.add_event(case_id, "case reopened", by, f"reason: {reason}", base=base, role="supervisor")
 
 
 NEXT_REVIEW, NEXT_FIX, NEXT_INTAKE = "Supervisor to review the draft", "Fix the draft and resend it", \
@@ -376,6 +437,8 @@ NEXT_RECHECK = "Supervisor to review the changes"
 def next_step(record: Optional[dict], status: str, case_id: str, base: Path = HERE,
               today: Optional[date] = None) -> Tuple[str, Optional[str], Optional[timeline.Step]]:
     """(next step, due date YYYY-MM-DD or None, the timeline step if it is one)."""
+    if status == CLOSED:
+        return "", None, None  # nothing more to do (never overdue)
     if status == store.WAITING:
         return NEXT_REVIEW, None, None
     if status == store.SENT_BACK:

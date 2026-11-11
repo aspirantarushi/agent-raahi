@@ -605,6 +605,8 @@ class GeneralFacts:
     outcome: str = ""  # what the person wants, from the notes (or answered as a question)
     evidence: Dict[str, str] = field(default_factory=dict)  # quotes kept for the lawyer (e.g. a payment demand)
     research_state: str = "none"  # "none" (our files cover it), "waiting", "failed", "approved"
+    documents_cannot: Dict[str, str] = field(default_factory=dict)  # document -> why it can't be got
+    documents_to_get: Optional[List[str]] = None  # as the volunteer marked them (None: work it out)
 
     def to_dict(self) -> dict:
         d = {k: v for k, v in self.__dict__.items()}
@@ -617,7 +619,8 @@ class GeneralFacts:
                 "answers", "still_to_ask", "facts", "today"]
         return cls(**{k: d[k] for k in keys}, precautions=d.get("precautions", []), research=d.get("research", []),
                    outcome=d.get("outcome", ""), evidence=d.get("evidence", {}),
-                   research_state=d.get("research_state", "none"))
+                   research_state=d.get("research_state", "none"), documents_cannot=d.get("documents_cannot", {}),
+                   documents_to_get=d.get("documents_to_get"))
 
 
 OWED = re.compile(r"unpaid|not (been )?paid|n[o']t paid|owed|owes|due to (him|her|them)|pending|arrears|withheld|"
@@ -831,6 +834,9 @@ def _summary(g: "GeneralFacts", code: str) -> str:
     out.append(f"- {t('sum.doc_has')} " + ("; ".join(g.documents_held) if g.documents_held else
                                              t("sum.none_mentioned_short")))
     out += _document_lines(g, doc_lists, code, categories)
+    if g.documents_cannot:  # marked "Can't get" in the checklist, with the reason
+        out.append(f"- {t('sum.doc_cannot')}")
+        out += [f"  - {d} ({why})" for d, why in g.documents_cannot.items()]
     out.append("")
 
     out.append(t("sum.legal_aid"))
@@ -922,7 +928,10 @@ def _glance_lines(g: "GeneralFacts", code: str) -> List[str]:
 
 def _document_lines(g: "GeneralFacts", doc_lists, code: str, categories=None) -> List[str]:
     import casework
-    items, origin = casework.documents_needed(g, _approved_points(g), code)
+    _, origin = casework.documents_needed(g, _approved_points(g), code)
+    done = {d.casefold() for d in list(g.documents_held) + list(g.documents_cannot)}
+    items = g.documents_to_get if g.documents_to_get is not None else [  # as the volunteer marked them
+        d for d in casework.document_checklist(g, _approved_points(g), code) if d.casefold() not in done]
     label = lang.t("sum.doc_needed", code).rstrip(":")
     out = [f"- {label}:", *[f"  - {i}" for i in items]] if items else [f"- {label}: " + lang.t("cw.nothing_more", code)]
     if origin == "files":

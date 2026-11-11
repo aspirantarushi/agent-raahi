@@ -246,6 +246,27 @@ def documents_needed(g, approved: List[dict], code: str = "en") -> Tuple[List[st
     return general._not_held(items, g.documents_held), "plain"
 
 
+def document_checklist(g, approved: List[dict], code: str = "en") -> List[str]:
+    """Every document for this case, once each, in this order: what the story says the person has, the
+    list for this kind of problem from our files (or the plain list), and documents named in approved
+    research. The volunteer marks each one "Has it", "Still to get" or "Can't get" in the checklist."""
+    base, _ = documents_needed(g, [], code)  # our files, never unapproved research
+    research_docs = [p["text"] for p in approved if p.get("kind") == "documents"]
+    out, seen = [], set()
+    for d in list(g.documents_held) + list(getattr(g, "documents_cannot", {}) or {}) + base + research_docs:
+        if d and d.strip().casefold() not in seen:
+            seen.add(d.strip().casefold())
+            out.append(d.strip())
+    return out
+
+
+def documents_done(g, approved: List[dict], code: str = "en") -> bool:
+    """Every document is "Has it", or "Can't get" with a reason."""
+    held = {d.casefold() for d in g.documents_held}
+    cannot = {d.casefold() for d, why in (getattr(g, "documents_cannot", {}) or {}).items() if why}
+    return all(d.casefold() in held or d.casefold() in cannot for d in document_checklist(g, approved, code))
+
+
 # ---------- for the lawyer ----------
 
 def lawyer_flags(g, code: str = "en") -> List[str]:

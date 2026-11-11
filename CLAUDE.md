@@ -44,11 +44,15 @@ size of the problem, severity, quality of the solution, proven impact (real use 
   legal services authorities) that came from the actual search results; plain code checks this and
   drops points without one, and points that predict outcomes. Replaced laws, a source that names a
   different law, and a source from another state's website are flagged.
-- The flow for problems not in knowledge/: story read → questions → "Research from official
-  sources" runs once by itself → the points are shown to the volunteer, each with its source link,
+- Nothing that produces a result happens by itself: the volunteer presses a button (Read the story,
+  Turn speech into text, Calculate the dates, Run research, Draft the letter, Make the drafts); the
+  notes' language is only suggested and the volunteer confirms it; the supervisor rebuilds the letter
+  from the approved points with a button.
+- The flow for problems not in knowledge/: story read → questions → the volunteer presses "Run
+  research" (state chosen first) → the points are shown to the volunteer, each with its source link,
   the warnings and the label "AI research, not yet checked by a lawyer" → the volunteer may untick
   points they think are wrong (with a short reason); they can never add or edit a legal point →
-  the complaint letter is drafted at once from the ticked points and the facts of the case (no
+  "Draft the letter" drafts it from the ticked points and the facts of the case (no
   legal claim beyond the ticked points) → "Send to supervisor" sends the summary, the letter, the
   DLSA application, every research point, and which points the volunteer left out and why → the
   supervisor approves, edits or rejects each point; the letter is then rebuilt from the approved

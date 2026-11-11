@@ -234,6 +234,7 @@ div[class*="st-key-learn-card-"] > div:has(.stButton) { width: 100%; }
 .chip.intake-done { background: var(--teal-tint); color: var(--teal-dark); }
 .chip.camp { background: var(--amber-bg); color: var(--amber-ink); font-size: 14px; padding: 6px 12px; }
 .chip.changed { background: var(--amber-bg); color: var(--amber-ink); }
+.chip.closed { background: #E0E7FF; color: #312E81; }
 .tag { display: inline-block; padding: 1px 8px; border-radius: 6px; background: var(--teal-tint); color: var(--teal-dark);
   font-size: 12.5px; font-weight: 500; line-height: 1.6; white-space: nowrap; vertical-align: .1em; margin-left: .25rem; }
 .case-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
@@ -565,3 +566,7 @@ div[class*="st-key-aud-table-box"], div[class*="st-key-hist-"][class*="-box"], .
   .st-key-signin-card { max-width: none; padding: 16px !important; }
 }
 .aud-counts { color: var(--ink); font-weight: 600; font-size: 15px; margin: 0 0 8px 0 !important; }
+
+/* A button that is not ready yet (for example "Draft the letter" before research) looks it: faded */
+.stButton > button:disabled, .stDownloadButton > button:disabled, [data-testid="stFormSubmitButton"] button:disabled {
+  opacity: .45 !important; cursor: not-allowed !important; }

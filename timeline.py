@@ -138,6 +138,9 @@ def create_for_undertrial(case_id: str, facts, result: section479.Result, approv
 # ---------- reading and saving ----------
 
 def _save(record: dict, base: Path) -> None:
+    case = storage.read_json("tracker", record["case_id"], base) or {}
+    if case.get("closed"):  # a closed case is read-only until the supervisor reopens it
+        raise ValueError("This case is closed, so it can't be changed. The supervisor can reopen it.")
     storage.write_json("timelines", record["case_id"], record, base)
 
 
