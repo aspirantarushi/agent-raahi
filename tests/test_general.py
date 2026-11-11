@@ -401,9 +401,9 @@ def test_screen_eligibility_questions_when_needed(pretend_ai, monkeypatch):
 
 
 def test_screen_custody_offers_section_479_check(pretend_ai, monkeypatch):
-    from test_intake import practice_answer
-    monkeypatch.setattr(llm, "read_undertrial_notes",
-                        lambda notes: llm.NotesReading(practice_answer(), notes, {}, MODEL))
+    from test_intake import field, practice_answer
+    monkeypatch.setattr(llm, "read_undertrial_notes",  # no offence date in the notes: it is asked first
+                        lambda notes: llm.NotesReading(practice_answer(offence_date=field(None, None)), notes, {}, MODEL))
     at = read_story(UNDERTRIAL)
     button(at, "Don't know").click().run()
     button(at, "Open Section 479 check").click().run()

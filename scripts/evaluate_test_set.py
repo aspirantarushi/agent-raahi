@@ -5,7 +5,7 @@ The real AI is used (keys from .env; backups allowed). The volunteer's answers c
 story says; anything else is answered "Don't know". The app's screens are driven with Streamlit's
 AppTest, so this is the same code a volunteer uses, without a browser.
 
-Usage:  .venv/bin/python scripts/evaluate_test_set.py <output folder>
+Usage:  .venv/bin/python scripts/evaluate_test_set.py <output folder> [case02,case09,...]
 Writes one JSON transcript per run (what each screen showed, questions and answers, drafts, the AI
 model, seconds taken). Score the transcripts by hand against practice_stories/test_set/ANSWER_KEY.md;
 this script never scores or invents results. Today's date in the cases is 4 November 2026: the
@@ -40,9 +40,9 @@ ELIGIBILITY = {
     "case07": {"woman": "Yes", "state": "Uttar Pradesh"}, "case08": {"woman": "Yes", "state": "Bihar"},
     "case09": {"state": "Bihar", "in_custody": "No", "woman": "No"}, "case10": {"in_custody": "Yes"},
 }
-# Section 479 check: the story gives only a month ("May 2024", "December 2023") and the app shows it
-# under the question; the volunteer picks a day in that month (any day gives the same result).
-DATES_479 = {"case02": {"offence_date": date(2024, 5, 31)}, "case05": {"offence_date": date(2023, 12, 31)}}
+# Section 479 check: the volunteer enters no date of their own (when the story gives only a month, such as
+# "May 2024", the app now decides the law from the month and does not ask for the day).
+DATES_479 = {}
 
 
 def screen(at) -> dict:
@@ -140,10 +140,13 @@ def run(case_file: Path, mode: str, ui_lang: str = "en") -> dict:
     return log
 
 
-def main(out: Path) -> None:
+def main(out: Path, only: str = "") -> None:
     out.mkdir(parents=True, exist_ok=True)
     jobs = []
+    wanted = {c.strip() for c in only.split(",") if c.strip()}
     for case_file in sorted(TEST_SET.glob("case*.txt")):
+        if wanted and case_file.stem[:6] not in wanted:
+            continue
         jobs.append((case_file, "any", "en"))
         if case_file.stem[:6] in UNDERTRIAL:
             jobs.append((case_file, "479", "en"))
@@ -158,4 +161,5 @@ def main(out: Path) -> None:
 
 
 if __name__ == "__main__":
-    main(Path(sys.argv[1]) if len(sys.argv) > 1 else Path(tempfile.mkdtemp(prefix="raahi-eval-out-")))
+    main(Path(sys.argv[1]) if len(sys.argv) > 1 else Path(tempfile.mkdtemp(prefix="raahi-eval-out-")),
+         sys.argv[2] if len(sys.argv) > 2 else "")

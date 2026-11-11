@@ -21,6 +21,7 @@ from typing import Dict, List, Optional, Tuple
 import drafts
 import intake
 import knowledge
+import names
 import lang
 import privacy
 import section479
@@ -548,7 +549,17 @@ def possible_names(summary: str, notes: str) -> List[str]:
                     and w.casefold() not in places \
                     and re.search(rf"\b{re.escape(w)}\b", summary) and w not in found:
                 found.append(w)
+    # common Indian first names and surnames (any case, and in Devanagari) from the notes, in the summary too
+    for w in names.found_in(notes, states):
+        if w not in found and re.search(rf"(?<![\w\u0900-\u097F]){re.escape(w)}(?![\w\u0900-\u097F])", summary):
+            found.append(w)
     return found
+
+
+def names_in_story(notes: str) -> List[str]:
+    """Words in the story that look like people's names (common Indian first names and surnames), even
+    when none reached the summary: the volunteer is told, so they check before ticking "no names"."""
+    return names.found_in(notes, {w.casefold() for s in state_names() for w in s.split()})
 
 
 PLACE_BEFORE = re.compile(r"\b(?:in|at|near|lives in|works in|district|city of|town of|village of)\s+$", re.I)

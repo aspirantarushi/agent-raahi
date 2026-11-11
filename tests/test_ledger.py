@@ -12,7 +12,7 @@ import llm
 import store
 from test_drafts import practice_facts
 from test_general import UPI, UPI_ANSWER, WAGES, WAGES_ANSWER, summarise, yn
-from test_intake import NOTES, practice_answer
+from test_intake import NOTES, field, practice_answer
 
 AI_READ = {"custody_began": date(2024, 3, 15), "law": "IPC", "section": "380", "never_convicted": True,
            "other_cases_pending": False, "delay_days_by_accused": 0, "lawyer": "Legal aid lawyer"}
@@ -84,7 +84,8 @@ def test_ledger_saved_with_case_and_shown(monkeypatch, tmp_path):
     monkeypatch.setattr(store, "submit", lambda *a, **k: original_submit(*a, base=tmp_path, **k))
     monkeypatch.setattr(llm, "available", lambda: True)
     monkeypatch.setattr(llm, "gemini_available", lambda: True)
-    monkeypatch.setattr(llm, "read_undertrial_notes", lambda notes: llm.NotesReading(practice_answer(), notes, {}, "m"))
+    monkeypatch.setattr(llm, "read_undertrial_notes", lambda notes: llm.NotesReading(  # no offence date: asked
+        practice_answer(offence_date=field(None, None)), notes, {}, "m"))
     at = AppTest.from_file("../app.py", default_timeout=20).run()
     at.radio(key="case_type").set_value("Undertrial").run()
     at.text_area(key="f_notes").set_value(NOTES)

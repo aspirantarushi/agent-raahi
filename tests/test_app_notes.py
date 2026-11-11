@@ -6,7 +6,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 import llm
-from test_intake import NOTES, practice_answer
+from test_intake import NOTES, field, practice_answer
 
 APP = "../app.py"
 
@@ -48,17 +48,14 @@ def test_notes_fill_the_practice_case(pretend_ai):
     button(at, "Read notes").click().run()
     ok(at)
 
-    # One missing fact is asked: the offence date (the notes only say February 2024).
-    assert any("On what date was the offence said to have happened?" in m.value for m in at.markdown)
-    assert any("February 2024" in c.value for c in at.caption)
-    at.date_input(key="q-offence_date").set_value(date(2024, 2, 15))
-    button(at, "Next").click().run()
-    ok(at)
+    # No question: the notes say "February 2024", and the month decides the law (the day is not needed).
+    assert not any("On what date was the offence said to have happened?" in m.value for m in at.markdown)
+    assert any("The notes give the month: February 2024. That is enough" in c.value for c in at.caption)
 
     # The form is filled in for the volunteer to check.
     assert at.text_input(key="f_section").value == "380"
     assert at.date_input(key="f_custody").value == date(2024, 3, 15)
-    assert at.date_input(key="f_offence_date").value == date(2024, 2, 15)
+    assert at.date_input(key="f_offence_date").value is None
     assert at.date_input(key="f_today").value == date(2026, 11, 2)
     assert at.checkbox(key="f_never").value is True
     assert at.checkbox(key="f_other").value is False
@@ -73,7 +70,10 @@ def test_notes_fill_the_practice_case(pretend_ai):
     assert at.radio(key="f_lawyer").value == "Legal aid lawyer"
 
 
-def test_dont_know_skips_a_question(pretend_ai):
+def test_dont_know_skips_a_question(pretend_ai, monkeypatch):
+    # notes that give no offence date at all: the date is asked
+    monkeypatch.setattr(llm, "read_undertrial_notes", lambda notes: llm.NotesReading(
+        practice_answer(offence_date=field(None, None)), notes, {}, "pretend-model"))
     at = open_app()
     at.text_area(key="f_notes").set_value(NOTES)
     button(at, "Read notes").click().run()

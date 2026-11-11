@@ -1252,6 +1252,10 @@ i18n/hi.json · aud.n_intake,{n} intake in progress,{n} का इनटेक �
 i18n/hi.json · aud.n_approved,{n} approved,{n} मंज़ूर,screen text,,
 i18n/hi.json · aud.n_sent_back,{n} sent back,{n} वापस भेजे गए,screen text,,
 i18n/hi.json · aud.n_deleted,{n} deleted,{n} हटाए गए,screen text,,
+i18n/hi.json · fact.offence_month,Month of the offence (day not known),अपराध का महीना (दिन पता नहीं),screen text,,
+i18n/hi.json · ui.form.month_decides,The notes give the month: {month}. That is enough to know which law applies (the day is not needed).,"नोट्स में महीना दिया है: {month}। कौन सा क़ानून लागू होगा, यह जानने के लिए इतना काफ़ी है (दिन की ज़रूरत नहीं)।",screen text,,
+i18n/hi.json · ui.form.month_ask_day,"The notes give the month: {month}. That is close to 1 July 2024, when the BNS began, so pick the day of the offence above.","नोट्स में महीना दिया है: {month}। यह 1 जुलाई 2024 के क़रीब है, जब BNS लागू हुआ, इसलिए ऊपर अपराध का दिन चुनें।",screen text,,
+i18n/hi.json · ui.names_in_story,"The story seems to contain a person's name: {names}. Names are never needed. Check that no name is in the drafts before you tick ""no names"", and next time describe people by their role (""the worker"", ""the husband"").","कहानी में किसी व्यक्ति का नाम लगता है: {names}। नाम की कभी ज़रूरत नहीं होती। ""कोई नाम नहीं"" पर टिक करने से पहले देख लें कि ड्राफ़्ट में कोई नाम न हो, और अगली बार लोगों को उनकी भूमिका से बताएँ (""मज़दूर"", ""पति"")।",screen text,,
 case_notes_hi.txt,(fake practice story; check that it reads naturally),"अभ्यास केस (कोई असली व्यक्ति नहीं)।
 बोलने वाली: एक विचाराधीन क़ैदी की बड़ी बहन।
 उसके भाई को 15 मार्च 2024 को गिरफ़्तार किया गया था। अपराध फ़रवरी 2024 में हुआ था।

@@ -88,6 +88,18 @@ class Maximum:
         return int(self.value) if self.value.isdigit() else None
 
 
+def month_law_date(month: Optional[str]) -> Optional[date]:
+    """'2024-05' (the notes give the month and year, not the day) -> a date in that month, used ONLY to
+    decide IPC or BNS: every day of May 2024 is before 1 July 2024. None for June and July 2024 (close
+    to 1 July 2024: the day is asked for), or when no month is known."""
+    try:
+        year, month_no = (int(x) for x in (month or "").split("-"))
+        first = date(year, month_no, 1)
+    except ValueError:
+        return None
+    return None if (year, month_no) in ((2024, 6), (2024, 7)) else first
+
+
 def choose_maximum(offence: Offence, offence_date: Optional[date]) -> Maximum:
     """Before 1 July 2024 the IPC maximum applies; from 1 July 2024 the BNS maximum.
 
@@ -259,8 +271,12 @@ def calculate(
     question_answered: bool = False,
     delay_days_by_accused: int = 0,
     offence_date: Optional[date] = None,
+    offence_month: Optional[str] = None,
 ) -> Result:
     """Work out the Section 479 dates for one offence.
+
+    offence_month: "2024-05" when the notes give the month and year but not the day; it decides IPC or
+    BNS (except June and July 2024), as offence_date would.
 
     question_answered: True once the row's ask_to_decide question has been answered
     and this row is confirmed as the right one. Ignored for rows with no question.
@@ -272,7 +288,7 @@ def calculate(
     if offence_date is not None and offence_date > custody_began:
         raise InputError("s479.error.offence_after_custody")
 
-    maximum = choose_maximum(offence, offence_date)
+    maximum = choose_maximum(offence, offence_date or month_law_date(offence_month))
     result = Result(offence=offence, maximum=maximum, applies=True, lawyer_check=False)
 
     # Rules that rule Section 479 out completely.

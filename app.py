@@ -109,15 +109,16 @@ def option_text(prefix: str):
 FORM_DEFAULTS = {
     "f_law": "IPC", "f_section": "", "f_offence_date": None, "f_custody": None,
     "f_today": None, "f_never": False, "f_other": False, "f_many": False, "f_delay": 0,
-    "f_answer": "", "f_confirm": False, "f_lawyer": None, "f_checked": False,
+    "f_answer": "", "f_confirm": False, "f_lawyer": None, "f_checked": False, "f_offence_month": None,
 }
 FACT_TO_KEY = {
     "law": "f_law", "section": "f_section", "offence_date": "f_offence_date",
     "custody_began": "f_custody", "today": "f_today", "never_convicted": "f_never",
     "other_cases_pending": "f_other", "more_than_one_section": "f_many",
     "delay_days_by_accused": "f_delay", "answer": "f_answer", "lawyer": "f_lawyer",
+    "offence_month": "f_offence_month",
 }
-FACT_LABEL_KEYS = ["custody_began", "offence_date", "today", "section", "law", "more_than_one_section",
+FACT_LABEL_KEYS = ["custody_began", "offence_date", "offence_month", "today", "section", "law", "more_than_one_section",
                    "never_convicted", "other_cases_pending", "delay_days_by_accused", "lawyer", "answer"]
 
 
@@ -855,6 +856,9 @@ def general_summary(gen):
     names = general.possible_names(packet, st.session_state.get("g_notes", ""))
     if names:
         st.warning(t("ui.general.possible_names", names=", ".join(names)))
+    in_story = [n for n in general.names_in_story(st.session_state.get("g_notes", "")) if n not in names]
+    if in_story:  # a name in the story that did not reach the drafts: the volunteer still checks
+        st.warning(t("ui.names_in_story", names=", ".join(in_story)), icon=":material/person_off:")
 
     flow_title(4)
     sent = st.session_state.get("gen_sent")
@@ -1268,6 +1272,8 @@ def show_value(value) -> str:
         return t("yes") if value else t("no")
     if isinstance(value, date):
         return show_date(value)
+    if isinstance(value, str) and re.fullmatch(r"\d{4}-\d{2}", value):  # a month: "May 2024"
+        return show_date(date.fromisoformat(value + "-01")).split(" ", 1)[1]  # "1 May 2024" -> "May 2024"
     return str(value)
 
 
@@ -1481,6 +1487,11 @@ def checked_by_volunteer() -> bool:
     show_translation_note(ai.get("translated_from"), ai.get("translation", ""))
     with st.container(border=True):
         st.markdown(f"**{t('ui.check.title')}**")
+        if ai["removed"]:  # also when no question was asked
+            st.caption(t("ui.removed_before_sending") + ", ".join(f"{n} × {k}" for k, n in ai["removed"].items()))
+        in_story = general.names_in_story(st.session_state.get("f_notes", ""))
+        if in_story:
+            st.warning(t("ui.names_in_story", names=", ".join(in_story)), icon=":material/person_off:")
         rows = [f"- {fact_label(f)}: {show_value(v)} — {t('ui.check.notes')}: “{reading.evidence[f]}”"
                 for f, v in reading.values.items() if f in FACT_LABEL_KEYS and f in reading.evidence]
         asked = [f for f in ai["values"] if f not in reading.values and f in FACT_LABEL_KEYS]
@@ -1520,6 +1531,11 @@ def undertrial_form():
     offence_date = st.date_input(t("fact.offence_date"), format="DD/MM/YYYY", key="f_offence_date",
                                  min_value=date(1990, 1, 1), max_value=date.today(),
                                  help=t("ui.form.offence_date_help"))
+    month = st.session_state.get("f_offence_month") if offence_date is None else None
+    if month:  # the notes give only the month and year
+        decides = section479.month_law_date(month) is not None
+        st.caption(t("ui.form.month_decides" if decides else "ui.form.month_ask_day", month=show_value(month)))
+        month = month if decides else None
     custody_began = st.date_input(t("fact.custody_began"), format="DD/MM/YYYY", key="f_custody",
                                   min_value=date(1990, 1, 1), max_value=date.today())
     today = st.date_input(t("fact.today"), format="DD/MM/YYYY", key="f_today")
@@ -1590,6 +1606,7 @@ def undertrial_form():
             question_answered=question_answered,
             delay_days_by_accused=int(delay_days),
             offence_date=offence_date,
+            offence_month=month,
         )
     except section479.InputError as err:
         st.error(t(err.key))
@@ -1614,6 +1631,7 @@ def undertrial_form():
                 delay_days_by_accused=int(delay_days),
                 offence_name=offence.offence,
                 offence_date=offence_date,
+                offence_month=month,
                 answer=answer.strip(),
             ),
             result,
@@ -1687,7 +1705,7 @@ def send_label(items) -> str:
 def draft_section(known: dict, result: section479.Result):
     st.divider()
     st.subheader(t("ui.draft.title"))
-    if known["offence_date"] is None:
+    if known["offence_date"] is None and not section479.month_law_date(known.get("offence_month")):
         st.info(t("ui.draft.need_offence_date"))
         return
     lawyer = st.radio(t("ui.draft.lawyer_question"), drafts.LAWYER_OPTIONS, key="f_lawyer",

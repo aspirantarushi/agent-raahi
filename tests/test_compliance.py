@@ -226,9 +226,7 @@ def test_draft_made_after_ai_reading_names_the_model(monkeypatch):
     at = AppTest.from_file("../app.py", default_timeout=20).run()
     at.radio(key="case_type").set_value("Undertrial").run()
     at.text_area(key="f_notes").set_value(NOTES)
-    next(b for b in at.button if b.label == "Read notes").click().run()
-    at.date_input(key="q-offence_date").set_value(date(2024, 2, 15))
-    next(b for b in at.button if b.label == "Next").click().run()
+    next(b for b in at.button if b.label == "Read notes").click().run()  # "February 2024": no day asked
     at.checkbox(key="f_checked").check().run()
     next(b for b in at.button if b.label == "Make draft").click().run()
     assert not at.exception

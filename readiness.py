@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 import lang
+import section479
 
 PRESENT, MISSING, UNCERTAIN, CANNOT = "present", "missing", "uncertain", "cannot obtain"
 
@@ -49,7 +50,8 @@ def section479_items(facts, result, details: Dict[str, str], skipped=(), cannot=
     o = result.offence
     items = [
         Item("sections", PRESENT),
-        Item("offence_date", PRESENT if facts.offence_date else MISSING),
+        Item("offence_date", PRESENT if facts.offence_date or section479.month_law_date(
+            getattr(facts, "offence_month", None)) else MISSING),  # the month alone decides the law
         Item("custody_began", PRESENT if facts.custody_began else MISSING),
         Item("previous_convictions", UNCERTAIN if "never_convicted" in skipped else PRESENT,
              "not known" if "never_convicted" in skipped else ""),

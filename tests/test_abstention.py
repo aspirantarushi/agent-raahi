@@ -97,9 +97,7 @@ def test_case3_ai_and_volunteer_disagree(monkeypatch):
     monkeypatch.setattr(llm, "read_undertrial_notes", lambda notes: llm.NotesReading(practice_answer(), notes, {}, "m"))
     at = open_form()
     at.text_area(key="f_notes").set_value(NOTES)
-    next(b for b in at.button if b.label == "Read notes").click().run()
-    at.date_input(key="q-offence_date").set_value(date(2023, 2, 15))
-    next(b for b in at.button if b.label == "Next").click().run()
+    next(b for b in at.button if b.label == "Read notes").click().run()  # "February 2024": the month decides, no day asked
     at.date_input(key="f_custody").set_value(date(2023, 3, 15))  # the volunteer changes the AI's reading
     at.checkbox(key="f_checked").check().run()
     ok(at)

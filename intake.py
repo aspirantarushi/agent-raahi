@@ -90,6 +90,22 @@ def _in_notes(quote: Optional[str], notes: str) -> bool:
     return bool(quote) and _norm(quote) in _norm(notes)
 
 
+def month_year(quote: Optional[str]) -> Optional[str]:
+    """"2024-05" from words like "in May 2024", "मई 2024" or "mai 2024" (a month name and a 4-digit year);
+    None if the quote does not give both."""
+    text = privacy.normalise_digits(quote or "")
+    years = re.findall(r"(?<!\d)(19\d\d|20\d\d)(?!\d)", text)
+    if len(set(years)) != 1:
+        return None
+    tokens = re.findall(r"[^\W\d_]+", text.casefold())
+    found = {i + 1 for i, name in enumerate(MONTHS) for t in tokens if t == name or (len(t) >= 3 and name.startswith(t))}
+    found |= {i + 1 for i, names in enumerate(HINDI_MONTH_NAMES) for n in names if privacy.comparable(n) in
+              {privacy.comparable(t) for t in tokens}}
+    found |= {i + 1 for i, names in enumerate(HINGLISH_MONTH_NAMES) for n in names
+              if n in tokens and n != "mai"}  # Hinglish "mai" usually means "in", not May
+    return f"{years[0]}-{found.pop():02d}" if len(found) == 1 else None
+
+
 def _date_supported(value: date, quote: str) -> bool:
     """The quote must show the day, the month and the year: no filling in a missing day."""
     q = _norm(quote)
@@ -127,7 +143,9 @@ def check_ai_answer(raw: dict, notes: str) -> Reading:
         value, quote = _field(raw, key)
         if value is None:
             if quote and _in_notes(quote, notes):
-                r.notes_say[fact] = quote  # e.g. "in February 2024": shown, not used
+                r.notes_say[fact] = quote  # e.g. "in February 2024": shown
+                if fact == "offence_date" and month_year(quote):  # the month and year decide IPC or BNS
+                    keep("offence_month", month_year(quote), quote)
             continue
         try:
             d = date.fromisoformat(value)
@@ -219,6 +237,8 @@ def missing_facts(values: Dict[str, object], skipped: Optional[set] = None) -> L
         if fact == "answer":
             if offence_question(values) and not values.get("answer"):
                 missing.append(fact)
+        elif fact == "offence_date" and section479.month_law_date(values.get("offence_month")):
+            continue  # the month is known and decides the law (not June or July 2024): no need for the day
         elif values.get(fact) is None:
             missing.append(fact)
     return missing

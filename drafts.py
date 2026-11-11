@@ -43,6 +43,7 @@ class UndertrialFacts:
     offence_name: str = ""  # the sentence-table row picked, when a section has several
     offence_date: Optional[date] = None
     answer: str = ""  # answer to the row's ask_to_decide question, if any
+    offence_month: Optional[str] = None  # "2024-05": the notes give the month and year, not the day
 
     def __post_init__(self):
         # The question counts as answered only when an answer is written down.
@@ -121,6 +122,21 @@ def remaining_blanks(text: str) -> List[str]:
 BNS_START = date(2024, 7, 1)  # the BNS replaced the IPC for offences from this date
 
 
+def law_date(facts: "UndertrialFacts") -> Optional[date]:
+    """The offence date, or (only the month known, not June or July 2024) a date in that month: used only
+    to decide IPC or BNS, never shown as the offence date."""
+    return facts.offence_date or section479.month_law_date(getattr(facts, "offence_month", None))
+
+
+def offence_when(facts: "UndertrialFacts") -> str:
+    if facts.offence_date:
+        return show_date(facts.offence_date)
+    if getattr(facts, "offence_month", None):
+        year, month = facts.offence_month.split("-")
+        return f"{date(int(year), int(month), 1):%B %Y} (the day is not known)"
+    return "not given"
+
+
 def describe_sections(offence: section479.Offence, offence_date: Optional[date]) -> str:
     """Before 1 July 2024: 'IPC 325 (now BNS 117(2))'. From 1 July 2024: 'BNS 117(2) (earlier IPC 325)'."""
     bns, ipc = offence.bns_section, offence.ipc_section
@@ -158,7 +174,7 @@ def section479_replacements(facts: UndertrialFacts, result: Result) -> List[Tupl
     m = result.maximum
     check = " (to be checked by a lawyer)" if result.lawyer_check else ""
 
-    sections = describe_sections(o, facts.offence_date)
+    sections = describe_sections(o, law_date(facts))
     if facts.more_than_one_section:
         sections += ", and other sections [___]"
 
@@ -197,7 +213,7 @@ def dlsa_replacements(facts: UndertrialFacts, result: Result) -> List[Tuple[str,
     o = result.offence
     statement = (
         f"   The applicant is an undertrial prisoner, in custody since {show_date(facts.custody_began)}, "
-        f"charged under {describe_sections(o, facts.offence_date)} ({o.offence.lower()}). "
+        f"charged under {describe_sections(o, law_date(facts))} ({o.offence.lower()}). "
         "The applicant has no lawyer and needs one to apply for release under Section 479 BNSS. "
         "Court and case or FIR number: [court, case / FIR number]."
     )
@@ -315,7 +331,7 @@ def hindi_note(facts: "UndertrialFacts", result: Result) -> Tuple[str, bool]:
     t = lambda key, **p: lang.t(key, code, **p)
     check = t("draft.check_suffix") if result.lawyer_check else ""
     status = lambda ms: t("draft.reached") if ms.reached else t("draft.not_reached")
-    sections = describe_sections_in(o, facts.offence_date, code)
+    sections = describe_sections_in(o, law_date(facts), code)
     if facts.more_than_one_section:
         sections += t("draft.other_sections")
     months, days = time_in_custody(facts.custody_began, facts.today)
@@ -362,7 +378,7 @@ def hindi_dlsa(facts: "UndertrialFacts", result: Result) -> Tuple[str, bool]:
     t = lambda key, **p: lang.t(key, code, **p)
     o = result.offence
     statement = t("draft.dlsa_statement", date=lang.show_date(facts.custody_began, code),
-                  sections=describe_sections_in(o, facts.offence_date, code), offence=o.offence.lower())
+                  sections=describe_sections_in(o, law_date(facts), code), offence=o.offence.lower())
     return fill(template, [(t("draft.dlsa_groups_blank"), t("draft.dlsa_custody")),
                            (t("draft.dlsa_need_blank"), t("draft.dlsa_need")),
                            (t("draft.dlsa_statement_blank"), statement)]), checked
@@ -438,7 +454,7 @@ def facts_missing(facts: UndertrialFacts, result: Result) -> List[str]:
         missing.append("The other sections charged, and whether Section 479(2) bars release")
     if result.offence.ask_to_decide and not facts.question_answered:
         missing.append(f"Answer to: {result.offence.ask_to_decide}")
-    if facts.offence_date is None:
+    if law_date(facts) is None:
         missing.append("Offence date (decides whether the IPC or the BNS applies)")
     if facts.lawyer == "Don't know":
         missing.append("Whether the person has a lawyer")
@@ -458,8 +474,8 @@ def make_case_file(case_id: str, facts: UndertrialFacts, result: Result, approve
         "",
         "## Facts known",
         f"- Offence: {o.offence}",
-        f"- Sections: {describe_sections(o, facts.offence_date)}",
-        "- Offence date: " + (show_date(facts.offence_date) if facts.offence_date else "not given"),
+        f"- Sections: {describe_sections(o, law_date(facts))}",
+        "- Offence date: " + offence_when(facts),
         f"- Maximum prison term: {describe_term(result.maximum.months)}, as per {result.maximum.section}",
         f"- Why this maximum: {result.maximum.reason}",
     ] + ([f"  {result.maximum.source_line}"] if result.maximum.source_line else []) + [
@@ -511,4 +527,5 @@ def recalculate(facts: UndertrialFacts) -> Result:
         question_answered=facts.question_answered,
         delay_days_by_accused=facts.delay_days_by_accused,
         offence_date=facts.offence_date,
+        offence_month=getattr(facts, "offence_month", None),
     )
