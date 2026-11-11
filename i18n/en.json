@@ -317,7 +317,6 @@
  "ui.cases.fix_caption": "Do not add names, phone numbers, Aadhaar numbers, addresses or prisoner IDs. To change the facts (dates, sections, answers), make a new draft on \"New case\" instead.",
  "ui.cases.resend": "Resend to supervisor",
  "ui.learn.title": "Learn",
- "ui.learn.soon": "Coming soon: explainers, quizzes and practice cases.",
  "ui.sup.title": "Supervisor",
  "ui.sup.no_password": "The supervisor password has not been set up yet. Put SUPERVISOR_PASSWORD in .streamlit/secrets.toml (see the example file).",
  "ui.sup.password": "Supervisor password",
@@ -1118,5 +1117,18 @@
  "aud.st.waiting": "Waiting",
  "aud.st.sent back": "Sent back",
  "aud.st.approved": "Approved",
- "aud.st.deleted": "Deleted"
+ "aud.st.deleted": "Deleted",
+ "learn.intro": "Short guides for volunteers, from the app's verified files. Read one aloud, then test yourself.",
+ "learn.open": "Open guide",
+ "learn.checked": "Checked by a lawyer: {checked}. Every key point below comes from the app's verified files, with its source.",
+ "learn.explainer": "Read aloud (about 2 minutes)",
+ "learn.english_only": "This explainer is in English for now. The key points below are in Hindi where a Hindi version exists.",
+ "learn.key_points": "Key points, with their sources",
+ "learn.key_points_note": "Tap a point to read it. Each one shows where it comes from.",
+ "learn.checked_on": "checked {on}",
+ "learn.hindi_unchecked": "Hindi translation not yet checked by a Hindi-speaking lawyer.",
+ "learn.hindi_checked": "Hindi translation checked.",
+ "learn.quiz": "Test yourself: {n} questions",
+ "learn.answer": "Show the answer",
+ "learn.practice": "Practice cases"
 }

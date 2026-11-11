@@ -608,7 +608,6 @@ i18n/hi.json · ui.cases.fix,Fix and resend,ठीक करके फिर भ
 i18n/hi.json · ui.cases.fix_label,Fix the draft,ड्राफ़्ट ठीक करें,screen text,,
 i18n/hi.json · ui.cases.fix_caption,"Do not add names, phone numbers, Aadhaar numbers, addresses or prisoner IDs. To change the facts (dates, sections, answers), make a new draft on ""New case"" instead.","नाम, फ़ोन नंबर, आधार नंबर, पता या क़ैदी ID न जोड़ें। तथ्य (तारीख़ें, धाराएँ, जवाब) बदलने हों तो ""नया केस"" में नया ड्राफ़्ट बनाएँ।",screen text,,
 i18n/hi.json · ui.cases.resend,Resend to supervisor,Supervisor को फिर भेजें,screen text,,
-i18n/hi.json · ui.learn.soon,"Coming soon: explainers, quizzes and practice cases.","जल्द आ रहा है: समझाने वाले पाठ, क्विज़ और अभ्यास केस।",screen text,,
 i18n/hi.json · ui.sup.no_password,The supervisor password has not been set up yet. Put SUPERVISOR_PASSWORD in .streamlit/secrets.toml (see the example file).,सुपरवाइज़र का पासवर्ड अभी सेट नहीं है। .streamlit/secrets.toml में SUPERVISOR_PASSWORD डालें (उदाहरण फ़ाइल देखें)।,screen text,,
 i18n/hi.json · ui.sup.password,Supervisor password,Supervisor पासवर्ड,screen text,,
 i18n/hi.json · ui.sup.sign_in,Sign in,साइन इन करें,screen text,,
@@ -1228,6 +1227,19 @@ i18n/hi.json · aud.st.waiting,Waiting,इंतज़ार में,screen te
 i18n/hi.json · aud.st.sent back,Sent back,वापस भेजा,screen text,,
 i18n/hi.json · aud.st.approved,Approved,मंज़ूर,screen text,,
 i18n/hi.json · aud.st.deleted,Deleted,हटाया गया,screen text,,
+i18n/hi.json · learn.intro,"Short guides for volunteers, from the app's verified files. Read one aloud, then test yourself.","स्वयंसेवकों के लिए छोटी गाइड, ऐप की जाँची हुई फ़ाइलों से। एक गाइड पढ़कर सुनाएँ, फिर ख़ुद को परखें।",screen text,,
+i18n/hi.json · learn.open,Open guide,गाइड खोलें,screen text,,
+i18n/hi.json · learn.checked,"Checked by a lawyer: {checked}. Every key point below comes from the app's verified files, with its source.","वकील ने जाँचा: {checked}। नीचे का हर मुख्य बिंदु ऐप की जाँची हुई फ़ाइलों से है, स्रोत के साथ।",screen text,,
+i18n/hi.json · learn.explainer,Read aloud (about 2 minutes),पढ़कर सुनाएँ (लगभग 2 मिनट),screen text,,
+i18n/hi.json · learn.english_only,This explainer is in English for now. The key points below are in Hindi where a Hindi version exists.,यह पाठ अभी सिर्फ़ अंग्रेज़ी में है। नीचे के मुख्य बिंदु हिंदी में हैं जहाँ हिंदी अनुवाद मौजूद है।,screen text,,
+i18n/hi.json · learn.key_points,"Key points, with their sources","मुख्य बिंदु, उनके स्रोत के साथ",screen text,,
+i18n/hi.json · learn.key_points_note,Tap a point to read it. Each one shows where it comes from.,पढ़ने के लिए किसी बिंदु पर टैप करें। हर बिंदु में लिखा है कि वह कहाँ से है।,screen text,,
+i18n/hi.json · learn.checked_on,checked {on},जाँचा गया {on},screen text,,
+i18n/hi.json · learn.hindi_unchecked,Hindi translation not yet checked by a Hindi-speaking lawyer.,हिंदी अनुवाद अभी किसी हिंदी जानने वाले वकील ने नहीं जाँचा है।,screen text,,
+i18n/hi.json · learn.hindi_checked,Hindi translation checked.,हिंदी अनुवाद जाँचा गया।,screen text,,
+i18n/hi.json · learn.quiz,Test yourself: {n} questions,ख़ुद को परखें: {n} सवाल,screen text,,
+i18n/hi.json · learn.answer,Show the answer,जवाब देखें,screen text,,
+i18n/hi.json · learn.practice,Practice cases,अभ्यास केस,screen text,,
 case_notes_hi.txt,(fake practice story; check that it reads naturally),"अभ्यास केस (कोई असली व्यक्ति नहीं)।
 बोलने वाली: एक विचाराधीन क़ैदी की बड़ी बहन।
 उसके भाई को 15 मार्च 2024 को गिरफ़्तार किया गया था। अपराध फ़रवरी 2024 में हुआ था।

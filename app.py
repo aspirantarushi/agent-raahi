@@ -27,6 +27,7 @@ import drafts
 import evaluation
 import impact
 import general
+import guides
 import home
 import intake
 import lang
@@ -164,8 +165,9 @@ def ai_info_for_audit():
 
 def page_title(text: str):
     """A page heading with the two tap-to-call helplines right under it (the Home page style)."""
-    st.title(text)
-    st.markdown(ui.page_helplines(t("safety.bar112"), t("safety.bar15100")), unsafe_allow_html=True)
+    with st.container(key="page-head", gap=None):  # its own space below the logo bar
+        st.title(text)
+        st.markdown(ui.page_helplines(t("safety.bar112"), t("safety.bar15100")), unsafe_allow_html=True)
 
 
 def new_case_screen():
@@ -2262,9 +2264,62 @@ def impact_box():
                            key="imp-export")
 
 
+def open_guide(key: str):
+    """Open one guide on the Learn page (from its card there, or its "Open Learn" button on Home)."""
+    st.session_state.update(screen="Learn", learn_guide=key, menu_open=False)
+
+
 def learn_screen():
+    """The three guides from learner/ as cards; the open guide below them: the read-aloud explainer, the
+    key points with their sources (verified files), the quiz and the practice cases."""
     page_title(t("ui.learn.title"))
-    st.info(t("ui.learn.soon"))
+    wanted = st.query_params.get("guide", "")
+    if "learn_guide" not in st.session_state and guides.by_key(wanted):
+        st.session_state["learn_guide"] = wanted  # reopened from the page address
+    current = st.session_state.get("learn_guide")
+    st.caption(t("learn.intro"))
+    with st.container(key="learnlinks"):
+        cols = st.columns(len(guides.GUIDES), gap="medium")
+        for col, g in zip(cols, guides.GUIDES):
+            with col.container(key=f"learn-card-{g.key}"):
+                st.markdown(ui.guide_card(g.icon, t(f"home.learn{g.number}"), t(f"home.learn{g.number}_p")),
+                            unsafe_allow_html=True)
+                st.button(t("learn.open"), key=f"guide-{g.key}", icon=":material/menu_book:",
+                          type="primary" if g.key == current else "secondary", on_click=open_guide, args=(g.key,))
+    guide = guides.by_key(current or "")
+    if guide:
+        if st.query_params.get("guide") != guide.key:
+            st.query_params["guide"] = guide.key
+        show_guide(guide)
+
+
+def show_guide(guide):
+    content = guides.content(guide.key)
+    with st.container(key="guide-page", border=True):
+        st.markdown(f"## {ui.icon(guide.icon)} {html.escape(t(f'home.learn{guide.number}'))}", unsafe_allow_html=True)
+        st.caption(t("learn.checked", checked=t("opt.Yes") if content.lawyer_checked == "yes" else t("opt.No")))
+        st.markdown(f"#### {t('learn.explainer')}")
+        if code() != "en":
+            st.caption(t("learn.english_only"))
+        st.markdown(content.explainer)
+        st.markdown(f"#### {t('learn.key_points')}")
+        st.caption(t("learn.key_points_note"))
+        for e in guides.key_points(guide.key, code()):
+            with st.expander(e.heading):
+                st.markdown(e.body)
+                st.caption(e.source_line + (f" · {t('learn.checked_on', on=e.checked)}" if e.checked else ""))
+                if e.lang == "hi":
+                    st.caption(t("learn.hindi_checked") if e.translation_checked else t("learn.hindi_unchecked"))
+        with st.expander(t("learn.quiz", n=len(content.quiz))):
+            for n, q in enumerate(content.quiz, 1):
+                options = "  \n".join(html.escape(o) for o in re.split(r"\s{2,}(?=[a-d]\))", q.options))
+                st.markdown(f"**{n}. {html.escape(q.text)}**  \n{options}"
+                            f'<details class="quiz-answer"><summary>{html.escape(t("learn.answer"))}</summary>'
+                            f"{html.escape(q.answer)}</details>", unsafe_allow_html=True)
+        with st.expander(t("learn.practice")):
+            for title, text in content.practice:
+                st.markdown(f"**{html.escape(title)}**")
+                st.markdown(text)
 
 
 def supervisor_password() -> str:
@@ -2379,23 +2434,25 @@ def supervisor_screen():
         info = st.session_state.pop("sup-msg-info", None)
         if info:
             st.info(info, icon=":material/timer:")
-        with st.form("sup-form", enter_to_submit=True, border=False):  # Enter signs in
-            st.text_input(t("ui.sup.password"), type="password", key="sup-pass")
-            st.form_submit_button(t("ui.sup.sign_in"), type="primary", key="sup-go", on_click=supervisor_sign_in)
-        msg = st.session_state.pop("sup-msg", None) or locked_message("supervisor")
-        if msg:
-            st.error(msg)
+        with st.container(key="signin-card"):  # the same card as on New case
+            with st.form("sup-form", enter_to_submit=True, border=False):  # Enter signs in
+                st.text_input(t("ui.sup.password"), type="password", key="sup-pass")
+                st.form_submit_button(t("ui.sup.sign_in"), type="primary", key="sup-go", on_click=supervisor_sign_in)
+            msg = st.session_state.pop("sup-msg", None) or locked_message("supervisor")
+            if msg:
+                st.error(msg)
         return
     if not supervisor_name():
         # After the password: the supervisor's name or initials, saved with every decision
         page_title(t("ui.sup.sign_in_title"))
-        with st.form("sup-name-form", enter_to_submit=True, border=False):
-            st.text_input(t("gate.name"), key="sup-name", max_chars=40, help=t("ui.sup.name_help"))
-            st.form_submit_button(t("ui.next"), type="primary", key="sup-name-go", on_click=supervisor_name_given)
-        msg = st.session_state.pop("sup-msg", None)
-        if msg:
-            st.error(msg)
-        st.button(t("ui.sup.sign_out"), key="sup-out", type="tertiary", on_click=supervisor_sign_out)
+        with st.container(key="signin-card"):
+            with st.form("sup-name-form", enter_to_submit=True, border=False):
+                st.text_input(t("gate.name"), key="sup-name", max_chars=40, help=t("ui.sup.name_help"))
+                st.form_submit_button(t("ui.next"), type="primary", key="sup-name-go", on_click=supervisor_name_given)
+            msg = st.session_state.pop("sup-msg", None)
+            if msg:
+                st.error(msg)
+            st.button(t("ui.sup.sign_out"), key="sup-out", type="tertiary", on_click=supervisor_sign_out)
         return
     page_title(t("ui.sup.title"))
     top1, top2 = st.columns([3, 1])
@@ -2922,14 +2979,15 @@ def clinic_sign_in():
 
 def clinic_gate():
     page_title(t("gate.title"))
-    st.caption(t("gate.caption"))
-    with st.form("gate-form", enter_to_submit=True, border=True):  # Enter signs in
-        st.text_input(t("gate.passcode"), type="password", key="gate-pass")
-        st.text_input(t("gate.name"), key="gate-name", max_chars=40, help=t("gate.name_help"))
-        st.form_submit_button(t("gate.go"), type="primary", key="gate-go", on_click=clinic_sign_in)
-    msg = st.session_state.pop("gate-msg", None) or locked_message("volunteer")
-    if msg:
-        st.error(msg)
+    with st.container(key="signin-card"):  # the same card as on New case
+        st.caption(t("gate.caption"))
+        with st.form("gate-form", enter_to_submit=True, border=False):  # Enter signs in
+            st.text_input(t("gate.passcode"), type="password", key="gate-pass")
+            st.text_input(t("gate.name"), key="gate-name", max_chars=40, help=t("gate.name_help"))
+            st.form_submit_button(t("gate.go"), type="primary", key="gate-go", on_click=clinic_sign_in)
+        msg = st.session_state.pop("gate-msg", None) or locked_message("volunteer")
+        if msg:
+            st.error(msg)
 
 
 def new_case_side() -> str:
@@ -3552,6 +3610,8 @@ def keep_place_in_address(screen: str):
     key = {**{s: k for s, k in NAV}, "Evaluation": "evaluation"}.get(screen, "home")
     if st.query_params.get("screen") != key:
         st.query_params["screen"] = key
+    if screen != "Learn" and "guide" in st.query_params:  # the open guide belongs to the Learn page only
+        del st.query_params["guide"]
     case_id = st.session_state.get("case_id") if screen == "New case" else None
     if case_id and st.query_params.get("case") != case_id:
         st.query_params["case"] = case_id
@@ -3662,7 +3722,7 @@ def home_screen():
                             unsafe_allow_html=True)
                 if i < 4:
                     st.button(t("home.learn_go"), key=f"home-learn-{i}", icon=":material/arrow_forward:",
-                              on_click=go, args=("Learn",))
+                              on_click=open_guide, args=(guides.GUIDES[i - 1].key,))  # its own guide
                 else:  # the 4th item: practice evaluation, a proper button with its own icon
                     st.button(t("home.eval_go"), key="nav-evaluation", type="primary", icon=":material/timer:",
                               on_click=go, args=("Evaluation",))

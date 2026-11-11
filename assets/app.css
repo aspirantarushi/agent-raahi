@@ -538,3 +538,29 @@ div[class*="-actions"]:has(> [class*="-docx"]) iframe { width: 100% !important; 
 .st-key-aud-filters { flex-wrap: wrap !important; align-items: flex-end; }
 .st-key-aud-filters > div { flex: 1 1 200px !important; min-width: 0; }
 div[class*="st-key-aud-table-box"], div[class*="st-key-hist-"][class*="-box"], .st-key-aud-hist-box { max-width: 100%; overflow-x: auto; }
+
+/* ---------- page tops: space below the logo bar; helplines; sign-in cards ---------- */
+.st-key-page-head { margin-top: 28px; gap: 0 !important; }
+.st-key-page-head h1 { padding-top: 0 !important; margin-bottom: 10px !important; }
+.st-key-page-head .helpline.helpline-page { margin: 0 0 18px 0; }
+.st-key-page-head .helpline-page .lines { flex-direction: row; flex-wrap: wrap; gap: 8px 28px; }
+.st-key-page-head .helpline-page a { min-height: 40px; }
+.st-key-signin-card { background: var(--card); border: 1px solid var(--line); border-radius: 20px;
+  padding: 20px 20px 16px 20px !important; max-width: 440px; box-sizing: border-box; gap: 8px !important; }
+.st-key-signin-card [data-testid="stForm"] { padding: 0 !important; border: 0 !important; }
+.st-key-signin-card .stButton > button, .st-key-signin-card [data-testid="stFormSubmitButton"] button { min-height: 44px; }
+/* Learn: the open guide, and quiz answers that open on a tap */
+.st-key-guide-page { margin-top: 18px; }
+.st-key-guide-page h2 { display: flex; align-items: center; gap: 10px; font-size: 1.5rem !important; }
+.st-key-guide-page h2 .mi { color: var(--teal); font-size: 28px; }
+.quiz-answer { margin: 6px 0 14px 0; }
+.quiz-answer summary { cursor: pointer; color: var(--teal-dark); font-weight: 600; min-height: 32px; }
+@media (max-width: 640px) {
+  .st-key-page-head { margin-top: 16px; }
+  /* stacked: the heading, the first line and the second line evenly spaced (each line still a 36 px tap target) */
+  .st-key-page-head h1 { margin-bottom: 4px !important; }
+  .st-key-page-head .helpline-page .lines { flex-direction: column; align-items: flex-start; gap: 0; }
+  .st-key-page-head .helpline-page a { min-height: 36px; }
+  .st-key-page-head .helpline.helpline-page { margin: 22px 0 12px 0; }  /* 18 px between the heading and line 1, as between the lines */
+  .st-key-signin-card { max-width: none; padding: 16px !important; }
+}
