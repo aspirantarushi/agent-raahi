@@ -2488,6 +2488,8 @@ def supervisor_screen():
     if already:
         st.info(already, icon=":material/info:")
 
+    audit_records_box()  # first: every case, with search and filters
+
     waiting = store.list_pending()
     if not waiting:
         st.info(t("ui.sup.none_waiting"))
@@ -2495,6 +2497,10 @@ def supervisor_screen():
         st.subheader(t("ui.sup.waiting", n=len(waiting)))
         for record in waiting:
             review_one(record)
+    jump = st.session_state.pop("sup-jump", None)
+    if jump and any(r["id"] == jump for r in waiting):  # a waiting row was clicked: scroll to its review box
+        components.html(f"<script>const box = window.parent.document.querySelector('.st-key-review-{jump}');"
+                        "if (box) box.scrollIntoView({behavior: 'smooth', block: 'start'});</script>", height=0)
 
     changed_after_approval_box()
     research_review_box()
@@ -2514,26 +2520,35 @@ def supervisor_screen():
                 st.markdown(f"- **{p['time'].replace('T', ' ')}** · {t('ui.case')} {p['case_id']} · {p['where']}: "
                             f"{p['text']}" + (f" _({t('ui.sup.removed')} {p['removed']})_" if p.get("removed") else ""))
 
-    audit_records_box()
 
 
 AUDIT_COLUMNS = [("code", "aud.code"), ("case_type", "aud.case_type"), ("status", "aud.status"),
                  ("sent_by", "aud.sent_by"), ("sent_on", "aud.sent_on"), ("decision_by", "aud.decision_by"),
                  ("decision_on", "aud.decision_on"), ("ai_used", "aud.ai_used"), ("last_step", "aud.last_step")]
 HISTORY_COLUMNS = [("time", "aud.time"), ("event", "aud.event"), ("by", "aud.by"), ("details", "aud.details")]
-STATUS_COLOURS = {"waiting": ("#E0F2FE", "#0C4A6E"), "sent back": ("#FEF3C7", "#78350F"),
-                  "approved": ("#DCFCE7", "#14532D"), "deleted": ("#EEE9DF", "#4B5563")}  # the app's chip colours
+STATUS_COLOURS = {"intake": ("#EEE9DF", "#4B5563"), "waiting": ("#E0F2FE", "#0C4A6E"),
+                  "sent back": ("#FEF3C7", "#78350F"), "approved": ("#DCFCE7", "#14532D"),
+                  "deleted": ("#E5E7EB", "#374151")}  # the app's chip colours; intake in progress grey
 
 
-def audit_rows() -> list:
-    """One row per case, from the audit records, with the case code from the tracker."""
+def audit_records() -> dict:
+    """Every case: its audit record, or (opened in the tracker, nothing recorded yet) "case opened"."""
+    records = {r["case_id"]: r for r in audit.list_records()}
+    for r in tracker.all_records():
+        records.setdefault(r["id"], audit.opened_record(r))
+    return records
+
+
+def audit_rows(records: dict = None) -> list:
+    """One row per case, with the case code, type and the AI that read the story from the tracker."""
+    records = records if records is not None else audit_records()
     tracked = {r["id"]: r for r in tracker.all_records()}
     pending = {r["id"]: r for r in storage.all_json("pending") if store.ID_PATTERN.match(r.get("id", ""))}
     rows = []
-    for record in audit.list_records():
-        case_id = record["case_id"]
-        kind = (pending.get(case_id) or {}).get("case_type") or (tracked.get(case_id) or {}).get("case_type", "")
-        row = audit.summary_row(record, (tracked.get(case_id) or {}).get("code", ""), kind)
+    for case_id, record in records.items():
+        known = tracked.get(case_id) or {}
+        kind = (pending.get(case_id) or {}).get("case_type") or known.get("case_type", "")
+        row = audit.summary_row(record, known.get("code", ""), kind, known.get("ai_model", ""))
         row["case_type"] = case_type_label(row["case_type"]) if row["case_type"] else "-"
         row["status_label"] = t(f"aud.st.{row['status']}")
         rows.append(row)
@@ -2553,21 +2568,34 @@ def shown_table(rows: list, columns: list):
 
 
 def open_audit_row():
-    """Clicking a row of the audit table opens that case's history below it."""
+    """Clicking a row of the audit table opens that case's history below it; a case waiting for review
+    also jumps to its review box further down the page."""
     selection = (st.session_state.get("aud-table") or {}).get("selection", {})
     picked = list(selection.get("rows", [])) or [cell[0] for cell in selection.get("cells", [])]  # tick box or any cell
     ids = st.session_state.get("aud-ids", [])
-    st.session_state["aud-open"] = ids[picked[0]] if picked and picked[0] < len(ids) else None
+    case_id = ids[picked[0]] if picked and picked[0] < len(ids) else None
+    st.session_state["aud-open"] = case_id
+    waiting = st.session_state.get("aud-waiting", [])
+    if case_id in waiting:
+        st.session_state["sup-jump"] = case_id
 
 
 def audit_records_box():
     """Audit records of all cases: one row per case (newest first), with search, status and date filters;
     a row opens the case's full history; both download as CSV."""
     st.subheader(t("ui.sup.audit_all"))
-    rows = audit_rows()
+    records = audit_records()
+    rows = audit_rows(records)
     if not rows:
         st.caption(t("ui.sup.no_audit"))
         return
+    n = audit.counts_line(rows)
+    line = [t("aud.n_cases", n=len(rows)), t("aud.n_waiting", n=n["waiting"]), t("aud.n_intake", n=n["intake"]),
+            t("aud.n_approved", n=n["approved"])]
+    line += [t("aud.n_sent_back", n=n["sent back"])] if n["sent back"] else []
+    line += [t("aud.n_deleted", n=n["deleted"])] if n["deleted"] else []
+    st.markdown(f'<p class="aud-counts">{html.escape(" · ".join(line))}</p>', unsafe_allow_html=True)
+    st.session_state["aud-waiting"] = [r["case_id"] for r in rows if r["status"] == "waiting"]
     with st.container(key="aud-filters", horizontal=True, gap="small"):
         st.text_input(t("aud.search"), key="aud-q", max_chars=20, placeholder="K7M2QX")
         st.selectbox(t("aud.status"), [""] + audit.STATUSES, key="aud-status",
@@ -2588,7 +2616,7 @@ def audit_records_box():
                        file_name=f"audit-records-{date.today():%Y-%m-%d}.csv", mime="text/csv",
                        key="aud-csv", icon=":material/download:")
     case_id = st.session_state.get("aud-open")
-    record = audit.read_record(case_id) if case_id in st.session_state["aud-ids"] else None
+    record = records.get(case_id) if case_id in st.session_state["aud-ids"] else None
     if record:
         row = next(r for r in shown if r["case_id"] == case_id)
         st.markdown(f"**{t('aud.history_of', slip=row['code'], case_id=case_id)}**")
@@ -2871,6 +2899,11 @@ def supervisor_case_cards(record: dict):
 
 
 def review_one(record: dict):
+    with st.container(key=f"review-{record['id']}"):  # clicking its row in the audit table jumps here
+        review_case(record)
+
+
+def review_case(record: dict):
     case_id = record["id"]
     with st.expander(t("ui.sup.case_row", case_id=case_id, kind=case_type_label(record["case_type"]),
                        sent=record["submitted"].replace("T", " ")), expanded=True):

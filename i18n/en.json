@@ -1114,7 +1114,7 @@
  "aud.click": "Click a row to see its full history.",
  "aud.csv": "Download as CSV",
  "aud.history_of": "History of case {slip} ({case_id})",
- "aud.st.waiting": "Waiting",
+ "aud.st.waiting": "Waiting for review",
  "aud.st.sent back": "Sent back",
  "aud.st.approved": "Approved",
  "aud.st.deleted": "Deleted",
@@ -1135,5 +1135,12 @@
  "ui.voice.part": "Turning speech into text… (part {n} of {total})",
  "ui.voice.backup_working": "Turning speech into text… (using the backup, Google Gemini)",
  "ui.voice.backup_used": "Sarvam could not do it this time, so the backup (Google Gemini) turned the speech into text.",
- "ui.voice.failed": "Sorry, the speech could not be turned into text just now (the speech service and its backup are both unavailable)."
+ "ui.voice.failed": "Sorry, the speech could not be turned into text just now (the speech service and its backup are both unavailable).",
+ "aud.st.intake": "Intake in progress",
+ "aud.n_cases": "{n} cases",
+ "aud.n_waiting": "{n} waiting for review",
+ "aud.n_intake": "{n} intake in progress",
+ "aud.n_approved": "{n} approved",
+ "aud.n_sent_back": "{n} sent back",
+ "aud.n_deleted": "{n} deleted"
 }

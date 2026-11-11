@@ -108,7 +108,7 @@ def add_event(case_id: str, event: str, by: str, details: str = "", base: Path =
     role: "volunteer" or "supervisor" when by is a person's name."""
     record = storage.read_json("audit", case_id, base)
     if record is None:  # a draft sent before audit records existed
-        record = {"case_id": case_id, "created": now(), "model": "not recorded", "ai_extracted": {},
+        record = {"case_id": case_id, "created": now(), "model": NOT_RECORDED, "ai_extracted": {},
                   "ai_answers_not_accepted": [], "volunteer_changed": [], "entered_by_volunteer": [],
                   "events": []}
     entry = {"time": now(), "event": event, "by": _plain(by)}
@@ -128,10 +128,13 @@ RESENT = "fixed and resent"
 SENT_BACK = "sent back"
 APPROVED = "approved"
 DELETED = "case deleted"
-# Status of a case, from its audit events (the last of these events decides)
+# Stage of a case, from its audit events (the last of these events decides). A case with none of
+# them was never sent to the supervisor: its intake is still in progress.
+INTAKE = "intake"
 STATUS_EVENTS = {SENT: "waiting", "sent to the supervisor": "waiting", RESENT: "waiting",
                  SENT_BACK: "sent back", APPROVED: "approved", DELETED: "deleted"}
-STATUSES = ["waiting", "sent back", "approved", "deleted"]
+STATUSES = [INTAKE, "waiting", "sent back", "approved", "deleted"]
+NOT_RECORDED = "not recorded"
 
 
 def who_did(event: dict) -> str:
@@ -148,8 +151,9 @@ def _sender(event: dict) -> str:
     return found.group(1) if found else ""
 
 
-def summary_row(record: dict, code: str = "", case_type: str = "") -> dict:
-    """One row of the supervisor's table of all cases, from the case's audit record."""
+def summary_row(record: dict, code: str = "", case_type: str = "", ai_model: str = "") -> dict:
+    """One row of the supervisor's table of all cases, from the case's audit record. ai_model: the model
+    that read the story (from the case tracker), for a case not yet sent; "-" until the story is read."""
     events = record.get("events", [])
     status, sent, decision = "", None, None
     for e in events:
@@ -160,12 +164,26 @@ def summary_row(record: dict, code: str = "", case_type: str = "") -> dict:
             else:
                 decision = e
     return {"case_id": record["case_id"], "code": code or record["case_id"],
-            "case_type": record.get("case_type") or case_type, "status": status or "waiting",
+            "case_type": record.get("case_type") or case_type, "status": status or INTAKE,
             "sent_by": _sender(sent) if sent else "", "sent_on": (sent or {}).get("time", "")[:16].replace("T", " "),
             "decision_by": who_did(decision) if decision else "",
             "decision_on": (decision or {}).get("time", "")[:16].replace("T", " "),
-            "ai_used": record.get("model", ""), "last_step": events[-1]["event"] if events else "",
+            "ai_used": (ai_model or "-") if record.get("model") in (None, "", NOT_RECORDED) else record["model"],
+            "last_step": events[-1]["event"] if events else "",
             "created": record.get("created", "")}
+
+
+def opened_record(tracker_record: dict) -> dict:
+    """For a case opened in the tracker with nothing in its audit record yet: one "case opened" event."""
+    return {"case_id": tracker_record["id"], "created": tracker_record.get("created", ""), "model": NOT_RECORDED,
+            "case_type": tracker_record.get("case_type", ""),
+            "events": [{"time": tracker_record.get("created", ""), "event": "case opened",
+                        "by": tracker_record.get("created_by") or VOLUNTEER, "role": "volunteer"}]}
+
+
+def counts_line(rows: List[dict]) -> Dict[str, int]:
+    """How many cases are at each stage (for the line above the table)."""
+    return {s: sum(1 for r in rows if r["status"] == s) for s in STATUSES}
 
 
 def filter_rows(rows: List[dict], search: str = "", status: str = "", start: Optional[date] = None,

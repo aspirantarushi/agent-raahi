@@ -1223,7 +1223,7 @@ i18n/hi.json · aud.count,{n} of {total} cases.,{total} में से {n} क
 i18n/hi.json · aud.click,Click a row to see its full history.,पूरा इतिहास देखने के लिए किसी पंक्ति पर क्लिक करें।,screen text,,
 i18n/hi.json · aud.csv,Download as CSV,CSV के रूप में डाउनलोड करें,screen text,,
 i18n/hi.json · aud.history_of,History of case {slip} ({case_id}),केस {slip} ({case_id}) का इतिहास,screen text,,
-i18n/hi.json · aud.st.waiting,Waiting,इंतज़ार में,screen text,,
+i18n/hi.json · aud.st.waiting,Waiting for review,समीक्षा का इंतज़ार,screen text,,
 i18n/hi.json · aud.st.sent back,Sent back,वापस भेजा,screen text,,
 i18n/hi.json · aud.st.approved,Approved,मंज़ूर,screen text,,
 i18n/hi.json · aud.st.deleted,Deleted,हटाया गया,screen text,,
@@ -1245,6 +1245,13 @@ i18n/hi.json · ui.voice.part,Turning speech into text… (part {n} of {total}),
 i18n/hi.json · ui.voice.backup_working,"Turning speech into text… (using the backup, Google Gemini)","बोली को लिखाई में बदला जा रहा है… (बैकअप, Google Gemini से)",screen text,,
 i18n/hi.json · ui.voice.backup_used,"Sarvam could not do it this time, so the backup (Google Gemini) turned the speech into text.","इस बार Sarvam से नहीं हो पाया, इसलिए बैकअप (Google Gemini) ने बोली को लिखाई में बदला।",screen text,,
 i18n/hi.json · ui.voice.failed,"Sorry, the speech could not be turned into text just now (the speech service and its backup are both unavailable).","माफ़ करें, अभी बोली लिखाई में नहीं बदल सकी (स्पीच सेवा और उसका बैकअप दोनों उपलब्ध नहीं हैं)।",screen text,,
+i18n/hi.json · aud.st.intake,Intake in progress,इनटेक जारी,screen text,,
+i18n/hi.json · aud.n_cases,{n} cases,{n} केस,screen text,,
+i18n/hi.json · aud.n_waiting,{n} waiting for review,{n} समीक्षा के इंतज़ार में,screen text,,
+i18n/hi.json · aud.n_intake,{n} intake in progress,{n} का इनटेक जारी,screen text,,
+i18n/hi.json · aud.n_approved,{n} approved,{n} मंज़ूर,screen text,,
+i18n/hi.json · aud.n_sent_back,{n} sent back,{n} वापस भेजे गए,screen text,,
+i18n/hi.json · aud.n_deleted,{n} deleted,{n} हटाए गए,screen text,,
 case_notes_hi.txt,(fake practice story; check that it reads naturally),"अभ्यास केस (कोई असली व्यक्ति नहीं)।
 बोलने वाली: एक विचाराधीन क़ैदी की बड़ी बहन।
 उसके भाई को 15 मार्च 2024 को गिरफ़्तार किया गया था। अपराध फ़रवरी 2024 में हुआ था।

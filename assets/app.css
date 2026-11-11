@@ -564,3 +564,4 @@ div[class*="st-key-aud-table-box"], div[class*="st-key-hist-"][class*="-box"], .
   .st-key-page-head .helpline.helpline-page { margin: 22px 0 12px 0; }  /* 18 px between the heading and line 1, as between the lines */
   .st-key-signin-card { max-width: none; padding: 16px !important; }
 }
+.aud-counts { color: var(--ink); font-weight: 600; font-size: 15px; margin: 0 0 8px 0 !important; }

@@ -231,18 +231,18 @@ def test_audit_table_on_screen_opens_a_history_and_downloads(monkeypatch):
     at = supervisor_screen(monkeypatch)
     at.text_input(key="aud-q").set_value(code).run()  # search by case code
     ok(at)
-    table = tables(at)[-1]
+    table = tables(at)[0]  # the audit table comes first on the page
     assert list(table.columns) == ["Case code", "Case type", "Status", "Sent by", "Sent on", "Decision by",
                                    "Decision on", "AI used", "Last step"]
     assert table.to_dict("records")[0]["Case code"] == code and table.iloc[0]["Status"] == "Sent back"
     assert table.iloc[0]["Sent by"] == "Volunteer Q" and table.iloc[0]["Decision by"] == "SK (supervisor)"
     at.selectbox(key="aud-status").set_value("approved").run()
-    assert len(tables(at)[-1]) == 0
+    assert len(tables(at)[0]) == 0
     at.selectbox(key="aud-status").set_value("sent back").run()
     at.session_state["aud-open"] = case_id  # what clicking the row does
     at.run()
     ok(at)
-    history = tables(at)[-1]
+    history = tables(at)[1]  # right below the audit table
     assert list(history.columns) == ["Time", "What happened", "By", "Details"]
     assert history.iloc[-1]["What happened"] == "sent back" and history.iloc[-1]["By"] == "SK (supervisor)"
     assert any(f"History of case {code}" in m.value for m in at.markdown)
@@ -336,3 +336,72 @@ def test_idle_timer_checks_once_a_minute():
     source = (Path(__file__).resolve().parent.parent / "app.py").read_text(encoding="utf-8")
     assert "@st.fragment(run_every=60)\ndef supervisor_idle_timer" in source
     assert "SUPERVISOR_IDLE_SECONDS = 30 * 60" in source
+
+
+# ---------- the real stage of every case; page order; jumping to a waiting draft ----------
+
+def test_never_sent_case_is_intake_in_progress_not_waiting(tmp_path):
+    record = tracker.open_case("General", "Volunteer A", base=tmp_path)
+    audit.add_event(record["id"], "research search", audit.VOLUNTEER, "Tavily used", base=tmp_path)  # never sent
+    row = audit.summary_row(audit.read_record(record["id"], base=tmp_path), record["code"])
+    assert row["status"] == "intake" and row["sent_by"] == "" and row["ai_used"] == "-"  # "-" until the story is read
+    read = audit.summary_row(audit.read_record(record["id"], base=tmp_path), record["code"], ai_model="gemini-3.5-flash-lite")
+    assert read["ai_used"] == "gemini-3.5-flash-lite"  # the story was read: the model that read it
+    opened = audit.summary_row(audit.opened_record(tracker.load(record["id"], base=tmp_path)))
+    assert opened["status"] == "intake" and opened["last_step"] == "case opened" and opened["ai_used"] == "-"
+
+
+def test_stage_labels_and_count_line(monkeypatch):
+    import lang
+    assert [lang.t(f"aud.st.{s}") for s in audit.STATUSES] == ["Intake in progress", "Waiting for review", "Sent back",
+                                                                "Approved", "Deleted"]
+    intake = tracker.open_case("General", "Volunteer N")  # opened, nothing recorded yet
+    sent, sent_code = waiting_case(by="Volunteer M")
+    at = supervisor_screen(monkeypatch)
+    counts = next(m.value for m in at.markdown if 'class="aud-counts"' in m.value)
+    rows = {r["case_id"]: r for r in tables(at)[0].assign(case_id=st_ids(at)).to_dict("records")}
+    assert rows[intake["id"]]["Status"] == "Intake in progress" and rows[intake["id"]]["AI used"] == "-"
+    assert rows[sent]["Status"] == "Waiting for review"
+    import re
+    n = {k: int(v) for v, k in re.findall(r"(\d+) (cases|waiting for review|intake in progress|approved)", counts)}
+    assert n["cases"] == len(rows) and n["waiting for review"] == sum(r["Status"] == "Waiting for review" for r in rows.values())
+    assert n["intake in progress"] == sum(r["Status"] == "Intake in progress" for r in rows.values())
+
+
+def st_ids(at):
+    return at.session_state["aud-ids"]
+
+
+def test_audit_table_comes_first_then_waiting_drafts(monkeypatch):
+    waiting_case(by="Volunteer O")
+    at = supervisor_screen(monkeypatch)
+    headings = [s.value for s in at.subheader]
+    assert headings[0] == "Audit records of all cases" and headings[1].startswith("Drafts waiting for approval")
+    assert headings.index("Problems reported") > 1
+
+
+def test_clicking_a_waiting_row_jumps_to_its_review_box(monkeypatch):
+    case_id, _ = waiting_case(by="Volunteer P")
+    at = supervisor_screen(monkeypatch)
+    at.session_state["sup-jump"] = case_id  # what open_audit_row sets for a waiting case
+    at.run()
+    scripts = [e.proto.srcdoc for e in at.get("iframe") if "scrollIntoView" in e.proto.srcdoc]
+    assert scripts and f".st-key-review-{case_id}" in scripts[0]
+    assert any(e.label.startswith(f"Case {case_id}") for e in at.expander)  # its review box is open
+
+
+def test_open_audit_row_only_jumps_for_waiting_cases():
+    import types
+    from pathlib import Path
+    state = {"aud-ids": ["U-1", "U-2"], "aud-waiting": ["U-2"]}
+    fake_st = types.SimpleNamespace(session_state=state)
+    source = (Path(__file__).resolve().parent.parent / "app.py").read_text(encoding="utf-8")
+    code = source.split("def open_audit_row")[1].split("\ndef ")[0]
+    namespace = {"st": fake_st}
+    exec("def open_audit_row" + code, namespace)
+    state["aud-table"] = {"selection": {"rows": [0], "cells": []}}
+    namespace["open_audit_row"]()
+    assert state["aud-open"] == "U-1" and "sup-jump" not in state  # intake or decided: only the history
+    state["aud-table"] = {"selection": {"rows": [], "cells": [(1, "Case code")]}}
+    namespace["open_audit_row"]()
+    assert state["aud-open"] == "U-2" and state["sup-jump"] == "U-2"  # waiting for review: jump to its box
