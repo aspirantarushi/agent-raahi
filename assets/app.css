@@ -570,3 +570,10 @@ div[class*="st-key-aud-table-box"], div[class*="st-key-hist-"][class*="-box"], .
 /* A button that is not ready yet (for example "Draft the letter" before research) looks it: faded */
 .stButton > button:disabled, .stDownloadButton > button:disabled, [data-testid="stFormSubmitButton"] button:disabled {
   opacity: .45 !important; cursor: not-allowed !important; }
+
+/* One line under a disabled button: why it can't be pressed yet (red for the send button) */
+.why-off { font-size: 13.5px; color: var(--muted2); margin: -4px 0 6px 0 !important; }
+.why-off.red { color: var(--red); font-weight: 600; }
+.sent-status { font-size: 15px; font-weight: 600; color: var(--teal-dark); margin: 4px 0 !important; }
+/* "Press Enter to apply" sat on top of the eye icon in password boxes: not shown there (Enter still works) */
+[data-testid="stTextInput"]:has(input[type="password"]) [data-testid="InputInstructions"] { display: none !important; }

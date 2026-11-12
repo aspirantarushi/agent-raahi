@@ -185,10 +185,13 @@ def open_conflicts(record: dict) -> List[dict]:
     return [c for c in record.get("conflicts", []) if not c.get("resolved")]
 
 
-def merge_facts(case_id: str, new: Dict[str, object], by: str, source: str, base: Path = HERE) -> List[dict]:
+def merge_facts(case_id: str, new: Dict[str, object], by: str, source: str, base: Path = HERE,
+                replace: bool = False) -> List[dict]:
     """Add new facts to the case. A fact already known with the same value is left alone; a new fact is
     added (with date and volunteer); a DIFFERENT value is not saved over the earlier one: it becomes a
-    contradiction to resolve. Returns the new contradictions."""
+    contradiction to resolve. Returns the new contradictions.
+    replace: the same volunteer edited the story and read it again in the same session: a newer value
+    (for example a corrected date) replaces the older one instead of becoming a contradiction."""
     by = clean_name(by)
     record = _must_load(case_id, base)
     facts, added, conflicts = record.setdefault("facts", {}), [], []
@@ -198,6 +201,10 @@ def merge_facts(case_id: str, new: Dict[str, object], by: str, source: str, base
         value = plain(value)
         entry = {"value": value, "on": now(), "by": by, "source": clean_text(source, 80)}
         if fact not in facts:
+            facts[fact] = entry
+            added.append(fact)
+        elif not _same(facts[fact]["value"], value) and replace:
+            entry["replaced"] = facts[fact]["value"]
             facts[fact] = entry
             added.append(fact)
         elif not _same(facts[fact]["value"], value):
@@ -275,6 +282,28 @@ def add_answers(case_id: str, answers: List[Tuple[str, str]], by: str, base: Pat
         _save(record, base)
 
 
+_LEAD = re.compile(r"^(?:(?:they|he|she|it|we|i|the person|the person seeking help|the person needing help|"
+                   r"the speaker|then|and|also)\s+)+", re.I)
+
+
+def _plain_line(text: str) -> str:
+    text = re.sub(r"[^\w\s]", " ", (text or "").casefold())
+    return _LEAD.sub("", " ".join(text.split()))
+
+
+def same_line(a: str, b: str) -> bool:
+    """The same fact said again, perhaps a little differently ("They were captured, beaten" and "Were
+    captured, beaten"): the same words once a leading "they/he/she" and punctuation are set aside, or
+    nearly so."""
+    import difflib
+    x, y = _plain_line(a), _plain_line(b)
+    if x and y and x != y:  # one line says all of the other and a little more ("... as evidence")
+        short, long_ = sorted((x, y), key=len)
+        if len(short.split()) >= 5 and long_.startswith(short):
+            return True
+    return bool(x) and (x == y or difflib.SequenceMatcher(None, x, y).ratio() >= 0.88)
+
+
 def add_summary(case_id: str, what_happened: List[str], issues: List[Tuple[str, str]], documents_held: List[str],
                 by: str, ai_model: Optional[str] = None, base: Path = HERE) -> None:
     """Lines from the checked summary (never the notes). New lines are added after the earlier ones."""
@@ -285,7 +314,16 @@ def add_summary(case_id: str, what_happened: List[str], issues: List[Tuple[str, 
         have = [x if isinstance(x, str) else tuple(x) for x in record.get(key, [])]
         for item in items:
             item = clean_text(item) if isinstance(item, str) else tuple(clean_text(str(x), 100) for x in item)
-            if item and item not in have:
+            if not item or item in have:
+                continue
+            twin = next((i for i, h in enumerate(have) if isinstance(item, str) and isinstance(h, str)
+                         and same_line(h, item)), None)
+            if twin is not None:  # "They were captured, beaten" = "Were captured, beaten": the newer wording,
+                # unless the older line says more ("... as evidence" is kept, not cut back)
+                if not (_plain_line(have[twin]).startswith(_plain_line(item))
+                        and len(_plain_line(have[twin])) > len(_plain_line(item))):
+                    have[twin] = item
+            else:
                 have.append(item)
         record[key] = [x if isinstance(x, str) else list(x) for x in have]
 

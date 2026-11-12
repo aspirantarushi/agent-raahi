@@ -651,6 +651,26 @@ def _year_answer(when: str, answer: str) -> Optional[str]:
     return f"{when} {year[0]}"
 
 
+_QWORDS = {"what", "when", "where", "which", "who", "whom", "why", "how", "is", "are", "was", "were", "did", "does",
+           "do", "has", "have", "had", "the", "a", "an", "of", "to", "in", "on", "for", "any", "you", "your", "person",
+           "they", "he", "she", "it", "this", "that", "kya", "kab", "kaun", "ko", "ka", "ki", "ke", "se", "hai"}
+
+
+def same_question(a: str, b: str) -> bool:
+    """The same question asked again in other words ("When did the employer stop paying?" and "On what
+    date did the employer stop paying wages?"): most of the content words are shared."""
+    def words(q):
+        return {w for w in re.findall(r"[\w\u0900-\u097F]+", (q or "").casefold()) if w not in _QWORDS and len(w) > 2}
+    x, y = words(a), words(b)
+    return bool(x and y) and len(x & y) / min(len(x), len(y)) >= 0.75
+
+
+WHEN_QUESTION = re.compile(r"\bwhen\b|\bdate\b|\bsince\b|\bkab\b|कब|तारीख़|तारीख|तिथि", re.I)
+DATE_PHRASE = re.compile(
+    r"\b\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z\u0900-\u097F]+,?\s+(?:19|20)\d{2}\b|\b[A-Za-z\u0900-\u097F]+\s+(?:19|20)\d{2}\b|"
+    r"\b\d{1,2}[/.-]\d{1,2}[/.-](?:19|20)\d{2}\b|\b(?:19|20)\d{2}-\d{2}-\d{2}\b")
+
+
 def apply_answers(g: "GeneralFacts", code: str = "en") -> "GeneralFacts":
     """Answers to the questions update the case itself (plain code): a full date fixes the timeline
     entry it was asked for, documents the person has go into the documents list, and the answers to
@@ -677,6 +697,13 @@ def apply_answers(g: "GeneralFacts", code: str = "en") -> "GeneralFacts":
                     if w and not YEAR.search(w) and re.search(rf"(?<!\w){re.escape(w)},?\s+(19|20)\d{{2}}", full):
                         y = re.search(rf"(?<!\w){re.escape(w)},?\s+((19|20)\d{{2}})", full)[1]
                         entries[i] = (f"{when} {y}", what)
+        # "When did it start?" "15 March 2026": a dated answer to a "when" question is a timeline entry too
+        # (so "Going on for" and the timeline use it), unless that date is already there
+        found = DATE_PHRASE.search(privacy.normalise_digits(answer))
+        if found and WHEN_QUESTION.search(question) and YEAR.search(found[0]):
+            when = found[0].strip(" ,")
+            if not any(when.casefold() in w.casefold() for w, _ in g.timeline + g.coming_dates):
+                g.timeline.append((when, question.strip()))  # the question as asked reads clearly
         if question in (lang.t("q.person", "en"), lang.t("q.person", "hi")) and not g.person:
             g.person = clean(answer, 120)
         elif question in (lang.t("q.outcome", "en"), lang.t("q.outcome", "hi")) and not g.outcome:

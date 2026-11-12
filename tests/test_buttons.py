@@ -66,7 +66,7 @@ def test_edit_unticks_the_check_and_hides_the_dates(monkeypatch):
     assert at.checkbox(key="f_checked").value is False and not dates_shown(at)
 
 
-def test_language_is_suggested_and_confirmed_before_reading(monkeypatch):
+def test_language_is_suggested_and_pre_selected(monkeypatch):
     monkeypatch.setattr(llm, "available", lambda: True)
     monkeypatch.setattr(llm, "gemini_available", lambda: True)
     read = []
@@ -75,12 +75,15 @@ def test_language_is_suggested_and_confirmed_before_reading(monkeypatch):
     at = AppTest.from_file("../app.py", default_timeout=20)
     at.session_state["screen"] = "New case"
     at.run()
+    assert at.button(key="g-read").disabled                             # no story yet: says why
+    assert any("Type or speak the story first." in m.value for m in at.markdown)
     at.text_area(key="g_notes").set_value("Malik ne teen mahine se salary nahi di, kya karein? Bhai bahut pareshan hai.").run()
-    assert at.selectbox(key="g_notes_lang").value is None              # never set by itself
-    assert at.button(key="g-read").disabled                            # read only after a language is chosen
-    assert any("Suggested from the text: Hinglish" in c.value for c in at.caption)
-    at.button(key="g_notes_lang-use").click().run()                    # the volunteer confirms the suggestion
-    assert at.selectbox(key="g_notes_lang").value == "hi-Latn" and not at.button(key="g-read").disabled
+    assert at.selectbox(key="g_notes_lang").value == "hi-Latn"          # the suggestion, pre-selected
+    assert any("Detected: Hinglish" in c.value for c in at.caption)     # the volunteer can change it
+    assert not at.button(key="g-read").disabled
+    at.selectbox(key="g_notes_lang").set_value("en").run()              # the volunteer's choice wins
+    at.text_area(key="g_notes").set_value("Malik ne teen mahine se salary nahi di. Bhai bahut pareshan hai, kya karein?").run()
+    assert at.selectbox(key="g_notes_lang").value == "en"
     at.button(key="g-read").click().run()
     assert len(read) == 1
 

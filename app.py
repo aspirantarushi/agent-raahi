@@ -335,22 +335,74 @@ def notes_language_choice(key: str):
     st.selectbox(t("ui.lang.notes_language"), list(options), format_func=options.get, key=key, index=None,
                  placeholder=t("ui.lang.choose"), on_change=lambda: st.session_state.update({f"{key}-chosen": True}))
     suggested = st.session_state.get(f"{key}-suggested")
-    if suggested in options and suggested != st.session_state.get(key):
+    if suggested in options and suggested == st.session_state.get(key) and not st.session_state.get(f"{key}-chosen"):
+        st.caption(t("ui.lang.detected", language=options[suggested]))  # pre-selected; change it if wrong
+    elif suggested in options and suggested != st.session_state.get(key):
         with st.container(horizontal=True, gap="small", vertical_alignment="center", key=f"{key}-suggest"):
             st.caption(t("ui.lang.suggested", language=options[suggested]))
             st.button(t("ui.lang.use", language=options[suggested]), key=f"{key}-use", type="tertiary",
                       on_click=lambda: st.session_state.update({key: suggested, f"{key}-chosen": True}))
-    elif not st.session_state.get(key):
-        st.caption(t("ui.lang.choose_first"))
+
+
+def no_drafts_waiting_text() -> str:
+    """Why no draft is waiting, with live counts: "No drafts sent for review yet. 3 cases are still at
+    intake." (or how many were sent back or approved)."""
+    statuses = [r["status"] for r in tracker.rows()]
+    intake = sum(s in (tracker.INTAKE, tracker.INTAKE_DONE) for s in statuses)
+    back = statuses.count(store.SENT_BACK)
+    decided = sum(s in tracker.APPROVED_STATUSES + (tracker.CHANGED, tracker.CLOSED) for s in statuses)
+    if not statuses:
+        return t("none_waiting.no_cases")
+    parts = [t("none_waiting.lead_never" if not (back or decided) else "none_waiting.lead")]
+    if intake:
+        parts.append(t("none_waiting.intake", n=intake))
+    if back:
+        parts.append(t("none_waiting.sent_back", n=back))
+    if decided:
+        parts.append(t("none_waiting.decided", n=decided))
+    return " ".join(parts)
+
+
+def sent_status_line(case_id: str) -> str:
+    """"Sent on 12 November 2026 · Waiting for review" once a case's draft was sent (any later stage too)."""
+    if not case_id:
+        return ""
+    try:
+        status = tracker.status_of(case_id)
+        record = audit.read_record(case_id)
+    except (ValueError, tracker.TrackerError, storage.StorageError):
+        return ""
+    if status in (tracker.INTAKE, tracker.INTAKE_DONE) or not record:
+        return ""
+    sent_on = audit.summary_row(record)["sent_on"][:10]
+    if not sent_on:
+        return ""
+    return t("send.status", on=show_date(date.fromisoformat(sent_on)), status=status_text(status))
+
+
+def why_disabled(text: str, red: bool = False):
+    """One line under a disabled button saying why it can't be pressed yet."""
+    st.markdown(f'<p class="why-off{" red" if red else ""}">{html.escape(text)}</p>', unsafe_allow_html=True)
 
 
 def detect_notes_language(text_key: str = "g_notes"):
-    """Suggest the story's language (English, Hindi or Hinglish) from its text. Only a suggestion: the
-    volunteer confirms it ("Use ...") or chooses another."""
+    """Suggest the story's language (English, Hindi or Hinglish) from its text and pre-select it, unless
+    the volunteer already chose one; the volunteer can change it."""
     key = NOTES_LANGUAGE_KEYS[text_key]
     found = multilingual.detect_language(st.session_state.get(text_key) or "")
     if found and found in multilingual.note_languages():
         st.session_state[f"{key}-suggested"] = found
+        if not st.session_state.get(f"{key}-chosen"):
+            st.session_state[key] = found
+
+
+def ensure_notes_language(text_key: str):
+    """At "Read": the language chosen, or else the suggested one, or else the screen's language."""
+    key = NOTES_LANGUAGE_KEYS[text_key]
+    if not st.session_state.get(key):
+        detect_notes_language(text_key)
+    if not st.session_state.get(key):
+        st.session_state[key] = code() if code() in multilingual.note_languages() else "en"
 
 
 def language_name(language: str) -> str:
@@ -400,9 +452,13 @@ def read_general():
     for kind, n in notes_reading.removed.items():
         removed[kind] = removed.get(kind, 0) + n
     answers = []
+    # Only a story already read in THIS session and then edited counts as a correction; a story from another
+    # visit or volunteer (a continued case) still shows a contradiction to resolve
+    reread = bool((st.session_state.get("gen") or {}).get("read_here")) and bool(st.session_state.get("case_id"))
     try:
         case_id = ensure_case(general.CASE_TYPE)
-        tracker.merge_facts(case_id, reading.facts, who(), "story read by AI, checked by code")
+        # Read again after an edit in this session: a newer value (a corrected date) replaces the older one
+        tracker.merge_facts(case_id, reading.facts, who(), "story read by AI, checked by code", replace=reread)
         tracker.add_summary(case_id, reading.what_happened, reading.issues, reading.documents_held, who(),
                             ai_model=notes_reading.model)
         record = tracker.load(case_id)
@@ -411,13 +467,15 @@ def read_general():
         reading.issues = [tuple(i) for i in record["issues"]]
         reading.documents_held = list(record["documents_held"])
         answers = [tuple(a) for a in record.get("answers", [])]
-        asked = {q for q, _ in answers}
-        reading.questions = [q for q in reading.questions if q not in asked]
+        asked = [q for q, _ in answers]
+        reading.questions = [q for q in reading.questions  # never ask again what was already answered
+                             if not any(q == a or general.same_question(q, a) for a in asked)]
         known_values = tracker.known_for_form(record)
     except (tracker.TrackerError, storage.StorageError) as err:
         tracker_error(err)
         known_values = {}
     _start_general(reading, notes_reading.model, removed)
+    st.session_state["gen"]["read_here"] = True  # read in this session (an edit and re-read is a correction)
     st.session_state["gen"]["facts"].update(known_values)
     st.session_state["gen"].update(translated_from=prepared.translated_from, translation=prepared.text,
                                    answers=answers)
@@ -616,7 +674,8 @@ def restore_held_story():
     if not current or current == held["text"].strip():
         st.session_state["g_notes"] = held["text"]
     if held.get("lang"):
-        st.session_state["g_notes_lang-suggested"] = held["lang"]  # a suggestion: the volunteer confirms it
+        st.session_state["g_notes_lang-suggested"] = held["lang"]  # pre-selected; the volunteer can change it
+        st.session_state.setdefault("g_notes_lang", held["lang"])
 
 
 def general_screen():
@@ -647,9 +706,11 @@ def general_screen():
             voice_box("g_audio", "g_notes")
             col1, col2 = st.columns(2)
             busy = bool(st.session_state.get("g_reading"))
-            col1.button(t("ui.general.read"), type="primary", key="g-read",
-                        disabled=busy or not st.session_state.get("g_notes_lang"),  # the language comes first
-                        on_click=lambda: st.session_state.update(g_reading=True))
+            empty = not (st.session_state.get("g_notes") or "").strip()
+            col1.button(t("ui.general.read"), type="primary", key="g-read", disabled=busy or empty,
+                        on_click=lambda: (ensure_notes_language("g_notes"), st.session_state.update(g_reading=True)))
+            if empty and not busy:
+                why_disabled(t("why.story_first"))
             if gen:
                 col2.button(t("ui.general.clear"), on_click=clear_general)
                 if st.session_state.get("g_story_open"):
@@ -864,6 +925,8 @@ def general_summary(gen):
     if "arrest_or_custody" in categories:
         st.info(t("ui.general.custody_info"))
         st.button(t("ui.general.open_479"), on_click=open_section479, disabled=not llm.available())
+        if not llm.available():
+            why_disabled(t("why.no_ai"))
     if "online_or_financial_fraud" in categories:
         st.info(t("ui.general.cyber_info"))
 
@@ -960,8 +1023,10 @@ def general_summary(gen):
 
     flow_title(4)
     sent = st.session_state.get("gen_sent")
-    if sent:
-        st.success(t("ui.sent", case_id=sent))  # "Finish intake" follows right below
+    status_line = sent_status_line(sent or st.session_state.get("case_id"))
+    if sent or status_line:
+        st.success((t("ui.sent", case_id=sent) + "  \n" if sent else "") + status_line,  # "Finish intake" follows
+                   icon=":material/send:")
         return
     with st.container(border=True, key="send-card"):  # the send section, its reason boxes inside the card
         unticked = readiness.gaps(items)
@@ -975,13 +1040,18 @@ def general_summary(gen):
         checked = st.checkbox(t("ui.general.checked_no_names"), key="g_checked")
         label = f"{t('ui.send_to_supervisor')} \u2014 " + (t("ready.button_unticked", n=len(unticked)) if unticked
                                                           else t("ready.button_ready"))
-        if unticked and checked and not send_reason:
-            st.caption(t("ready.send_reason_needed"))
         not_made = not drafts_made or (letter_wanted and research_done and not letter_made)
-        if not_made:
-            st.caption(t("cw.make_first"))
-        if st.button(label, disabled=not checked or bool(research_now) or (bool(unticked) and not send_reason)
-                     or bool(no_reason) or not_made, key="send-g", type="primary", icon=":material/send:"):
+        # Exactly why it can't be sent yet, one line each, in red under the button
+        reasons = ([t("why.send.drafts")] if not drafts_made else []) + \
+            ([t("why.send.letter")] if letter_wanted and research_done and not letter_made else []) + \
+            ([t("why.send.research")] if research_now else []) + \
+            ([t("why.send.left_out")] if no_reason else []) + \
+            ([t("why.send.reason")] if unticked and not send_reason else []) + \
+            ([t("why.send.checked")] if not checked else [])
+        clicked = st.button(label, disabled=bool(reasons), key="send-g", type="primary", icon=":material/send:")
+        for why in reasons:
+            why_disabled(why, red=True)
+        if clicked:
             ai = None
             if gen["model"]:
                 ai = {"model": gen["model"], "read_at": gen["read_at"], "extracted": dict(reading.facts),
@@ -1256,8 +1326,12 @@ def research_panel(g, uncovered, status, case_id, state, waiting_rs=None, letter
                           on_click=lambda s=letter.get("sig"): st.session_state.update(g_letter_sig=s))
             if status != "approved":  # research failed or the problem isn't covered: two free helplines
                 nyaya_setu_button()
+        if uncovered and status == "not started" and not state:
+            why_disabled(t("why.state_first"))
+        elif uncovered and not can_search:
+            why_disabled(t("why.no_search"))
         if letter.get("wanted") and not letter.get("research_done"):
-            st.caption(t("cw.letter_after_research"))
+            why_disabled(t("cw.letter_after_research"))
         elif letter.get("changed"):
             st.info(t("cw.letter_changed"), icon=":material/edit_note:")
 
@@ -1393,6 +1467,8 @@ def research_box(uncovered: list, state):
         c2.selectbox(t("rs.state"), general.state_names(), index=None, key="rs-state")
         st.button(t("rs.button"), key="rs-go", type="primary", icon=":material/travel_explore:",
                   on_click=run_research, args=(uncovered,), disabled=not llm.gemini_available())  # research needs Google Search (Gemini)
+        if not llm.gemini_available():
+            why_disabled(t("why.no_search"))
         msg = st.session_state.pop("rs-msg", None)
         if msg:
             (st.success if msg[0] == "ok" else st.error)(msg[1])
@@ -1470,12 +1546,15 @@ def notes_box():
         notes_language_choice("f_notes_lang")
         run_pending_voice("f_audio", "f_notes")
         voice_box("f_audio", "f_notes")
-        st.text_area(t("ui.notes.label"), key="f_notes", height=220, placeholder=t("ui.notes.placeholder"))
+        st.text_area(t("ui.notes.label"), key="f_notes", height=220, placeholder=t("ui.notes.placeholder"),
+                     on_change=lambda: detect_notes_language("f_notes"))
         col1, col2 = st.columns(2)
         busy = bool(st.session_state.get("f_reading"))
-        col1.button(t("ui.notes.read"), type="primary", key="f-read",
-                    disabled=busy or not st.session_state.get("f_notes_lang"),  # the language comes first
-                    on_click=lambda: st.session_state.update(f_reading=True))
+        empty = not (st.session_state.get("f_notes") or "").strip()
+        col1.button(t("ui.notes.read"), type="primary", key="f-read", disabled=busy or empty,
+                    on_click=lambda: (ensure_notes_language("f_notes"), st.session_state.update(f_reading=True)))
+        if empty and not busy:
+            why_disabled(t("why.notes_first"))
         if ai:
             col2.button(t("ui.notes.clear"), on_click=clear_notes)
         if busy:
@@ -1936,6 +2015,9 @@ def draft_section(known: dict, result: section479.Result):
     sent = st.session_state.get("sent")
     if sent and sent["sig"] == signature:
         st.success(t("ui.sent", case_id=sent["id"]))
+        line = sent_status_line(sent["id"])
+        if line:
+            st.markdown(f'<p class="sent-status">{html.escape(line)}</p>', unsafe_allow_html=True)
     elif st.button(send_label(items), key="send-f"):
         try:
             case_id = ensure_case("Undertrial")
@@ -2691,7 +2773,7 @@ def supervisor_screen():
 
     waiting = store.list_pending()
     if not waiting:
-        st.info(t("ui.sup.none_waiting"))
+        st.info(no_drafts_waiting_text(), icon=":material/inbox:")
     else:
         st.subheader(t("ui.sup.waiting", n=len(waiting)))
         for record in waiting:
@@ -2866,6 +2948,8 @@ def close_or_reopen_box(case_id: str, status: str):
             st.button(t("close.go"), key=f"close-go-{case_id}", type="primary", icon=":material/lock:",
                       disabled=not st.session_state.get(f"close-reason-{case_id}"), on_click=close_case_now,
                       args=(case_id,))
+            if not st.session_state.get(f"close-reason-{case_id}"):
+                why_disabled(t("why.close_reason"))
         else:
             record = tracker.load(case_id) or {}
             if record.get("closed"):
@@ -3019,6 +3103,8 @@ def research_decision(r: dict, p: dict):
         st.text_area(t("rs.edit_label"), value=p["text"], key=f"rse-{r['id']}-{p['id']}", height=120)
     st.button(t("rs.save"), key=f"rss-{r['id']}-{p['id']}", type="primary", disabled=choice is None,
               on_click=decide_research_point, args=(r["id"], p["id"]))
+    if choice is None:
+        why_disabled(t("why.rs_choice"))
 
 
 def status_chip_text(status: str) -> str:
@@ -3120,11 +3206,17 @@ def delete_selected_case():
 def delete_case_box():
     with st.expander(t("del.title")):
         st.caption(t("del.caption"))
-        cases = [c["id"] for c in store.list_cases()]
-        st.selectbox(t("del.case"), cases, index=None, key="del-case")
+        # every case at any stage, intake in progress included (not only those sent or approved)
+        rows = {r["id"]: r for r in tracker.rows()}
+        cases = sorted(rows, reverse=True)
+        st.selectbox(t("del.case"), cases, index=None, key="del-case",
+                     format_func=lambda c: " · ".join(x for x in (rows[c].get("code"), c, status_text(rows[c]["status"]))
+                                                      if x))
         st.text_input(t("del.confirm"), key="del-confirm")
         st.button(t("del.button"), key="del-go", on_click=delete_selected_case,
                   disabled=not st.session_state.get("del-case"))
+        if not st.session_state.get("del-case"):
+            why_disabled(t("why.del_case"))
         msg = st.session_state.pop("del-msg", None)
         if msg:
             (st.success if msg[0] == "ok" else st.error)(msg[1])
@@ -3209,15 +3301,21 @@ def review_case(record: dict):
         if action == "Approve":
             st.button(t("ui.sup.approve_save"), type="primary", key=f"approve-{case_id}", disabled=busy or own,
                       on_click=decide, args=(case_id, "approve"))
+            if busy or own:
+                why_disabled(t("ui.sup.own_draft") if own else t("why.busy"))
         elif action == "Edit then Approve":
             st.text_area(t("ui.sup.edit"), value=record["draft"], height=500, key=f"edit-{case_id}")
             st.caption(t("ui.sup.no_personal"))
             st.button(t("ui.sup.save_approve"), type="primary", key=f"edit-approve-{case_id}", disabled=busy or own,
                       on_click=decide, args=(case_id, "edit"))
+            if busy or own:
+                why_disabled(t("ui.sup.own_draft") if own else t("why.busy"))
         elif action == "Reject with a reason":
             st.text_area(t("ui.sup.reason"), key=f"reason-{case_id}")
             st.button(t("ui.sup.send_back"), key=f"reject-{case_id}", disabled=busy,
                       on_click=decide, args=(case_id, "send back"))
+            if busy:
+                why_disabled(t("why.busy"))
         err = st.session_state.pop(f"decide-err-{case_id}", None)
         if err:
             st.error(err)
@@ -3864,6 +3962,9 @@ def current_case_panel():
                     f'<span class="code">{html.escape(record["code"])}</span>{status_chip(status)}</div>'
                     f'<div class="case-id">{html.escape(t("ui.case_title", case_id=case_id))}</div>',
                     unsafe_allow_html=True)
+        line = sent_status_line(case_id)
+        if line:  # also after a reload: the case card shows where the draft is
+            st.markdown(f'<p class="sent-status">{html.escape(line)}</p>', unsafe_allow_html=True)
         if st.session_state.pop("slip_new", False):
             st.success(t("slip.new_short", slip_code=record["code"]), icon=":material/qr_code_2:")
         if record.get("intake_finished") and record.get("next"):

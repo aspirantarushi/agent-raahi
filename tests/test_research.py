@@ -265,6 +265,7 @@ def test_research_on_screen(monkeypatch, fake_ai):
         [research.KEPT, research.LEFT_OUT]
     assert record["points"][1]["volunteer_reason"] == "the forum is for a later step"
 
+    assert any("Sent on" in s.value and "Waiting for review" in s.value for s in at.success)  # the status, after sending
     # One combined review: research points and the drafts together; approval waits for the points
     at.button(key="nav-supervisor").click().run()
     next(t for t in at.text_input if t.label == "Supervisor password").set_value("practice-sup")

@@ -1,0 +1,227 @@
+"""Fixes from Arushi's testing document (12 November 2026). Fake data only."""
+
+import time
+from datetime import date
+from pathlib import Path
+
+from streamlit.testing.v1 import AppTest
+
+import casework
+import general
+import llm
+import store
+import tracker
+from test_general import MODEL, WAGES, WAGES_ANSWER, answer, yn
+from test_new_case_fixes import facts as make_facts
+from volunteer import make_drafts
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def ok(at):
+    assert not at.exception, at.exception[0].stack_trace
+
+
+def to_summary(at):
+    for _ in range(12):
+        if any(b.key == "q-not-needed-go" for b in at.button):
+            at.button(key="q-not-needed-go").click().run()
+            continue
+        skip = [b for b in at.button if b.key and b.key.startswith("gskip-") and b.key != "gskip-all"]
+        if not skip:
+            return at
+        skip[0].click().run()
+    return at
+
+
+def wages(monkeypatch, reading=None):
+    monkeypatch.setattr(llm, "available", lambda: True)
+    monkeypatch.setattr(llm, "gemini_available", lambda: True)
+    monkeypatch.setattr(llm, "read_general_notes", reading or (
+        lambda notes, output_lang="en", **k: llm.NotesReading(WAGES_ANSWER, notes, {}, MODEL)))
+    at = AppTest.from_file("../app.py", default_timeout=30)
+    at.session_state["screen"] = "New case"
+    at.run()
+    at.text_area(key="g_notes").set_value(WAGES).run()
+    at.button(key="g-read").click().run()
+    return to_summary(at)
+
+
+# ---------- 1. sending: why not, and the status afterwards ----------
+
+def test_send_says_exactly_why_it_cannot_be_sent_then_sends(monkeypatch):
+    at = wages(monkeypatch)
+    ok(at)
+    assert next(b for b in at.button if b.key == "send-g").disabled
+    import html
+    reasons = [html.unescape(m.value) for m in at.markdown if 'class="why-off red"' in m.value]
+    assert any('Press "Make the drafts" first.' in r for r in reasons) and any("Tick" in r for r in reasons)
+    make_drafts(at, letter=False)
+    if any(t.key == "g_send_reason" for t in at.text_input):
+        at.text_input(key="g_send_reason").set_value("practice: the rest at the next visit")
+    at.checkbox(key="g_checked").check().run()
+    send = next(b for b in at.button if b.key == "send-g")
+    assert not send.disabled and not [m for m in at.markdown if 'class="why-off red"' in m.value]
+    send.click().run()
+    ok(at)
+    case_id = at.session_state["case_id"]
+    assert tracker.status_of(case_id) == store.WAITING
+    today = f"{date.today().day} {date.today():%B %Y}"
+    assert any(f"Sent on {today} · Waiting for review" in s.value for s in at.success)
+    # after a reload (a new session with the case in the page address) the case card still says so
+    at2 = AppTest.from_file("../app.py", default_timeout=30)
+    at2.query_params["screen"] = "new"
+    at2.query_params["case"] = case_id
+    at2.run()
+    ok(at2)
+    assert any(f"Sent on {today} · Waiting for review" in m.value for m in at2.markdown)
+    # and the Supervisor page lists it as waiting
+    monkeypatch.setenv("SUPERVISOR_PASSWORD", "sup-pass-9")
+    sup = AppTest.from_file("../app.py", default_timeout=30)
+    sup.session_state["screen"] = "Supervisor"
+    for k, v in {"supervisor_ok": True, "supervisor_name": "SK", "sup_last_active": time.time()}.items():
+        sup.session_state[k] = v
+    sup.run()
+    ok(sup)
+    assert any(e.label.startswith(f"Case {case_id}") for e in sup.expander)
+
+
+# ---------- 2. every disabled button says why ----------
+
+def test_disabled_buttons_say_why(monkeypatch):
+    no_state = answer(what_happened=["The employer has not paid her wages."],
+                      issues=[{"category": "employment_or_wages", "name": "unpaid wages"}], woman=yn("yes", "A woman"))
+    at = wages(monkeypatch, lambda notes, output_lang="en", **k: llm.NotesReading(no_state, notes, {}, MODEL))
+    skip = [b for b in at.button if b.key and b.key.startswith("gskip-") and b.key != "gskip-all"]
+    if skip:  # the state question: "Don't know"
+        skip[0].click().run()
+        to_summary(at)
+    ok(at)
+    assert at.button(key="rs-run-go").disabled
+    assert any("Choose the state first: research needs it." in m.value for m in at.markdown)  # (no quotes to escape)
+
+
+def test_delete_button_says_choose_a_case_first(monkeypatch):
+    monkeypatch.setenv("SUPERVISOR_PASSWORD", "sup-pass-9")
+    tracker.open_case("General", "Volunteer A")
+    sup = AppTest.from_file("../app.py", default_timeout=30)
+    sup.session_state["screen"] = "Supervisor"
+    for k, v in {"supervisor_ok": True, "supervisor_name": "SK", "sup_last_active": time.time()}.items():
+        sup.session_state[k] = v
+    sup.run()
+    assert sup.button(key="del-go").disabled and any("Choose a case first." in m.value for m in sup.markdown)
+
+
+# ---------- 3. editing the story and reading it again merges ----------
+
+def test_near_repeated_lines_are_merged_and_a_corrected_value_replaces(tmp_path):
+    case_id = tracker.open_case("General", "VA", base=tmp_path)["id"]
+    tracker.add_summary(case_id, ["They were captured, beaten and robbed."], [], [], "VA", base=tmp_path)
+    tracker.add_summary(case_id, ["Were captured, beaten and robbed.", "The police did not file a report."], [], [],
+                        "VA", base=tmp_path)
+    assert tracker.load(case_id, base=tmp_path)["summary"] == ["Were captured, beaten and robbed.",
+                                                               "The police did not file a report."]
+    tracker.merge_facts(case_id, {"state": "Bihar"}, "VA", "story", base=tmp_path)
+    assert tracker.merge_facts(case_id, {"state": "Jharkhand"}, "VA", "story", base=tmp_path, replace=True) == []
+    assert tracker.load(case_id, base=tmp_path)["facts"]["state"]["value"] == "Jharkhand"   # the newer value
+    assert tracker.merge_facts(case_id, {"state": "Odisha"}, "VB", "another visit", base=tmp_path)  # still a contradiction
+
+
+def test_a_question_already_answered_is_never_asked_again():
+    assert general.same_question("When did the employer stop paying?", "On what date did the employer stop paying wages?")
+    assert not general.same_question("What does the person want?", "Which state does the person live in?")
+
+
+def test_rereading_keeps_answers_and_does_not_ask_again(monkeypatch):
+    first = dict(WAGES_ANSWER, questions_to_ask=["When did the contractor stop paying?"])
+    second = dict(WAGES_ANSWER, questions_to_ask=["On what date did the contractor stop paying the wages?"],
+                  what_happened=["They were not paid wages for June to August 2026 by the contractor."])
+    calls = []
+
+    def reading(notes, output_lang="en", **k):
+        calls.append(notes)
+        return llm.NotesReading(first if len(calls) == 1 else second, notes, {}, MODEL)
+    monkeypatch.setattr(llm, "available", lambda: True)
+    monkeypatch.setattr(llm, "gemini_available", lambda: True)
+    monkeypatch.setattr(llm, "read_general_notes", reading)
+    at = AppTest.from_file("../app.py", default_timeout=30)
+    at.session_state["screen"] = "New case"
+    at.run()
+    at.text_area(key="g_notes").set_value(WAGES).run()
+    at.button(key="g-read").click().run()
+    at.text_input(key="gq-0").set_value("1 June 2026")
+    next(b for b in at.button if b.key and b.key.startswith("gnext-ai")).click().run()
+    to_summary(at)
+    at.button(key="g-back-story").click().run() if any(b.key == "g-back-story" for b in at.button) else None
+    at.text_area(key="g_notes").set_value(WAGES + " He worked on a site in Pune.").run()
+    at.button(key="g-read").click().run()
+    ok(at)
+    assert not any("stop paying" in m.value for m in at.markdown if m.value.startswith("**"))  # not asked again
+    gen = at.session_state["gen"]
+    assert ("When did the contractor stop paying?", "1 June 2026") in gen["answers"]           # the answer is kept
+    record = tracker.load(at.session_state["case_id"])
+    lines = record["summary"]
+    assert len(lines) == len({tracker._plain_line(x) for x in lines})                          # no near-repeats
+
+
+# ---------- 4. a dated answer feeds the timeline and "Going on for" ----------
+
+def test_a_dated_answer_feeds_going_on_for():
+    g = make_facts(timeline=[], answers=[("When did the contractor stop paying?", "On 15 March 2026")],
+                   what_happened=["The contractor has not paid the worker."])
+    general.apply_answers(g)
+    assert ("15 March 2026", "When did the contractor stop paying?") in g.timeline
+    assert casework.duration_text(g, date(2026, 11, 12)).startswith("about 8 months")
+
+
+# ---------- 5. every case can be deleted ----------
+
+def test_an_intake_case_can_be_deleted(monkeypatch):
+    monkeypatch.setenv("SUPERVISOR_PASSWORD", "sup-pass-9")
+    record = tracker.open_case("General", "Volunteer A")
+    sup = AppTest.from_file("../app.py", default_timeout=30)
+    sup.session_state["screen"] = "Supervisor"
+    for k, v in {"supervisor_ok": True, "supervisor_name": "SK", "sup_last_active": time.time()}.items():
+        sup.session_state[k] = v
+    sup.run()
+    assert any(record["id"] in o for o in sup.selectbox(key="del-case").options)  # intake in progress too
+    sup.selectbox(key="del-case").set_value(record["id"])
+    sup.text_input(key="del-confirm").set_value("DELETE")
+    sup.button(key="del-go").click().run()
+    ok(sup)
+    assert tracker.load(record["id"]) is None
+
+
+# ---------- 6. the password hint ----------
+
+def test_password_boxes_hide_the_enter_hint():
+    css = (ROOT / "assets" / "app.css").read_text(encoding="utf-8")
+    assert '[data-testid="stTextInput"]:has(input[type="password"]) [data-testid="InputInstructions"] { display: none' in css
+
+
+# ---------- 7. why no drafts are waiting ----------
+
+def test_no_drafts_waiting_says_why_with_counts(monkeypatch, tmp_path):
+    import functools
+    monkeypatch.setattr(tracker, "rows", functools.partial(tracker.rows, base=tmp_path))
+    monkeypatch.setattr(store, "list_pending", functools.partial(store.list_pending, base=tmp_path))
+    for _ in range(3):
+        tracker.open_case("General", "Volunteer A", base=tmp_path)
+    monkeypatch.setenv("SUPERVISOR_PASSWORD", "sup-pass-9")
+    sup = AppTest.from_file("../app.py", default_timeout=30)
+    sup.session_state["screen"] = "Supervisor"
+    for k, v in {"supervisor_ok": True, "supervisor_name": "SK", "sup_last_active": time.time()}.items():
+        sup.session_state[k] = v
+    sup.run()
+    ok(sup)
+    assert any("No drafts sent for review yet. 3 case(s) still at intake." == i.value for i in sup.info)
+
+
+def test_a_line_that_says_the_same_and_more_replaces_the_shorter_one(tmp_path):
+    case_id = tracker.open_case("General", "Volunteer A", base=tmp_path)["id"]
+    tracker.add_summary(case_id, ["She has WhatsApp messages from the employer."], [], [], "Volunteer A", base=tmp_path)
+    tracker.add_summary(case_id, ["She has WhatsApp messages from the employer as evidence."], [], [], "Volunteer A", base=tmp_path)
+    tracker.add_summary(case_id, ["She has WhatsApp messages from the employer."], [], [], "Volunteer A", base=tmp_path)
+    lines = [l for l in tracker.load(case_id, base=tmp_path)["summary"] if "WhatsApp" in l]
+    assert lines == ["She has WhatsApp messages from the employer as evidence."]
+    assert not tracker.same_line("He was arrested.", "He was arrested in Patna.")   # too short to judge: kept apart
