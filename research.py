@@ -321,8 +321,22 @@ def run(case_id: str, state: str, issue: str, by: str, base: Path = HERE,
     audit.add_event(case_id, "research asked", audit.VOLUNTEER,
                     f"{LABEL}; search: {search}; model {raw.model}; {len(sources)} search results, "
                     f"{record['sources_official']} official; {len(kept)} points kept, {len(dropped)} dropped "
-                    f"(by {by})", base=base)
+                    f"{_dropped_reasons(dropped)}; sites searched: {_sites(sources)} (by {by})", base=base)
     return record
+
+
+def _sites(sources: List[dict]) -> str:
+    """The official websites the points came from (site names only), for "What the agent did"."""
+    names = sorted({urllib.parse.urlparse(x["url"]).netloc.lower().removeprefix("www.")
+                    for x in sources if x.get("allowed") and x.get("url")})
+    return ", ".join(names[:8]) or "none"
+
+
+def _dropped_reasons(dropped: List[dict]) -> str:
+    counts: Dict[str, int] = {}
+    for d in dropped:
+        counts[d.get("reason") or "no reason"] = counts.get(d.get("reason") or "no reason", 0) + 1
+    return "(" + "; ".join(f"{r} ×{n}" for r, n in counts.items()) + ")" if counts else ""
 
 
 # ---------- reading ----------
@@ -349,7 +363,7 @@ def waiting(base: Path = HERE) -> List[dict]:
 # ---------- the supervisor's decisions ----------
 
 def decide(research_id: str, point_id: str, decision: str, text: Optional[str] = None, base: Path = HERE,
-           today: Optional[date] = None) -> dict:
+           today: Optional[date] = None, by: str = "") -> dict:
     """Approve, edit (then approve) or reject one point. Approved points go into the case with their
     sources. Every decision is in the audit record."""
     if decision not in (APPROVE, EDIT, REJECT):
@@ -374,7 +388,7 @@ def decide(research_id: str, point_id: str, decision: str, text: Optional[str] =
         point["text"] = edited
         point["warnings"] = [w for w in point.get("warnings", []) if w["kind"] != "replaced"]
     point.update(status={APPROVE: "approved", EDIT: "approved after editing", REJECT: "rejected"}[decision],
-                 decided_on=today.isoformat(), decided_by=audit.SUPERVISOR)
+                 decided_on=today.isoformat(), decided_by=_norm(by)[:40] or audit.SUPERVISOR)
     if decision != REJECT:
         case = tracker.load(record["case_id"], base)
         if case is not None:
@@ -390,7 +404,8 @@ def decide(research_id: str, point_id: str, decision: str, text: Optional[str] =
     details = f"{research_id} {point_id} ({KINDS[point['kind']]})"
     if decision == EDIT:
         details += f": {point['original']} -> {point['text']}"
-    audit.add_event(record["case_id"], f"research point {point['status']}", audit.SUPERVISOR, details, base=base)
+    audit.add_event(record["case_id"], f"research point {point['status']}", _norm(by)[:40] or audit.SUPERVISOR, details,
+                    base=base, role="supervisor" if by else "")
     return point
 
 
@@ -461,8 +476,9 @@ def keywords(text: str) -> List[str]:
 
 def save_knowledge(research_id: str, point_id: str, heading: str, words: Optional[List[str]] = None,
                    base: Path = HERE, today: Optional[date] = None) -> dict:
-    """Save an approved point as a knowledge entry for its state, with Source, Link and
-    "Lawyer checked: yes". The next case in that state with a matching issue is then covered."""
+    """Save an approved point as a knowledge entry for its state, with Source, Link and "Approved by the
+    supervisor (<name>, <date>)" (the supervisor may not be a lawyer). The next case in that state with a
+    matching issue is then covered."""
     today = today or date.today()
     record = load(research_id, base)
     point = next((p for p in record["points"] if p["id"] == point_id), None)
@@ -479,7 +495,8 @@ def save_knowledge(research_id: str, point_id: str, heading: str, words: Optiona
              "state": record["state"], "heading": heading, "body": point["text"],
              "source": "; ".join(s["title"] for s in point["sources"]), "link": first["url"],
              "links": [s["url"] for s in point["sources"]], "checked": today.isoformat(),
-             "lawyer_checked": f"yes (supervisor, {today.isoformat()})", "keywords": words,
+             "approved_by": point.get("decided_by") or audit.SUPERVISOR,
+             "approved_on": point.get("decided_on") or today.isoformat(), "keywords": words,
              "from_case": record["case_id"], "from_research": research_id, "point_id": point_id}
     storage.write_json("knowledge_added", entry["id"], entry, base)
     point["knowledge_id"] = entry["id"]
@@ -487,6 +504,17 @@ def save_knowledge(research_id: str, point_id: str, heading: str, words: Optiona
     audit.add_event(record["case_id"], "research saved as knowledge", audit.SUPERVISOR,
                     f"{entry['id']} for {entry['state']}: {heading}", base=base)
     return entry
+
+
+def approved_by(entry: dict) -> str:
+    """Who approved a saved entry ("supervisor" for entries saved before names were kept)."""
+    return entry.get("approved_by") or audit.SUPERVISOR
+
+
+def approval_line(entry: dict) -> str:
+    """"Approved by the supervisor (SK, 2026-11-05)": never "Lawyer checked", since the supervisor may not
+    be a lawyer."""
+    return f"Approved by the supervisor ({approved_by(entry)}, {entry.get('approved_on') or entry['checked']})"
 
 
 def learned(base: Path = HERE) -> List[dict]:
@@ -515,13 +543,14 @@ def items_for_summary(case_id: Optional[str], state: Optional[str], issues: List
         for e in matching(state, issue, base):
             items.append({"issue": issue, "origin": "knowledge", "kind": "", "heading": e["heading"],
                           "text": e["body"], "source_line": f"Source: {e['source']} ({e['link']})",
-                          "approved_on": e["checked"]})
+                          "approved_on": e["checked"], "approved_by": approved_by(e)})
     for p in approved_points(case_id, base) if case_id else []:
         target = p["issue"] if p["issue"] in issues else (issues[0] if issues else p["issue"])
         if any(i["text"] == p["text"] and i["issue"] == target for i in items):
             continue
         items.append({"issue": target, "origin": "research", "kind": p["kind"], "heading": KINDS[p["kind"]],
-                      "text": p["text"], "source_line": source_line(p["sources"]), "approved_on": p["approved_on"]})
+                      "text": p["text"], "source_line": source_line(p["sources"]), "approved_on": p["approved_on"],
+                      "approved_by": ""})
     return items
 
 
@@ -529,9 +558,9 @@ def export_markdown(base: Path = HERE, today: Optional[date] = None) -> str:
     """Every saved entry in the knowledge/ file format, to add to knowledge/ by hand after a check."""
     today = today or date.today()
     out = ["# Approved research (exported from Agent Raahi)", "",
-           f"Module: research · Exported: {today.isoformat()} · Each entry was approved by the supervising lawyer.",
+           f"Module: research · Exported: {today.isoformat()} · Each entry was approved by the supervisor.",
            "", "---", ""]
     for e in learned(base):
         out += [f"### {e['heading']}", f"State: {e['state']}.", e["body"], f"Source: {e['source']}",
-                f"Link: {e['link']}", f"Checked: {e['checked']} · Lawyer checked: {e['lawyer_checked']}", ""]
+                f"Link: {e['link']}", f"Checked: {e['checked']} · {approval_line(e)}", ""]
     return "\n".join(out)

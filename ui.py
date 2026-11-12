@@ -71,6 +71,15 @@ def new_case_side(camp_label: str, camp_text: str, camp_on: bool, tip: str) -> s
             f'<p class="nc-tip">{icon("lightbulb")}<span>{html.escape(tip)}</span></p></div>')
 
 
+def signin_side(title: str, points, help_title: str, danger: str, aid: str) -> str:
+    """Beside a sign-in form (below it on a phone): what the page is for, then the two helplines."""
+    items = "".join(f"<li>{html.escape(p)}</li>" for p in points)
+    return (f'<div class="signin-side"><h3>{html.escape(title)}</h3><ul>{items}</ul>'
+            f'<h4>{html.escape(help_title)}</h4>'
+            f'<nav class="helpline helpline-page" aria-label="Emergency and helplines">'
+            f'{helpline_links(danger, aid)}</nav></div>')
+
+
 def page_helplines(danger: str, aid: str) -> str:
     """The helplines under a page heading (New case, Case tracker, Supervisor, sign-in pages...)."""
     return (f'<nav class="helpline helpline-page" aria-label="Emergency and helplines">'

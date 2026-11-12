@@ -268,3 +268,87 @@ def test_start_a_case_asks_before_leaving_an_open_case(tmp_path, monkeypatch):
     at.button(key="leave-yes").click().run()
     assert "case_id" not in at.session_state
     assert not [b for b in at.button if b.key == "case-another"]
+
+
+# ---------- layout and two small agent features (12 November 2026) ----------
+
+def test_the_ais_reasons_are_shown_only_without_names():
+    raw = dict(WAGES_ANSWER, why_asked=["The letter should mention any written proof.",
+                                        "Ask Ramesh Kumar whether others were paid."])  # a name: dropped
+    notes = WAGES + " Ramesh Kumar is a co-worker."
+    reading = general.check_general_answer(raw, notes)
+    first, second = WAGES_ANSWER["questions_to_ask"]
+    assert reading.question_reasons[first] == "The letter should mention any written proof."
+    assert second in reading.questions and second not in reading.question_reasons
+    assert not general.reason_is_clean("Call 9876543210 first.", notes)
+
+
+def test_why_this_is_asked_under_each_question(monkeypatch):
+    import html as h
+    reasons = dict(WAGES_ANSWER, why_asked=["The letter should mention any written proof."])
+    monkeypatch.setattr(llm, "available", lambda: True)
+    monkeypatch.setattr(llm, "gemini_available", lambda: True)
+    monkeypatch.setattr(llm, "read_general_notes",
+                        lambda notes, output_lang="en", **k: llm.NotesReading(reasons, notes, {}, MODEL))
+    at = AppTest.from_file("../app.py", default_timeout=30)
+    at.session_state["screen"] = "New case"
+    at.run()
+    at.text_area(key="g_notes").set_value(WAGES).run()
+    at.button(key="g-read").click().run()
+    seen = []
+    for _ in range(12):
+        why = [h.unescape(m.value) for m in at.markdown if 'class="why-asked"' in m.value]
+        if not why:
+            break
+        seen.append(why[0])
+        skip = [b for b in at.button if b.key and b.key.startswith("gskip-") and b.key != "gskip-all"]
+        if not skip:
+            break
+        skip[0].click().run()
+    ok(at)
+    assert "Why this is asked:</b> The letter should mention any written proof." in seen[0]   # the AI's reason
+    assert "The agent suggested this to fill a gap in the story." in seen[1]                  # it gave none
+    assert "The letter must say what the person is asking for." in seen[2]                   # the app's own
+
+
+def test_every_fixed_question_has_its_reason_in_english_and_hindi():
+    import json
+    import intake
+    for code in ("en", "hi"):
+        strings = json.load(open(ROOT / "i18n" / f"{code}.json", encoding="utf-8"))
+        for m in general.ELIGIBILITY_QUESTIONS:
+            assert strings[f"whyq.elig.{m}"]
+        for fact, _ in intake.FACT_QUESTIONS:
+            assert strings[f"whyq.f.{fact}"]
+        for key in ("whyq.person", "whyq.outcome", "whyq.year", "whyq.ai_default", "whyq.label"):
+            assert strings[key]
+
+
+def test_what_the_agent_did_card_from_the_audit_record(monkeypatch):
+    import audit
+    at = wages(monkeypatch)
+    make_drafts(at, letter=False)
+    ok(at)
+    events = [e["event"] for e in audit.read_record(at.session_state["case_id"])["events"]]
+    assert "story read" in events and "question asked" in events and "drafts made" in events
+    [text] = [m.value for m in at.markdown if 'class="agent-did"' in m.value]
+    assert "Story read" in text and f"model {MODEL}" in text and "Question asked" in text and "Drafts made" in text
+    assert "(by " not in text  # who is in the audit table; the card says what was done
+
+
+def test_one_filled_button_per_screen_and_it_is_the_next_action(monkeypatch):
+    at = wages(monkeypatch)
+    ok(at)
+    filled = lambda: [b.key for b in at.button if b.proto.type == "primary" and b.key not in ("nav-start",)]  # noqa: E731
+    assert filled() == ["rs-run-go"]                       # step 3: the problem is not in our files: research
+    import html as h
+    assert h.unescape([m.value for m in at.markdown if 'class="next-label"' in m.value][0]).endswith(">Next:</p>")
+
+
+def test_sign_in_pages_say_what_they_are_for(monkeypatch):
+    monkeypatch.setenv("CLINIC_PASSCODE", "practice-pass-123")
+    at = AppTest.from_file("../app.py", default_timeout=30)
+    at.session_state["screen"] = "New case"
+    at.run()
+    side = [m.value for m in at.markdown if 'class="signin-side"' in m.value]
+    assert len(side) == 1 and "What this page is for" in side[0] and 'href="tel:15100"' in side[0]

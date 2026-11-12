@@ -344,22 +344,27 @@ def test_saved_knowledge_covers_the_next_similar_case(tmp_path, fake_ai):
     case_id, record = bihar_research(tmp_path, fake_ai)
     with pytest.raises(research.ResearchFailed, match="Only an approved point"):
         research.save_knowledge(record["id"], "p1", "x", base=tmp_path)
-    research.decide(record["id"], "p1", research.APPROVE, base=tmp_path, today=date(2026, 11, 5))
+    research.decide(record["id"], "p1", research.APPROVE, base=tmp_path, today=date(2026, 11, 5), by="SK")
     entry = research.save_knowledge(record["id"], "p1", "Bihar: electricity disconnection, who to write to first",
                                     ["electricity", "disconnection"], base=tmp_path, today=date(2026, 11, 5))
-    assert entry["lawyer_checked"] == "yes (supervisor, 2026-11-05)" and entry["link"].endswith("/complaints")
+    assert entry["approved_by"] == "SK" and entry["approved_on"] == "2026-11-05" and "lawyer_checked" not in entry
+    assert research.approval_line(entry) == "Approved by the supervisor (SK, 2026-11-05)"
+    assert entry["link"].endswith("/complaints")
     assert audit.read_record(case_id, base=tmp_path)["events"][-1]["event"] == "research saved as knowledge"
 
     later = new_case(tmp_path)  # a new Bihar case: covered now, no research needed
     items = research.items_for_summary(later, "Bihar", ["electricity disconnection at home"], base=tmp_path)
     assert [i["origin"] for i in items] == ["knowledge"] and "Lawyer" not in items[0]["text"]
+    assert items[0]["approved_by"] == "SK"
+    g_lines = general._research_lines(items)
+    assert "(approved by the supervisor (SK, 2026-11-05))" in g_lines[0] and "lawyer checked" not in g_lines[0]
     assert research.items_for_summary(later, "Uttar Pradesh", ["electricity disconnection"], base=tmp_path) == []
     assert research.items_for_summary(later, "Bihar", ["unpaid wages"], base=tmp_path) == []
 
 
 def test_export_is_in_the_knowledge_file_format(tmp_path, fake_ai, monkeypatch):
     case_id, record = bihar_research(tmp_path, fake_ai)
-    research.decide(record["id"], "p1", research.APPROVE, base=tmp_path)
+    research.decide(record["id"], "p1", research.APPROVE, base=tmp_path, today=date(2026, 11, 5), by="SK")
     research.save_knowledge(record["id"], "p1", "Bihar: electricity disconnection, who to write to first",
                             base=tmp_path, today=date(2026, 11, 5))
     folder = tmp_path / "k"
@@ -372,7 +377,8 @@ def test_export_is_in_the_knowledge_file_format(tmp_path, fake_ai, monkeypatch):
     finally:
         knowledge._entries.cache_clear()
     assert entry.heading == "Bihar: electricity disconnection, who to write to first"
-    assert entry.link == "https://energy.bihar.gov.in/complaints" and "Lawyer checked: yes" in entry.checked
+    assert entry.link == "https://energy.bihar.gov.in/complaints" and "Approved by the supervisor (SK, 2026-11-05)" in entry.checked
+    assert "Lawyer checked" not in research.export_markdown(base=tmp_path)
     assert "State: Bihar." in entry.body
 
 

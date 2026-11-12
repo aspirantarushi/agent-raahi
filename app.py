@@ -167,11 +167,23 @@ def ai_info_for_audit():
             "not_accepted": sorted({d.split(":")[0] for d in reading.dropped})}
 
 
-def page_title(text: str):
-    """A page heading with the two tap-to-call helplines right under it (the Home page style)."""
+def page_title(text: str, helplines: bool = True):
+    """A page heading with the two tap-to-call helplines right under it (the Home page style). Sign-in
+    pages show the helplines in the card instead."""
     with st.container(key="page-head", gap=None):  # its own space below the logo bar
         st.title(text)
-        st.markdown(ui.page_helplines(t("safety.bar112"), t("safety.bar15100")), unsafe_allow_html=True)
+        if helplines:
+            st.markdown(ui.page_helplines(t("safety.bar112"), t("safety.bar15100")), unsafe_allow_html=True)
+
+
+def signin_columns(who: str):
+    """A sign-in page's wide card (laptop): the form on the left (returned), and on the right what the page
+    is for and the helplines. On a phone the two stack, full width."""
+    with st.container(key="signin-wide"):
+        form, side = st.columns([3, 2], gap="large")
+    side.markdown(ui.signin_side(t("signin.title"), [t(f"signin.{who}{i}") for i in (1, 2, 3)], t("signin.help"),
+                                 t("safety.bar112"), t("safety.bar15100")), unsafe_allow_html=True)
+    return form
 
 
 def new_case_screen():
@@ -212,8 +224,8 @@ def finish_intake_box(case_id: str):
     """"Finish intake" once the draft is sent (and the next step, once it is finished)."""
     record = tracker.load(case_id) or {}
     if not record.get("intake_finished"):
-        st.button(t("intake.finish"), key="intake-finish", type="primary", icon=":material/task_alt:",
-                  on_click=finish_intake, args=(case_id,))
+        next_action(t("intake.finish"), key="intake-finish", icon=":material/task_alt:",
+                    on_click=finish_intake, args=(case_id,))
     elif record.get("next"):
         n = record["next"]
         st.success(t("intake.done", step=next_step_words(n["step"], None),
@@ -222,8 +234,25 @@ def finish_intake_box(case_id: str):
 
 # ----- voice: "Speak the story" -----
 
+def mic_key(audio_key: str) -> str:
+    """The recorder's own key. "Record again" gives the recorder a new key, so it starts empty."""
+    n = st.session_state.get(f"{audio_key}-round", 0)
+    return audio_key if not n else f"{audio_key}{n}"
+
+
+def recording(audio_key: str):
+    return st.session_state.get(mic_key(audio_key))
+
+
+def record_again(audio_key: str):
+    st.session_state.pop(mic_key(audio_key), None)
+    st.session_state[f"{audio_key}-round"] = st.session_state.get(f"{audio_key}-round", 0) + 1
+    for suffix in ("-msg", "-converted", "-pending"):
+        st.session_state.pop(f"{audio_key}{suffix}", None)
+
+
 def recording_digest(audio_key: str) -> str:
-    recording = st.session_state.get(audio_key)
+    recording = st.session_state.get(mic_key(audio_key))
     return hashlib.sha256(recording.getvalue()).hexdigest()[:16] if recording is not None else ""
 
 
@@ -235,7 +264,7 @@ def recording_stopped(audio_key: str):
 def convert_recording(audio_key: str):
     """"Turn speech into text": the work runs on this run, just before the story box is drawn (so the
     progress can be shown: "part 2 of 4")."""
-    if st.session_state.get(audio_key) is not None:
+    if recording(audio_key) is not None:
         st.session_state[f"{audio_key}-pending"] = True
 
 
@@ -244,8 +273,8 @@ def run_pending_voice(audio_key: str, target_key: str):
     to become text; it is never saved. The text goes through the privacy filter, then into the box."""
     if not st.session_state.pop(f"{audio_key}-pending", False):
         return
-    recording = st.session_state.get(audio_key)
-    if recording is None:
+    audio = recording(audio_key)
+    if audio is None:
         return
     shown = st.empty()
 
@@ -256,8 +285,8 @@ def run_pending_voice(audio_key: str, target_key: str):
     progress(1, 1)
     try:
         language = st.session_state.get(NOTES_LANGUAGE_KEYS.get(target_key, "")) or code()
-        transcript = multilingual.speech_to_text(recording.getvalue(),
-                                                 getattr(recording, "type", None) or "audio/wav", language, progress)
+        transcript = multilingual.speech_to_text(audio.getvalue(),
+                                                 getattr(audio, "type", None) or "audio/wav", language, progress)
     except (llm.AIUnavailable, bhashini.BhashiniUnavailable):
         shown.empty()
         st.session_state[f"{audio_key}-msg"] = ("error", f"{t('ui.voice.failed')} {t('ui.voice.type_instead')}")
@@ -287,15 +316,24 @@ def voice_box(audio_key: str, target_key: str):
         if not (sarvam.configured() or llm.gemini_available()):  # Sarvam, or Gemini as the backup (never Groq)
             st.info(t("ui.voice.no_ai"))
             return
-        st.audio_input(t("ui.voice.title"), key=audio_key, on_change=recording_stopped, args=(audio_key,))
+        st.audio_input(t("ui.voice.title"), key=mic_key(audio_key), on_change=recording_stopped, args=(audio_key,))
         # While recording, the label says so (Streamlit's recorder shows the timer and the stop button)
         st.markdown(f"<style>.st-key-{audio_key}-box [data-testid=\"stAudioInput\"]:has(button[aria-label=\"Stop recording\"])"
                     f" [data-testid=\"stWidgetLabel\"] p::after {{ content: \" \\2014  {css_text(t('ui.voice.recording'))}\"; "
                     f"color: var(--red); font-weight: 700; }}</style>", unsafe_allow_html=True)
-        if st.session_state.get(audio_key) is not None and \
-                st.session_state.get(f"{audio_key}-converted") != recording_digest(audio_key):
-            st.button(t("ui.voice.convert"), key=f"{audio_key}-convert", type="primary", icon=":material/text_fields:",
-                      on_click=convert_recording, args=(audio_key,))
+        # Both buttons always under the recorder, side by side; a greyed-out one says why
+        has_recording = recording(audio_key) is not None
+        new = has_recording and st.session_state.get(f"{audio_key}-converted") != recording_digest(audio_key)
+        with st.container(horizontal=True, gap="small", key=f"{audio_key}-actions"):
+            st.button(t("ui.voice.again"), key=f"{audio_key}-again", icon=":material/restart_alt:",
+                      disabled=not has_recording, on_click=record_again, args=(audio_key,))
+            (next_action if new else lambda label, **kw: st.button(label, type="secondary", **kw))(
+                t("ui.voice.convert"), key=f"{audio_key}-convert", icon=":material/text_fields:", disabled=not new,
+                on_click=convert_recording, args=(audio_key,))
+        if not has_recording:
+            why_disabled(t("why.record_first"))
+        elif not new:
+            why_disabled(t("why.converted"))
         st.caption(t("ui.voice.warning") + " " + t("ui.voice.caption"))
         msg = st.session_state.pop(f"{audio_key}-msg", None)
         if msg:
@@ -378,6 +416,25 @@ def sent_status_line(case_id: str) -> str:
     if not sent_on:
         return ""
     return t("send.status", on=show_date(date.fromisoformat(sent_on)), status=status_text(status))
+
+
+def next_action(label: str, key: str, form: bool = False, **kw):
+    """The step's next action: its one filled button (the others are outlined). On phones it is pinned to
+    the bottom of the screen as "Next: <action>". Never two on one screen: a second one is outlined."""
+    press = st.form_submit_button if form else st.button
+    if st.session_state.get("_next_shown"):
+        return press(label, key=key, type="secondary", **kw)
+    st.session_state["_next_shown"] = True
+    with st.container(key="next-action", horizontal=True, vertical_alignment="center", gap="small"):
+        st.markdown(f'<p class="next-label">{html.escape(t("ui.next_bar"))}</p>', unsafe_allow_html=True)
+        return press(label, key=key, type="primary", **kw)
+
+
+def step_button(label: str, key: str, **kw):
+    """A step 3 button: filled only when it is the next action (worked out once, in general_summary)."""
+    if st.session_state.get("_next_key") == key:
+        return next_action(label, key, **kw)
+    return st.button(label, key=key, type="secondary", **kw)
 
 
 def why_disabled(text: str, red: bool = False):
@@ -475,6 +532,9 @@ def read_general():
         tracker_error(err)
         known_values = {}
     _start_general(reading, notes_reading.model, removed)
+    log_agent("story read", f"model {notes_reading.model}; removed before sending: "
+              + (", ".join(f"{n} × {k}" for k, n in removed.items()) or "nothing")
+              + f"; {len(reading.questions)} questions planned")
     st.session_state["gen"]["read_here"] = True  # read in this session (an edit and re-read is a correction)
     st.session_state["gen"]["facts"].update(known_values)
     st.session_state["gen"].update(translated_from=prepared.translated_from, translation=prepared.text,
@@ -569,6 +629,26 @@ def continue_after_not_needed():
     st.session_state["gen"]["elig_ack"] = True
 
 
+def why_asked(gen, kind: str, ref, text: str) -> str:
+    """Why a question is asked: fixed text for the app's own questions; for the AI's, the AI's reason
+    (already checked by plain code to contain no names), or a plain line when it gave none."""
+    if kind == "eligibility":
+        return t(f"whyq.elig.{ref}")
+    same = lambda key: text in (lang.t(key, "en"), lang.t(key, "hi"))  # noqa: E731
+    if same("q.person"):
+        return t("whyq.person")
+    if same("q.outcome"):
+        return t("whyq.outcome")
+    if text.startswith((lang.t("q.year_start", "en"), lang.t("q.year_start", "hi"))):
+        return t("whyq.year")
+    return gen["reading"].question_reasons.get(text) or t("whyq.ai_default")
+
+
+def why_asked_line(reason: str):
+    st.markdown(f'<p class="why-asked"><b>{html.escape(t("whyq.label"))}</b> {html.escape(reason)}</p>',
+                unsafe_allow_html=True)
+
+
 def answer_general(kind: str, ref, skip: bool = False):
     gen = st.session_state["gen"]
     get = st.session_state.get
@@ -579,7 +659,9 @@ def answer_general(kind: str, ref, skip: bool = False):
         gen["unanswered"] = [q for q in gen["unanswered"] if q != question]
         if skip:
             gen["unanswered"].append(question)
+            log_agent("question asked", f"{question} (don't know)")
         elif text:
+            log_agent("question asked", f"{question} (answered)")
             gen["answers"].append((question, text))
             if st.session_state.get("case_id"):
                 try:
@@ -602,6 +684,7 @@ def answer_general(kind: str, ref, skip: bool = False):
         if choice == "Not sure":
             skip = True
     if skip or value is not None:
+        log_agent("question asked", f"{lang.t(f'elig.q.{fact}', 'en')} ({'not sure' if skip else 'answered'})")
         gen["elig_done"] = gen.get("elig_done", 0) + 1
         gen.setdefault("elig_asked", []).append(fact)
     if skip:
@@ -707,8 +790,10 @@ def general_screen():
             col1, col2 = st.columns(2)
             busy = bool(st.session_state.get("g_reading"))
             empty = not (st.session_state.get("g_notes") or "").strip()
-            col1.button(t("ui.general.read"), type="primary", key="g-read", disabled=busy or empty,
-                        on_click=lambda: (ensure_notes_language("g_notes"), st.session_state.update(g_reading=True)))
+            with col1:
+                (next_action if not gen else lambda label, **kw: st.button(label, type="secondary", **kw))(
+                    t("ui.general.read"), key="g-read", disabled=busy or empty,
+                    on_click=lambda: (ensure_notes_language("g_notes"), st.session_state.update(g_reading=True)))
             if empty and not busy:
                 why_disabled(t("why.story_first"))
             if gen:
@@ -745,8 +830,8 @@ def general_screen():
         eligibility = general.check_eligibility(gen["facts"])
         st.info(t("ui.q_not_needed", n=len(left), reason=eligibility_text(eligibility)), icon=":material/task_alt:")
         st.markdown("\n".join(f"- {t(f'elig.q.{m}')}" for m in left))
-        st.button(t("ui.q_continue"), key="q-not-needed-go", type="primary", icon=":material/arrow_forward:",
-                  on_click=continue_after_not_needed)
+        next_action(t("ui.q_continue"), key="q-not-needed-go", icon=":material/arrow_forward:",
+                    on_click=continue_after_not_needed)
         st.button(t("ui.back_story"), key="g-back-story", type="tertiary", icon=":material/arrow_back:",
                   on_click=back_to_story)
         return
@@ -757,6 +842,7 @@ def general_screen():
         st.markdown(f'<p class="q-count">{html.escape(t("ui.q_of", n=n, total=total))}</p>', unsafe_allow_html=True)
         with st.form(key=f"gform-{kind}-{ref}", enter_to_submit=True, border=True):
             st.markdown(f"**{text}**")
+            why_asked_line(why_asked(gen, kind, ref, text))
             if kind == "ai":
                 st.text_input(t("ui.general.answer_no_names"), key=f"gq-{ref}", max_chars=300)
             elif ref == "state":
@@ -771,8 +857,8 @@ def general_screen():
                          format_func=option_text("opt."))
             with st.container(horizontal=True, gap="small", key="q-actions"):
                 # the first button is the one Enter presses
-                st.form_submit_button(t("ui.next"), type="primary", key=f"gnext-{kind}-{ref}",
-                                      icon=":material/arrow_forward:", on_click=answer_general, args=(kind, ref))
+                next_action(t("ui.next"), key=f"gnext-{kind}-{ref}", form=True,
+                            icon=":material/arrow_forward:", on_click=answer_general, args=(kind, ref))
                 st.form_submit_button(t("ui.dont_know"), key=f"gskip-{kind}-{ref}", on_click=answer_general,
                                       args=(kind, ref, True))
                 st.form_submit_button(t("ui.general.skip_rest"), key="gskip-all", type="tertiary",
@@ -997,7 +1083,15 @@ def general_summary(gen):
                                                                        draft_lang)))
     documents = [(title, st.session_state.get(f"doc-edit-{i}", text)) for i, (title, text) in enumerate(documents)]
     letter_state = {"wanted": letter_wanted, "made": letter_made, "research_done": research_done,
-                    "sig": letter_sig, "changed": bool(st.session_state.get("g_letter_sig")) and not letter_made}
+                    "sig": letter_sig, "changed": bool(st.session_state.get("g_letter_sig")) and not letter_made,
+                    "points": sum(1 for p in letter_points if p.get("kind") != "letter")}
+    can_search = llm.gemini_available() or llm.tavily_key()
+    sent_already = bool(st.session_state.get("gen_sent") or sent_status_line(case_id))
+    st.session_state["_next_key"] = (
+        None if sent_already else  # then "Finish intake" is the next action
+        "rs-run-go" if uncovered and status == "not started" and state and can_search and not research_now else
+        "letter-go" if letter_wanted and research_done and not letter_made else
+        "drafts-go" if not drafts_made else "send-g")
 
     col_cards, col_check = st.columns([3, 2], gap="medium")
     with col_cards:
@@ -1011,6 +1105,11 @@ def general_summary(gen):
     drafts_panel(documents, "loading" if research_now else status, uncovered, facts_sig, drafts_made)
     entries = ledger.general(facts, reading.facts, eligibility, ai_checked=bool(gen["model"]))
     ledger_box(entries)
+    if case_id:
+        try:
+            agent_did_card(audit.read_record(case_id), "step3")
+        except storage.StorageError:
+            pass
     packet = casework.bundle(documents) if documents else ""
     if documents:
         reading_copy_box("summary", documents[0][1])
@@ -1049,7 +1148,7 @@ def general_summary(gen):
             ([t("why.send.left_out")] if no_reason else []) + \
             ([t("why.send.reason")] if unticked and not send_reason else []) + \
             ([t("why.send.checked")] if not checked else [])
-        clicked = st.button(label, disabled=bool(reasons), key="send-g", type="primary", icon=":material/send:")
+        clicked = step_button(label, key="send-g", disabled=bool(reasons), icon=":material/send:")
         for why in reasons:
             why_disabled(why, red=True)
         if clicked:
@@ -1315,16 +1414,19 @@ def research_panel(g, uncovered, status, case_id, state, waiting_rs=None, letter
                          placeholder=t("rs.choose_state_placeholder"), on_change=choose_research_state)
         with st.container(horizontal=True, gap="small", key="research-actions"):
             if uncovered and status == "not started":
-                st.button(t("rs.run"), key="rs-run-go", type="primary", icon=":material/travel_explore:",
+                step_button(t("rs.run"), key="rs-run-go", icon=":material/travel_explore:",
                           disabled=not (state and can_search),
                           on_click=lambda: st.session_state.update({"rs-run": (case_id, uncovered[0], state)}))
             elif uncovered and state and case_id:
                 st.button(t("rs.again"), key="rs-again-go", icon=":material/refresh:", disabled=not can_search,
                           on_click=research_again, args=(case_id, uncovered[0], state))
             if letter.get("wanted"):  # the letter, from the ticked points (or facts only), when asked for
-                st.button(t("cw.letter_go"), key="letter-go", type="primary" if not letter.get("made") else "secondary",
-                          icon=":material/edit_document:", disabled=not letter.get("research_done"),
-                          on_click=lambda s=letter.get("sig"): st.session_state.update(g_letter_sig=s))
+                step_button(t("cw.letter_go"), key="letter-go",
+                            icon=":material/edit_document:", disabled=not letter.get("research_done"),
+                            on_click=lambda s=letter.get("sig"), n=letter.get("points", 0): (
+                                st.session_state.update(g_letter_sig=s),
+                                log_agent("letter drafted", f"from {n} ticked research points" if n
+                                          else "facts only (no research point ticked)")))
             if status != "approved":  # research failed or the problem isn't covered: two free helplines
                 nyaya_setu_button()
         if uncovered and status == "not started" and not state:
@@ -1353,8 +1455,9 @@ def drafts_panel(documents, status, uncovered, facts_sig="", drafts_made=True):
     if not drafts_made:
         if st.session_state.get("g_drafts_sig"):
             st.info(t("cw.drafts_changed"), icon=":material/edit_note:")
-        st.button(t("cw.make_drafts"), key="drafts-go", type="primary", icon=":material/description:",
-                  on_click=lambda: st.session_state.update(g_drafts_sig=facts_sig))
+        step_button(t("cw.make_drafts"), key="drafts-go", icon=":material/description:",
+                    on_click=lambda: (st.session_state.update(g_drafts_sig=facts_sig),
+                                      log_agent("drafts made", "case summary; free legal aid application if needed")))
     if uncovered and status == "loading":  # only while research is still running
         st.info(t("cw.letter_waiting"), icon=":material/hourglass_top:")
     for i, (title, text) in enumerate(documents):
@@ -1552,8 +1655,10 @@ def notes_box():
         col1, col2 = st.columns(2)
         busy = bool(st.session_state.get("f_reading"))
         empty = not (st.session_state.get("f_notes") or "").strip()
-        col1.button(t("ui.notes.read"), type="primary", key="f-read", disabled=busy or empty,
-                    on_click=lambda: (ensure_notes_language("f_notes"), st.session_state.update(f_reading=True)))
+        with col1:
+            (next_action if not ai else lambda label, **kw: st.button(label, type="secondary", **kw))(
+                t("ui.notes.read"), key="f-read", disabled=busy or empty,
+                on_click=lambda: (ensure_notes_language("f_notes"), st.session_state.update(f_reading=True)))
         if empty and not busy:
             why_disabled(t("why.notes_first"))
         if ai:
@@ -1630,11 +1735,13 @@ def ask_missing_facts() -> bool:
         if fact == "answer":
             question = intake.offence_question(ai["values"])
         st.markdown(f"**{question}**")
+        why_asked_line(t(f"whyq.f.{fact}"))
         if fact in ai["reading"].notes_say:
             st.caption(t("ui.missing.notes_say", quote=ai["reading"].notes_say[fact]))
         question_widget(fact)
         col1, col2, col3 = st.columns([1, 1, 2])
-        col1.button(t("ui.next"), type="primary", key=f"next-{fact}", on_click=answer_fact, args=(fact,))
+        with col1:
+            next_action(t("ui.next"), key=f"next-{fact}", on_click=answer_fact, args=(fact,))
         col2.button(t("ui.dont_know"), key=f"skip-{fact}", on_click=answer_fact, args=(fact, True))
         col3.button(t("ui.missing.skip_rest"), key="skip-all", on_click=skip_all)
     return True
@@ -1718,8 +1825,10 @@ def calculate_card(used: dict, offence, signature: str):
         st.markdown(f"**{t('calc.title')}**")
         st.markdown("\n".join(f"- {html.escape(k)}: **{html.escape(str(v))}**" for k, v in rows))
         with st.container(horizontal=True, gap="small", key="f-calc-actions"):
-            st.button(t("calc.go"), key="f-calc", type="primary", icon=":material/calculate:",
-                      on_click=lambda: st.session_state.update(f_calc_sig=signature))
+            (next_action if st.session_state.get("f_calc_sig") != signature else
+             lambda label, **kw: st.button(label, type="secondary", **kw))(
+                t("calc.go"), key="f-calc", icon=":material/calculate:",
+                on_click=lambda: st.session_state.update(f_calc_sig=signature))
             st.button(t("calc.edit"), key="f-edit", icon=":material/edit:",
                       on_click=lambda: st.session_state.update(f_checked=False, f_calc_sig=None))
 
@@ -2734,11 +2843,11 @@ def supervisor_screen():
         return
     if not st.session_state.get("supervisor_ok"):
         # Only the supervisor password: no clinic passcode and no name
-        page_title(t("ui.sup.sign_in_title"))
+        page_title(t("ui.sup.sign_in_title"), helplines=False)
         info = st.session_state.pop("sup-msg-info", None)
         if info:
             st.info(info, icon=":material/timer:")
-        with st.container(key="signin-card"):  # the same card as on New case
+        with signin_columns("s"), st.container(key="signin-card"):
             with st.form("sup-form", enter_to_submit=True, border=False):  # Enter signs in
                 st.text_input(t("ui.sup.password"), type="password", key="sup-pass")
                 st.form_submit_button(t("ui.sup.sign_in"), type="primary", key="sup-go", on_click=supervisor_sign_in)
@@ -2748,8 +2857,8 @@ def supervisor_screen():
         return
     if not supervisor_name():
         # After the password: the supervisor's name or initials, saved with every decision
-        page_title(t("ui.sup.sign_in_title"))
-        with st.container(key="signin-card"):
+        page_title(t("ui.sup.sign_in_title"), helplines=False)
+        with signin_columns("s"), st.container(key="signin-card"):
             with st.form("sup-name-form", enter_to_submit=True, border=False):
                 st.text_input(t("gate.name"), key="sup-name", max_chars=40, help=t("ui.sup.name_help"))
                 st.form_submit_button(t("ui.next"), type="primary", key="sup-name-go", on_click=supervisor_name_given)
@@ -2761,7 +2870,7 @@ def supervisor_screen():
     page_title(t("ui.sup.title"))
     top1, top2 = st.columns([3, 1])
     top1.success(t("ui.sup.signed_in_as", name=supervisor_name()))
-    top2.button(t("ui.sup.sign_out"), type="primary", icon=":material/logout:", key="sup-out",
+    top2.button(t("ui.sup.sign_out"), type="secondary", icon=":material/logout:", key="sup-out",
                 on_click=supervisor_sign_out)
 
     flash = st.session_state.pop("supervisor_flash", None)
@@ -3008,7 +3117,8 @@ def decide_research_point(research_id: str, point_id: str):
     choice = st.session_state.get(key)
     decision = {"Approve": research.APPROVE, "Edit then approve": research.EDIT, "Reject": research.REJECT}.get(choice)
     try:
-        point = research.decide(research_id, point_id, decision, st.session_state.get(f"rse-{research_id}-{point_id}"))
+        point = research.decide(research_id, point_id, decision, st.session_state.get(f"rse-{research_id}-{point_id}"),
+                                by=supervisor_name())
     except (research.ResearchFailed, storage.StorageError, ValueError) as err:
         st.session_state["supervisor_flash"] = str(err)
         return
@@ -3159,7 +3269,8 @@ def knowledge_added_box():
     with st.expander(t("rs.k_title", n=len(entries)), icon=":material/library_books:"):
         st.caption(t("rs.k_export_caption"))
         for e in entries:
-            st.markdown(f"- **{html.escape(e['heading'])}** ({e['state']}) · {ui.tag(e['lawyer_checked'])}  \n"
+            approved = t("rs.approved_by", name=research.approved_by(e), date=e.get("approved_on") or e["checked"])
+            st.markdown(f"- **{html.escape(e['heading'])}** ({e['state']}) · {ui.tag(approved)}  \n"
                         f"  {html.escape(e['body'][:300])}  \n  _Source: {html.escape(e['source'])} ({e['link']})_",
                         unsafe_allow_html=True)
         st.download_button(t("rs.k_export"), research.export_markdown(), file_name="research_approved.md",
@@ -3286,6 +3397,7 @@ def review_case(record: dict):
         if record.get("ledger"):
             ledger_box(record["ledger"])
         audit_record = audit.read_record(case_id)
+        agent_did_card(audit_record, f"sup-{case_id}")
         with st.expander(t("ui.sup.audit_one")):
             if audit_record:
                 audit_ai_summary(audit_record)
@@ -3396,8 +3508,8 @@ def clinic_sign_in():
 
 
 def clinic_gate():
-    page_title(t("gate.title"))
-    with st.container(key="signin-card"):  # the same card as on New case
+    page_title(t("gate.title"), helplines=False)
+    with signin_columns("v"), st.container(key="signin-card"):
         st.caption(t("gate.caption"))
         with st.form("gate-form", enter_to_submit=True, border=False):  # Enter signs in
             st.text_input(t("gate.passcode"), type="password", key="gate-pass")
@@ -3422,7 +3534,7 @@ def volunteer_line(card: bool = False):
     if clinic_passcode():
         st.markdown(f'<span class="who" title="{html.escape(t("gate.name_help"))}">'
                     f'{html.escape(t("gate.signed_in_short", name=who()))}</span>', unsafe_allow_html=True)
-        if st.button(t("gate.sign_out"), key="gate-out", type="primary", icon=":material/logout:"):
+        if st.button(t("gate.sign_out"), key="gate-out", type="secondary", icon=":material/logout:"):
             for key in ("clinic_ok", "volunteer", "case_id"):
                 st.session_state.pop(key, None)
             st.rerun()
@@ -3490,6 +3602,64 @@ def todays_camp():
     camp = st.session_state.get("camp_today")
     return {"village": camp["village"], "district": camp["district"], "on": date.fromisoformat(camp["on"])} \
         if camp else None
+
+
+# "What the agent did": these audit events, in the order they happened
+AGENT_EVENTS = {"story read": "story", "question asked": "question", "research asked": "research",
+                "research failed": "research_failed", "research looked at by the volunteer": "points",
+                "letter drafted": "letter", "drafts made": "drafts"}
+
+
+def agent_did_card(record, key: str):
+    """A collapsed card from the case's audit record: story read (model, numbers removed), questions
+    asked, sites searched, research points kept and left out (with reasons), drafts made, with times."""
+    events = [e for e in (record or {}).get("events", []) if e.get("event") in AGENT_EVENTS]
+    with st.expander(t("agent.title", n=len(events)), icon=":material/smart_toy:"):
+        st.caption(t("agent.caption"))
+        if not events:
+            st.caption(t("agent.none"))
+            return
+        lines = []
+        for e in events:
+            when = e.get("time", "")
+            try:
+                stamp = f"{show_date(date.fromisoformat(when[:10]))} {when[11:16]}"
+            except ValueError:
+                stamp = when[:16]
+            details = agent_details(re.sub(r"\s*\(by .*\)\s*$", "", e.get("details", "")))  # who: audit table
+            lines.append(f'<li><span class="agent-time">{html.escape(stamp)}</span> '
+                         f'<b>{html.escape(t("agent.ev." + AGENT_EVENTS[e["event"]]))}</b>'
+                         + (f" · {html.escape(details)}" if details else "") + "</li>")
+        st.markdown(f'<ul class="agent-did">{"".join(lines)}</ul>', unsafe_allow_html=True)
+
+
+# The audit record is kept in English; its fixed words are shown in the screen's language
+AGENT_WORDS = [("(answered)", "agent.w.answered"), ("(don't know)", "agent.w.dont_know"), ("(not sure)", "agent.w.not_sure"),
+               ("removed before sending: nothing", "agent.w.removed_none"), ("removed before sending:", "agent.w.removed"), ("questions planned", "agent.w.planned"),
+               ("case summary; free legal aid application if needed", "agent.w.drafts"),
+               ("facts only (no research point ticked)", "agent.w.facts_only")]
+
+
+def agent_details(details: str) -> str:
+    if code() == "en":
+        return details
+    for m in general.ELIGIBILITY_QUESTIONS:  # the app's own questions, as asked on screen
+        details = details.replace(lang.t(f"elig.q.{m}", "en"), t(f"elig.q.{m}"))
+    for english, key in AGENT_WORDS:
+        details = details.replace(english, t(key))
+    return details
+
+
+def log_agent(event: str, details: str):
+    """A step of the agent's work, in the case's audit record ("What the agent did"). Only once a case
+    exists; never names (the details are the model, counts, questions and site names)."""
+    case_id = st.session_state.get("case_id")
+    if not case_id:
+        return
+    try:
+        audit.add_event(case_id, event, audit.VOLUNTEER, f"{details} (by {who()})")
+    except storage.StorageError:
+        pass
 
 
 def ensure_case(case_type: str) -> str:
@@ -3573,7 +3743,7 @@ def continue_box(where: str):
                      expanded=bool(st.session_state.get(f"scan-open-{where}"))):
         st.text_input(t("cont.code"), key=f"cont-code-{where}", max_chars=12, placeholder="K7M2QX")
         with st.container(horizontal=True, gap="small"):
-            st.button(t("cont.open"), key=f"cont-go-{where}", type="primary", on_click=continue_case, args=(where,))
+            st.button(t("cont.open"), key=f"cont-go-{where}", type="secondary", on_click=continue_case, args=(where,))
             st.button(t("home.scan"), key=f"scan-{where}", icon=":material/qr_code_scanner:", on_click=toggle,
                       args=(f"scan-open-{where}",))
         if st.session_state.get(f"scan-open-{where}"):
@@ -4230,6 +4400,8 @@ supervisor_idle_check()  # 30 minutes without activity: the supervisor is signed
 choice = st.session_state["screen"] if st.session_state["screen"] in SCREENS else "Home"
 keep_place_in_address(choice)
 st.session_state["shown_drafts"] = []
+st.session_state["_next_shown"] = False  # one filled "next" button per screen
+st.session_state["_next_key"] = None
 top_bar(choice)
 leave_case_box()
 if storage.records_will_be_lost():  # online without Supabase: nothing saved would survive a restart

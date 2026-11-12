@@ -96,7 +96,9 @@ def start_record(case_id: str, final_facts: dict, ai: Optional[dict] = None, bas
             if fact not in extracted and final_facts.get(field) not in (None, "")
         ) if ai else [],
         "case_type": case_type,
-        "events": [{"time": now(), "event": SENT, "by": _plain(by) or VOLUNTEER, "role": "volunteer"}],
+        # what happened during intake (case opened, story read, questions, research, drafts) is kept
+        "events": [e for e in ((storage.read_json("audit", case_id, base) or {}).get("events") or [])] +
+                  [{"time": now(), "event": SENT, "by": _plain(by) or VOLUNTEER, "role": "volunteer"}],
     }
     _save(record, base)
     return record

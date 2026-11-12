@@ -116,7 +116,9 @@ def test_page_tops_and_sign_in_cards():
     tops = css.split("/* ---------- page tops")[1]
     assert "flex-direction: row" in tops and "flex-direction: column" in tops  # side by side; stacked on phones
     assert ".st-key-signin-card { background: var(--card); border: 1px solid var(--line); border-radius: 20px;" in tops
-    assert source.count('with st.container(key="signin-card")') == 3   # volunteer, supervisor password, name
+    assert source.count('st.container(key="signin-card")') == 3   # volunteer, supervisor password, name
+    assert source.count('with signin_columns(') == 3                 # each in the wide two-column card
+    assert ".st-key-signin-wide {" in css and ".signin-side {" in css
 
 
 @pytest.mark.parametrize("screen, state", [("Supervisor", {}), ("New case", {}), ("My cases", {}),

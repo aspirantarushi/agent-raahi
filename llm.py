@@ -490,6 +490,7 @@ GENERAL_SCHEMA = {
         },
         "documents_held": {"type": "ARRAY", "items": {"type": "STRING"}},
         "questions_to_ask": {"type": "ARRAY", "items": {"type": "STRING"}},
+        "why_asked": {"type": "ARRAY", "items": {"type": "STRING"}},
         "outcome_wanted": {"type": "OBJECT",
                            "properties": {"value": {"type": "STRING", "nullable": True},
                                           "quote": {"type": "STRING", "nullable": True}},
@@ -512,7 +513,7 @@ GENERAL_SCHEMA = {
     },
     "required": ["person_needing_help", "what_happened", "timeline", "danger_now", "in_custody",
                  "money_lost_online", "money_lost_in_last_few_days", "called_1930", "coming_dates",
-                 "sections_charged", "issues", "documents_held", "questions_to_ask", "outcome_wanted",
+                 "sections_charged", "issues", "documents_held", "questions_to_ask", "why_asked", "outcome_wanted",
                  "essential_service_cut", "unofficial_payment_demand", "woman", "under_18",
                  "sc_st", "disability", "state", "income"],
 }
@@ -533,8 +534,8 @@ Rules:
 - The notes may be in English, Hindi (Devanagari script), Hinglish (Hindi written in Roman letters)
   or a mix. Read them all the same way. Copy every "quote" exactly as written, in the same script and
   spelling. "आईपीसी" or "IPC" means law "IPC"; "बीएनएस" or "BNS" means law "BNS".
-- Write person_needing_help, what_happened, timeline, issue names, documents_held and questions_to_ask
-  in {output_language}. Every "quote" must still be copied word for word from the notes, in the notes'
+- Write person_needing_help, what_happened, timeline, issue names, documents_held, questions_to_ask and
+  why_asked in {output_language}. Every "quote" must still be copied word for word from the notes, in the notes'
   own script and spelling: never translate or transliterate a quote.
 - Never guess. If something is not clearly stated, use "unknown" (or null, or an empty list).
 - For every yes/no answer and for state and income, "quote" must be the exact words copied from the
@@ -560,6 +561,9 @@ Rules:
   they hope for) if the notes don't say it; for any date without a year, ask for the full date; ask the
   person's age if it is not stated and they might be under 18 (children get free legal aid whatever the
   income). Never ask for names, phone numbers, Aadhaar numbers, addresses or ID numbers.
+- why_asked: for each question in questions_to_ask, in the same order, one short plain sentence saying
+  what the answer is needed for (for example "The letter must say when the wages stopped."). Never
+  include anyone's name, and never judge the person, their chances or their credibility.
 - outcome_wanted: what the person wants to happen, in plain words, only if the notes say it (with the
   exact words as quote); otherwise null.
 - woman, under_18, sc_st, disability, state, income: about the person needing legal help (not the

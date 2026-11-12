@@ -30,12 +30,14 @@ def helpline_blocks(at):
     return [e for e in screen(at) if getattr(e, "type", "") == "markdown" and 'class="helpline' in str(e.value)]
 
 
-def check_under_heading(at, code):
+def check_under_heading(at, code, signin=False):
     ok = not at.exception
     assert ok, at.exception[0].stack_trace
     items = screen(at)
     title = next(i for i, e in enumerate(items) if getattr(e, "type", "") == "title")
     after = items[title + 1]
+    if signin:  # sign-in pages: in the wide card, beside the form (below it on a phone)
+        [after] = [e for e in items if 'class="signin-side"' in str(getattr(e, "value", ""))]
     assert getattr(after, "type", "") == "markdown" and 'class="helpline helpline-page"' in after.value
     html = after.value
     assert 'href="tel:112"' in html and 'href="tel:15100"' in html             # tap to call
@@ -74,7 +76,7 @@ SIGNED_IN = {"clinic_ok": True, "volunteer": "VA"}
 def test_helplines_under_every_page_heading(monkeypatch, code, screen_name, state, title_key):
     at = open_app(monkeypatch, screen_name, code, **state)
     assert at.title[0].value == lang.t(title_key, code)
-    check_under_heading(at, code)
+    check_under_heading(at, code, signin=title_key in ("gate.title", "ui.sup.sign_in_title"))
 
 
 @pytest.mark.parametrize("code", ["en", "hi"])

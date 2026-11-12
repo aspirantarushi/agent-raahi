@@ -110,14 +110,16 @@ def test_speech_becomes_text_only_when_asked(monkeypatch):
     at.session_state["g_audio"] = Recording(b"RIFF fake")
     at.run()
     assert sent == [] and not at.text_area(key="g_notes").value       # a recording alone sends nothing
-    assert any(b.key == "g_audio-convert" for b in at.button)         # "Turn speech into text" is offered
+    assert not at.button(key="g_audio-convert").disabled               # "Turn speech into text" is offered
+    assert not at.button(key="g_audio-again").disabled                 # "Record again" beside it
     # What pressing it does (the test tool cannot keep a recording in the mic widget across a click):
     at.session_state["g_audio"] = Recording(b"RIFF fake")
     at.session_state["g_audio-pending"] = True
     at.run()
     ok(at)
     assert sent == [1] and at.text_area(key="g_notes").value == "The worker was not paid."
-    assert not any(b.key == "g_audio-convert" for b in at.button)     # done for this recording
+    assert at.button(key="g_audio-convert").disabled                   # done for this recording: still there,
+    assert "Record again to add more" in " ".join(m.value for m in at.markdown)  # greyed out, with the reason
 
 
 def test_drafts_only_after_make_the_drafts_and_cleared_by_a_change(monkeypatch):
@@ -145,3 +147,20 @@ def test_drafts_only_after_make_the_drafts_and_cleared_by_a_change(monkeypatch):
     (tick.uncheck() if tick.value else tick.check()).run()             # a change to what the drafts are made from
     assert not at.session_state["shown_drafts"]
     assert any('press "Make the drafts" again' in i.value for i in at.info)
+
+
+def test_record_again_and_convert_are_always_under_the_recorder(monkeypatch):
+    monkeypatch.setattr(llm, "available", lambda: True)
+    monkeypatch.setattr(llm, "gemini_available", lambda: True)
+    monkeypatch.setenv("SARVAM_API_KEY", "test-key-not-real")
+    at = AppTest.from_file("../app.py", default_timeout=20)
+    at.session_state["screen"] = "New case"
+    at.run()
+    assert at.button(key="g_audio-again").disabled and at.button(key="g_audio-convert").disabled  # nothing recorded
+    assert "Record the story first: tap the mic." in " ".join(m.value for m in at.markdown)
+    at.session_state["g_audio"] = Recording(b"RIFF fake")
+    at.run()
+    at.button(key="g_audio-again").click().run()
+    ok(at)
+    assert at.session_state["g_audio-round"] == 1 and "g_audio" not in at.session_state  # a fresh, empty recorder
+    assert at.button(key="g_audio-convert").disabled

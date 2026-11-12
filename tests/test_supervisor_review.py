@@ -218,7 +218,9 @@ def test_history_rows_and_csv(tmp_path):
     case_id, _ = waiting_case(tmp_path, by="VA")
     store.reject(case_id, "Add the court.", base=tmp_path, by="SK")
     rows = audit.history_rows(audit.read_record(case_id, base=tmp_path))
-    assert (rows[0]["event"], rows[0]["by"]) == ("sent to supervisor", "VA (volunteer)")
+    sent = [r for r in rows if r["event"] == "sent to supervisor"]
+    assert [(r["event"], r["by"]) for r in sent] == [("sent to supervisor", "VA (volunteer)")]
+    assert rows[0]["event"] == "case opened (intake started)"  # intake steps are kept when the case is sent
     assert rows[-1]["event"] == "sent back" and rows[-1]["by"] == "SK (supervisor)"
     assert rows[-1]["details"] == "reason: Add the court." and len(rows[-1]["time"]) == 16
     text = audit.to_csv(rows, [("time", "Time"), ("event", "What happened"), ("by", "By"), ("details", "Details")])

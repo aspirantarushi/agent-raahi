@@ -132,6 +132,7 @@ class GeneralReading:
     issues: List[Tuple[str, str]] = field(default_factory=list)  # (category, plain-words name)
     documents_held: List[str] = field(default_factory=list)
     questions: List[str] = field(default_factory=list)
+    question_reasons: Dict[str, str] = field(default_factory=dict)  # the AI's "why this is asked", name-checked
     outcome: str = ""                                            # what the person wants, from the notes
     dropped: List[str] = field(default_factory=list)
     unconfirmed_yes: List[str] = field(default_factory=list)  # "yes" answers whose words weren't found
@@ -254,6 +255,10 @@ def check_general_answer(raw: dict, notes: str, code: str = "en") -> GeneralRead
     r.documents_held = [c for c in (clean(d, 100) for d in (raw.get("documents_held") or [])[:10]) if c]
     r.questions = [c for c in (clean(q, 200) for q in (raw.get("questions_to_ask") or [])[:5])
                    if c and not privacy.personal_details_found(c)]
+    for q, why in zip((raw.get("questions_to_ask") or [])[:5], raw.get("why_asked") or []):
+        q, why = clean(q, 200), clean(why, 200)
+        if q in r.questions and why and reason_is_clean(why, notes):
+            r.question_reasons[q] = why
     value, quote = _quoted(raw.get("outcome_wanted"), notes)
     if value and quote:
         r.outcome = clean(value, 200)
@@ -556,6 +561,13 @@ def possible_names(summary: str, notes: str) -> List[str]:
     return found
 
 
+def reason_is_clean(text: str, notes: str) -> bool:
+    """The AI's reason for a question, shown under it, only if plain code finds no name, phone, Aadhaar or
+    other personal number in it."""
+    states = {w.casefold() for s in state_names() for w in s.split()}
+    return not (privacy.personal_details_found(text) or possible_names(text, notes) or names.found_in(text, states))
+
+
 def names_in_story(notes: str) -> List[str]:
     """Words in the story that look like people's names (common Indian first names and surnames), even
     when none reached the summary: the volunteer is told, so they check before ticking "no names"."""
@@ -761,8 +773,10 @@ def _research_lines(items: List[dict], hi: bool = False) -> List[str]:
     out = []
     for i in items:
         if i["origin"] == "knowledge":
-            head = (_hi("sum.research_knowledge", heading=i["heading"], date=i["approved_on"]) if hi else
-                    f"From approved research saved in our files, “{i['heading']}” (lawyer checked {i['approved_on']}):")
+            who = i.get("approved_by") or "supervisor"
+            head = (_hi("sum.research_knowledge", heading=i["heading"], name=who, date=i["approved_on"]) if hi else
+                    f"From approved research saved in our files, “{i['heading']}” (approved by the supervisor "
+                    f"({who}, {i['approved_on']})):")
         else:
             head = (_hi("sum.research_case", heading=i["heading"], date=i["approved_on"]) if hi else
                     f"{i['heading']} (AI research, approved by the supervisor on {i['approved_on']}):")

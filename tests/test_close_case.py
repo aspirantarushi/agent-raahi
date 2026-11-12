@@ -82,6 +82,8 @@ def test_close_and_reopen_are_in_the_audit_with_the_supervisors_name(tmp_path):
     tracker.close_case(case_id, "resolved", "", "Asha R", base=tmp_path)
     events = [(e["event"], e["by"], e.get("role"), e.get("details")) for e in audit.read_record(case_id, base=tmp_path)["events"]
               if "case" in e["event"]]
+    assert events[0][0] == "case opened (intake started)"  # kept when the case was sent
+    events = events[1:]
     assert events == [("case closed", "SK", "supervisor", "reason: referred elsewhere; note: sent to the labour office"),
                       ("case reopened", "Asha R", "supervisor", "reason: the labour office sent it back"),
                       ("case closed", "Asha R", "supervisor", "reason: resolved")]
