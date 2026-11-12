@@ -779,8 +779,6 @@ def general_screen():
             st.warning(t("ui.general.names_warning"))
         with st.container(key="names-warning-short"):  # phones: the same rule, short
             st.warning(t("ui.general.names_warning_short"))
-        with st.container(key="practice-note"):  # a prototype: practice stories only, one small line
-            st.caption(t("ui.practice_only"))
         if llm.available():
             run_pending_voice("g_audio", "g_notes")  # a recording just stopped: its text goes into the box
             st.text_area(t("ui.general.story_label"), key="g_notes", height=220,
@@ -2576,7 +2574,6 @@ def evaluation_box():
 
 
 def evaluation_panel():
-    st.caption(t("eval.caption"))
     msg = st.session_state.pop("ev-msg", None)
     if msg:
         (st.success if msg[0] == "ok" else st.error)(msg[1])
@@ -2620,11 +2617,10 @@ def save_eval_score():
 
 def evaluation_scoring_box():
     """Reviewer scoring form on the Supervisor screen (practice data only) and the raw-count export."""
+    finished = evaluation.sessions(finished_only=True)
+    if not finished:  # nothing to score yet: the section is not shown (no empty box)
+        return
     with st.expander(t("eval.score_title")):
-        finished = evaluation.sessions(finished_only=True)
-        if not finished:
-            st.caption(t("eval.no_sessions"))
-            return
         labels = {s["session_id"]: f"{s['session_id']} \u00b7 {s['case']} \u00b7 {s['method']} \u00b7 {s['volunteer']}"
                   for s in finished}
         sid = st.selectbox(t("eval.session"), list(labels), format_func=labels.get, key="evs-session")
@@ -2666,7 +2662,6 @@ def save_impact():
 
 def impact_box():
     with st.expander(t("imp.title")):
-        st.caption(t("imp.caption"))
         practice = impact.practice_case_ids()
         cases = [c["id"] for c in store.list_cases() if c["status"] == store.APPROVED and c["id"] not in practice]
         st.selectbox(t("imp.case"), cases, index=None, key="imp-case")
@@ -3918,8 +3913,6 @@ def slip_content(record: dict):
         st.download_button(t("slip.download_print"), ui.slip_page(lines, qr, print_only=True),
                            file_name=f"case-slip-{record['code']}.html", mime="text/html",
                            key=f"slip-dl-{record['id']}")
-        if not app_url():
-            st.caption(t("slip.no_url"))
 
 
 # ----- the case file: summary, facts known, still missing, documents, next step, visits -----

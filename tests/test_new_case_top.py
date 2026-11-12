@@ -75,13 +75,12 @@ def test_card_layout_rules():
     assert "line-height: 36px" in phone
 
 
-def test_story_box_says_prototype_practice_data_only(monkeypatch):
-    assert lang.t("ui.practice_only") == ("Practice Clinic: made-up cases only. Real cases need a partner clinic's "
-                                         "permission and the person's consent.")
-    assert lang.t("ui.practice_only", "hi").startswith("अभ्यास क्लिनिक: सिर्फ़ गढ़े हुए केस।")
+def test_story_box_has_no_practice_line_and_no_gap(monkeypatch):
+    assert "ui.practice_only" not in lang.strings("en") and "ui.practice_only" not in lang.strings("hi")
     for code in ("en", "hi"):
         at = signed_in(monkeypatch, code)
-        assert lang.t("ui.practice_only", code) in [c.value for c in at.caption]
+        assert not any("Practice Clinic" in c.value or "अभ्यास क्लिनिक" in c.value for c in at.caption)
+    assert 'key="practice-note"' not in (ROOT / "app.py").read_text(encoding="utf-8")  # no empty container left
     for path in ("i18n/en.json", "i18n/hi.json", "README.md"):
         words = (ROOT / path).read_text(encoding="utf-8")
         assert "in this pilot" not in words and "इस पायलट" not in words

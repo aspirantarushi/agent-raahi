@@ -58,12 +58,11 @@ def test_built_to_be_safe_cards_have_icons_and_the_exact_text(at):
          "websites. Anything not yet checked is labelled until the supervisor approves it."),
         ("lock", "Private by design.", "Phone and Aadhaar numbers are removed before the AI sees anything. The "
          "person&#x27;s story is never stored, and volunteer notes must not include names."),
-        ("help", "It stops when facts don&#x27;t add up.", "If details contradict each other or are missing, it says "
-         "&quot;Cannot conclude yet&quot; and asks, instead of guessing."),
+        ("help", "It stops when facts don&#x27;t add up.", "When information is missing or contradictory, the system "
+         "flags the issue and requests clarification rather than drawing premature conclusions."),
         ("balance", "No predictions.", "It never predicts outcomes, bail chances or risk, and never promises release "
          "or recovery."),
-        ("rule", "Works even without AI.", "Dates and eligibility follow fixed, tested rules, so the core works even "
-         "when the AI is down."),
+        ("rule", "Works even without AI.", "Date calculations and eligibility checks follow predefined, tested rules."),
     ]:
         assert f'<span class="mi" aria-hidden="true">{icon}</span><h3>{title}</h3><p>{text}</p>' in html, title
 

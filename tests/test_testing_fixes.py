@@ -352,3 +352,18 @@ def test_sign_in_pages_say_what_they_are_for(monkeypatch):
     at.run()
     side = [m.value for m in at.markdown if 'class="signin-side"' in m.value]
     assert len(side) == 1 and "What this page is for" in side[0] and 'href="tel:15100"' in side[0]
+
+
+# ---------- grey-text edits (12 November 2026) ----------
+
+def test_grey_text_edits_and_removed_lines():
+    import lang
+    assert lang.t("home.how2_p") == "When something is missing, we ask. When something is unclear, we don't guess."
+    assert lang.t("visit.caption") == "Each contact gets a dated entry."
+    assert lang.t("slip.caption") == ("Give this slip to the person. It contains the clinic name, case number, "
+                                      "access code, QR code, and helpline numbers.")
+    for key in ("slip.no_url", "ui.practice_only", "eval.caption", "eval.no_sessions", "imp.caption"):
+        assert key not in lang.strings("en") and key not in lang.strings("hi"), key
+    source = (ROOT / "app.py").read_text(encoding="utf-8")
+    for key in ("slip.no_url", "ui.practice_only", "eval.caption", "eval.no_sessions", "imp.caption"):
+        assert f't("{key}")' not in source, key

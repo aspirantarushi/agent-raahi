@@ -490,7 +490,6 @@ div[class*="-actions"]:has(> [class*="-docx"]) iframe { width: 100% !important; 
   div[class*="-actions"]:has(> [class*="-docx"]) > div { flex: 0 0 calc(50% - 4px) !important; max-width: none; }
 }
 
-.st-key-practice-note p { font-size: 13px !important; line-height: 1.4; margin: 0 0 6px 0 !important; color: var(--muted2) !important; }
 
 /* ---------- New case, top: one card (who, Sign out, camp, Continue a case) and, on laptops, the camp and a tip ---------- */
 .st-key-nc-top { gap: 32px !important; align-items: center !important; flex-wrap: nowrap !important; margin: 0 0 4px 0; }
