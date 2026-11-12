@@ -84,8 +84,8 @@ Checked: 2026-11-02 · Lawyer checked: no
 
 ### Section 479 applies to older cases too
 In August 2024 the Supreme Court held that Section 479 applies to undertrials whose cases began before the BNSS came into force on 1 July 2024, and told jail superintendents to identify eligible prisoners. In a later order (19 November 2024) it said special efforts should be made to identify eligible women prisoners, and that jail superintendents should personally attend to them.
-Source: In Re: Inhuman Conditions in 1382 Prisons, W.P. (C) 406/2013 (Supreme Court orders of 23 August 2024 and 19 November 2024; official copy not yet found); Ministry of Home Affairs advisory of 16 October 2024
-Link: https://xn--i1b5bzbybhfo5c8b4bxh.xn--11b7cb3a6a.xn--h2brj9c/sites/default/files/2024-10/AdvisoryWS_17102024.pdf
+Source: In Re: Inhuman Conditions in 1382 Prisons, W.P. (C) 406/2013 (Supreme Court orders of 23 August 2024 and 19 November 2024; official copy not yet found); Ministry of Home Affairs advisory of 16 October 2024 (No. 17013/20/2024-PR, "Implementation of the provisions of Section 479"), and the MHA advisory "Implementation of the provisions of Section 479 of the BNSS by the State Prison authorities for providing relief to undertrial prisoners", listed on the Ministry's Prison Reforms page with the date 1 January 2025
+Link: https://www.mha.gov.in/women-safety-prison-reforms
 Checked: 2026-11-02 · Lawyer checked: no
 
 ### How to work out the Section 479 dates
