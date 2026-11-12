@@ -67,9 +67,9 @@ Checked: 2026-11-02 · Lawyer checked: no
 
 ### How long a decision takes
 The Member-Secretary or Secretary of the legal services institution (or an officer they choose) checks the application. A decision must be taken immediately, and within seven days of receiving the application at most. (Before the 2018 amendment the limit was eight weeks.)
-Source: NALSA (Free and Competent Legal Services) Regulations, 2010, Regulation 7 (as substituted in 2018); NALSA "Post-application procedure" page
-Link: https://nalsa.gov.in/services/legal-aid/post-application-procedure
-Checked: 2026-11-02 · Lawyer checked: no
+Source: NALSA (Free and Competent Legal Services) Regulations, 2010, Regulation 7 (as substituted in 2018); NALSA "Legal Aid" page
+Link: https://nalsa.gov.in/legal-aid/
+Checked: 2026-11-12 · Lawyer checked: no
 
 ### If the application is refused
 A person who is refused can appeal to the Executive Chairman or Chairman of the legal services authority; that decision is final. If the person is not eligible, the institution should point them to other organisations or schemes that give free legal help, from a list it keeps.

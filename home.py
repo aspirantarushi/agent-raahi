@@ -11,6 +11,7 @@ from typing import List, Tuple
 import knowledge
 
 # (file, heading, [sentences in the entry the card is based on], plain English, plain Hindi)
+# Legal aid and Section 479 only: the band is about legal aid (no cyber-fraud facts).
 FACTS = [
     ("legal_aid_eligibility.md", "Who qualifies for free legal aid",
      ["A person who has to file or defend a case gets free legal services if they belong to any one of these groups:",
@@ -37,14 +38,6 @@ FACTS = [
      "यह उन अपराधों पर लागू नहीं होता जिनमें मौत या उम्रक़ैद की सज़ा हो सकती है।"),
     ("undertrial_bail.md", "When Section 479 does not apply",
      ["The offence can be punished with death or life imprisonment."], None, None),  # the exception above
-    ("cyber_fraud.md", "Call 1930 at once: report immediately",
-     ["call the national cyber-fraud helpline 1930 immediately",
-      "Report immediately: the reporting system exists so that the money can be stopped before the fraudsters siphon "
-      "it off."],
-     "Lost money online? Call 1930 or report on cybercrime.gov.in immediately, so the money can be stopped before "
-     "the fraudsters siphon it off.",
-     "ऑनलाइन पैसे गए? तुरंत 1930 पर कॉल करें या cybercrime.gov.in पर शिकायत करें, ताकि पैसे धोखेबाज़ों के हाथ लगने से "
-     "पहले ही रोके जा सकें।"),
     ("legal_aid_eligibility.md", "The legal aid lawyer cannot charge any fee",
      ["A panel lawyer assigned through legal aid must not take any fee or anything of value from the person."],
      "A legal aid lawyer must not take any fee, or anything of value, from the person they are helping.",
@@ -64,13 +57,6 @@ FACTS = [
      "is usually accepted.",
      "मुफ़्त क़ानूनी मदद के लिए आय प्रमाण-पत्र ज़रूरी नहीं है: आमदनी के बारे में व्यक्ति का अपना शपथ-पत्र (हलफ़नामा) "
      "आम तौर पर मान लिया जाता है।"),
-    ("cyber_fraud.md", "\"Digital arrest\" calls are always fraud",
-     ["No police, CBI, ED, customs officer or judge arrests anyone over a video call or asks for money to avoid "
-      "arrest.", "Hang up, don't pay, and report to 1930 or cybercrime.gov.in."],
-     "No police officer, CBI, ED or judge arrests anyone over a video call or asks for money to avoid arrest. "
-     "If someone does, hang up, don't pay, and call 1930.",
-     "पुलिस, CBI, ED या कोई जज वीडियो कॉल पर किसी को गिरफ़्तार नहीं करते, न गिरफ़्तारी से बचाने के लिए पैसे माँगते हैं। "
-     "ऐसा कॉल आए तो फ़ोन काटें, पैसे न दें, और 1930 पर कॉल करें।"),
 ]
 
 HINDI_CHECKED = False  # the Hindi cards have not been checked by a fluent reviewer yet

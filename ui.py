@@ -346,9 +346,12 @@ def footer(name: str, parts, privacy: str) -> str:
     return '<footer class="footer">' + " \u00b7 ".join(f'<span class="fi">{i}</span>' for i in items) + "</footer>"
 
 
-def guide_card(name: str, title: str, text: str) -> str:
-    """A Learn card: topic icon above the title and a line about it (like the safety cards)."""
-    return f'<div class="card guide">{icon(name)}<h3>{html.escape(title)}</h3><p>{html.escape(text)}</p></div>'
+def guide_card(name: str, title: str, text: str, tag: str = "") -> str:
+    """A Learn card: topic icon above the title and a line about it (like the safety cards); tag: for
+    example "Coming soon", for a guide not shown yet."""
+    badge = f'<span class="soon">{html.escape(tag)}</span>' if tag else ""
+    return (f'<div class="card guide{" soon-card" if tag else ""}">{icon(name)}{badge}<h3>{html.escape(title)}</h3>'
+            f'<p>{html.escape(text)}</p></div>')
 
 
 KEY_SPAN = re.compile(r'^<span class="k">(.*?)</span>(.*)$', re.S)

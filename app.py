@@ -2568,8 +2568,14 @@ def cancel_eval():
     st.session_state.pop("eval_session", None)
 
 
-def evaluation_screen():
-    page_title(t("eval.title"))
+def evaluation_box():
+    """The trainers' timing tool (practice cases by hand or with the agent), on the Supervisor page."""
+    with st.expander(t("eval.trainers"), icon=":material/timer:",
+                     expanded=bool(st.session_state.get("eval_session") or st.session_state.get("ev-msg"))):
+        evaluation_panel()
+
+
+def evaluation_panel():
     st.caption(t("eval.caption"))
     msg = st.session_state.pop("ev-msg", None)
     if msg:
@@ -2683,8 +2689,9 @@ def open_guide(key: str):
 
 
 def learn_screen():
-    """The three guides from learner/ as cards; the open guide below them: the read-aloud explainer, the
-    key points with their sources (verified files), the quiz and the practice cases."""
+    """The guides from learner/ as cards (a guide that is not fully accurate yet says "Coming soon"), and
+    the open guide below them: what you will be able to do, the key idea, a worked example, practice
+    cases and a five-question check with instant feedback. Every source is a clickable link."""
     page_title(t("ui.learn.title"))
     wanted = st.query_params.get("guide", "")
     if "learn_guide" not in st.session_state and guides.by_key(wanted):
@@ -2693,47 +2700,127 @@ def learn_screen():
     st.caption(t("learn.intro"))
     st.info(t("learn.not_reviewed"), icon=":material/info:")
     with st.container(key="learnlinks"):
-        cols = st.columns(len(guides.GUIDES), gap="medium")
+        cols = st.columns(len(guides.GUIDES) + 1, gap="medium")
         for col, g in zip(cols, guides.GUIDES):
             with col.container(key=f"learn-card-{g.key}"):
-                st.markdown(ui.guide_card(g.icon, t(f"home.learn{g.number}"), t(f"home.learn{g.number}_p")),
-                            unsafe_allow_html=True)
-                st.button(t("learn.open"), key=f"guide-{g.key}", icon=":material/menu_book:",
-                          type="primary" if g.key == current else "secondary", on_click=open_guide, args=(g.key,))
+                ready = guides.content(g.key).ready
+                st.markdown(ui.guide_card(g.icon, t(f"home.learn{g.number}"), t(f"home.learn{g.number}_p"),
+                                          "" if ready else t("learn.coming_soon")), unsafe_allow_html=True)
+                if ready:
+                    st.button(t("learn.open"), key=f"guide-{g.key}", icon=":material/menu_book:",
+                              type="primary" if g.key == current else "secondary", on_click=open_guide, args=(g.key,))
+        with cols[-1].container(key="learn-card-more"):
+            st.markdown(ui.guide_card("more_horiz", t("learn.more_title"),
+                                      t("learn.more_topics", topics=", ".join(t(f"learn.topic.{i}") for i in range(1, 5))),
+                                      t("learn.coming_soon")), unsafe_allow_html=True)
+    st.button(t("practice.go"), key="learn-practice", icon=":material/quiz:", on_click=go, args=("Practice",))
     guide = guides.by_key(current or "")
-    if guide:
+    if guide and guides.content(guide.key).ready:
         if st.query_params.get("guide") != guide.key:
             st.query_params["guide"] = guide.key
         show_guide(guide)
+
+
+def source_html(source) -> str:
+    """"Source: <the Act or section, linked>" from a guide's source: the Act/section as the guide writes it,
+    linked to the first knowledge/ entry's official page; other pages it names follow as "also" links."""
+    e = html.escape
+    links = []
+    for _, link in source.links():
+        if link and link not in links:
+            links.append(link)
+    name = e(source.text)
+    if links:
+        name = f'<a href="{e(links[0])}" target="_blank" rel="noopener noreferrer">{name}</a>'
+    extra = "".join(f' · <a href="{e(l)}" target="_blank" rel="noopener noreferrer">{e(t("learn.also"))}</a>'
+                    for l in links[1:])
+    return f'<p class="learn-src">{e(t("learn.source"))} {name}{extra}</p>'
+
+
+def show_point(n, point):
+    st.markdown(f'<div class="learn-point"><p><b>{n}.</b> {html.escape(point.text)}</p>{source_html(point.source)}</div>',
+                unsafe_allow_html=True)
+
+
+def quiz_block(guide, prefix: str) -> tuple:
+    """The five-question check: choose an option and the feedback shows at once (right or wrong, why,
+    then the Act or section, linked). Returns (answered, right)."""
+    content = guides.content(guide.key)
+    answered = right = 0
+    for n, q in enumerate(content.quiz, 1):
+        with st.container(border=True, key=f"{prefix}-q-{guide.key}-{n}"):
+            letters = [letter for letter, _ in q.options]
+            texts = dict(q.options)
+            choice = st.radio(f"{n}\\. {q.text}", letters, index=None, key=f"{prefix}-{guide.key}-{n}",  # "1." kept
+                              format_func=lambda letter, d=texts: f"{letter}) {d[letter]}")
+            ok = guides.check_answer(q, choice)
+            if ok is None:
+                continue
+            answered += 1
+            right += bool(ok)
+            if ok:
+                st.success(f"**{t('learn.right')}** {q.why}", icon=":material/check_circle:")
+            else:
+                st.error(f"**{t('learn.wrong', answer=q.answer + ') ' + texts[q.answer])}** {q.why}",
+                         icon=":material/cancel:")
+            st.markdown(source_html(q.source), unsafe_allow_html=True)
+    return answered, right
+
+
+def practice_cases(guide, prefix: str):
+    """Each case's core facts up front; the model answer in its own collapsible section."""
+    for i, case in enumerate(guides.content(guide.key).practice, 1):
+        with st.container(border=True, key=f"{prefix}-case-{guide.key}-{i}"):
+            st.markdown(f"**{html.escape(t('learn.case_n', n=i))}: {html.escape(case.title)}**")
+            st.markdown(f"*{t('learn.core_facts')}*  \n" + "\n".join(f"- {html.escape(f)}" for f in case.facts),
+                        unsafe_allow_html=True)
+            with st.expander(t("learn.model_answer")):
+                for line in case.answer:
+                    src = source_html(line.source) if line.source.refs else ""
+                    st.markdown(f'<div class="learn-point"><p>• {html.escape(line.text)}</p>{src}</div>',
+                                unsafe_allow_html=True)
 
 
 def show_guide(guide):
     content = guides.content(guide.key)
     with st.container(key="guide-page", border=True):
         st.markdown(f"## {ui.icon(guide.icon)} {html.escape(t(f'home.learn{guide.number}'))}", unsafe_allow_html=True)
-        st.markdown(f"#### {t('learn.explainer')}")
         if code() != "en":
             st.caption(t("learn.english_only"))
-        st.markdown(content.explainer)
-        st.markdown(f"#### {t('learn.key_points')}")
-        st.caption(t("learn.key_points_note"))
-        for e in guides.key_points(guide.key, code()):
-            with st.expander(e.heading):
-                st.markdown(e.body)
-                st.caption(e.source_line + (f" · {t('learn.checked_on', on=e.checked)}" if e.checked else ""))
-                if e.lang == "hi":
-                    st.caption(t("learn.hindi_checked") if e.translation_checked else t("learn.hindi_unchecked"))
-        with st.expander(t("learn.quiz", n=len(content.quiz))):
-            for n, q in enumerate(content.quiz, 1):
-                options = "  \n".join(html.escape(o) for o in re.split(r"\s{2,}(?=[a-d]\))", q.options))
-                st.markdown(f"**{n}. {html.escape(q.text)}**  \n{options}"
-                            f'<details class="quiz-answer"><summary>{html.escape(t("learn.answer"))}</summary>'
-                            f"{html.escape(q.answer)}</details>", unsafe_allow_html=True)
-        with st.expander(t("learn.practice")):
-            for title, text in content.practice:
-                st.markdown(f"**{html.escape(title)}**")
-                st.markdown(text)
+        st.markdown(f"#### {t('learn.able')}")
+        st.markdown("\n".join(f"- {html.escape(o)}" for o in content.outcomes))
+        st.markdown(f"#### {t('learn.key_idea')}")
+        for n, p in enumerate(content.points, 1):
+            show_point(n, p)
+        st.markdown(f"#### {t('learn.example')}")
+        st.markdown(f'<p class="learn-intro">{html.escape(content.example_intro)}</p>', unsafe_allow_html=True)
+        for n, step in enumerate(content.steps, 1):
+            show_point(t("learn.step_n", n=n), step)
+        st.markdown(f"#### {t('learn.try_it')}")
+        practice_cases(guide, "learn")
+        st.markdown(f"#### {t('learn.check', n=len(content.quiz))}")
+        st.caption(t("learn.check_caption"))
+        quiz_block(guide, "learn")
 
+
+def practice_screen():
+    """"Practice: test yourself": every ready guide's check and practice cases, with a score. Public, like
+    Learn (no passcode). The score is only in this browser session; nothing is saved."""
+    page_title(t("practice.title"))
+    st.caption(t("practice.caption"))
+    score = st.empty()
+    total_answered = total_right = total = 0
+    for g in guides.ready_guides():
+        content = guides.content(g.key)
+        total += len(content.quiz)
+        st.markdown(f"### {ui.icon(g.icon)} {html.escape(t(f'home.learn{g.number}'))}", unsafe_allow_html=True)
+        answered, right = quiz_block(g, "prac")
+        total_answered += answered
+        total_right += right
+        st.markdown(f"#### {t('learn.try_it')}")
+        practice_cases(g, "prac")
+    score.markdown(f'<p class="practice-score">{html.escape(t("practice.score", right=total_right, answered=total_answered, total=total))}</p>',
+                   unsafe_allow_html=True)
 
 def supervisor_password() -> str:
     """Read the supervisor password from an environment variable or Streamlit secrets.
@@ -2870,7 +2957,7 @@ def supervisor_screen():
     page_title(t("ui.sup.title"))
     top1, top2 = st.columns([3, 1])
     top1.success(t("ui.sup.signed_in_as", name=supervisor_name()))
-    top2.button(t("ui.sup.sign_out"), type="secondary", icon=":material/logout:", key="sup-out",
+    top2.button(t("ui.sup.sign_out"), type="primary", icon=":material/logout:", key="sup-out",  # navy, filled
                 on_click=supervisor_sign_out)
 
     flash = st.session_state.pop("supervisor_flash", None)
@@ -2898,6 +2985,7 @@ def supervisor_screen():
     research_review_box()
     knowledge_added_box()
     delete_case_box()
+    evaluation_box()
     evaluation_scoring_box()
     impact_box()
 
@@ -3534,7 +3622,8 @@ def volunteer_line(card: bool = False):
     if clinic_passcode():
         st.markdown(f'<span class="who" title="{html.escape(t("gate.name_help"))}">'
                     f'{html.escape(t("gate.signed_in_short", name=who()))}</span>', unsafe_allow_html=True)
-        if st.button(t("gate.sign_out"), key="gate-out", type="secondary", icon=":material/logout:"):
+        if st.button(t("gate.sign_out"), key="gate-out", type="primary", icon=":material/logout:"):  # navy, filled:
+            # Arushi's choice; not a step action, so the one-filled-button rule does not apply
             for key in ("clinic_ok", "volunteer", "case_id"):
                 st.session_state.pop(key, None)
             st.rerun()
@@ -4204,7 +4293,7 @@ def next_step_text(row: dict) -> str:
 def keep_place_in_address(screen: str):
     """The screen (and, on New case, the open case number) in the page address, so switching language,
     reloading or a phone reconnecting keeps the volunteer where they were. Case numbers only, never names."""
-    key = {**{s: k for s, k in NAV}, "Evaluation": "evaluation"}.get(screen, "home")
+    key = {**{s: k for s, k in NAV}, "Practice": "practice"}.get(screen, "home")
     if st.query_params.get("screen") != key:
         st.query_params["screen"] = key
     if screen != "Learn" and "guide" in st.query_params:  # the open guide belongs to the Learn page only
@@ -4331,17 +4420,18 @@ def home_screen():
         cols = st.columns(4, gap="medium")
         for i, col in enumerate(cols, 1):
             with col.container(key=f"learn-card-{i}"):
-                st.markdown(ui.guide_card(LEARN_ICONS[i - 1], t(f"home.learn{i}"), t(f"home.learn{i}_p")),
-                            unsafe_allow_html=True)
-                if i < 4:
+                ready = i == 4 or guides.content(guides.GUIDES[i - 1].key).ready
+                st.markdown(ui.guide_card(LEARN_ICONS[i - 1], t(f"home.learn{i}"), t(f"home.learn{i}_p"),
+                                          "" if ready else t("learn.coming_soon")), unsafe_allow_html=True)
+                if i < 4 and ready:
                     st.button(t("home.learn_go"), key=f"home-learn-{i}", icon=":material/arrow_forward:",
                               on_click=open_guide, args=(guides.GUIDES[i - 1].key,))  # its own guide
-                else:  # the 4th item: practice evaluation, a proper button with its own icon
-                    st.button(t("home.eval_go"), key="nav-evaluation", type="primary", icon=":material/timer:",
-                              on_click=go, args=("Evaluation",))
+                elif i == 4:  # the 4th item: Practice, public like Learn
+                    st.button(t("home.eval_go"), key="nav-practice", type="primary", icon=":material/quiz:",
+                              on_click=go, args=("Practice",))
 
 
-LEARN_ICONS = ["volunteer_activism", "gavel", "phishing", "science"]
+LEARN_ICONS = ["volunteer_activism", "gavel", "phishing", "quiz"]
 RAAHI_ICONS = ["qr_code_2", "checklist", "description", "history", "event"]  # "With Agent Raahi" rows
 SAFE_ICONS = ["verified_user", "menu_book", "lock", "help", "balance", "rule"]
 # The top navigation: (screen, key). Evaluation (practice only) is reached from the footer.
@@ -4381,13 +4471,15 @@ SCREENS = {
     "New case": new_case_screen,
     "My cases": my_cases_screen,
     "Learn": learn_screen,
-    "Evaluation": evaluation_screen,
+    "Practice": practice_screen,
     "Supervisor": supervisor_screen,
 }
 
-SCREEN_KEYS = {**{screen: key for screen, key in NAV}, "Evaluation": "evaluation"}
+SCREEN_KEYS = {**{screen: key for screen, key in NAV}, "Practice": "practice",
+               "Supervisor": "supervisor"}
+OLD_SCREEN_KEYS = {"evaluation": "Supervisor"}  # the trainers' timing tool moved to the Supervisor page
 if "screen" not in st.session_state:  # a fresh session (also after a phone reloads the page): the address says where
-    from_url = {key: screen for screen, key in SCREEN_KEYS.items()}.get(st.query_params.get("screen", ""))
+    from_url = {**{key: screen for screen, key in SCREEN_KEYS.items()}, **OLD_SCREEN_KEYS}.get(st.query_params.get("screen", ""))
     st.session_state["screen"] = from_url or START_SCREEN
     wanted = st.query_params.get("case", "")
     if wanted and re.fullmatch(r"U-\d{8}-[a-z0-9]{4}", wanted):
@@ -4408,7 +4500,7 @@ if storage.records_will_be_lost():  # online without Supabase: nothing saved wou
     st.error(t("online.no_supabase"), icon=":material/cloud_off:")
 if st.session_state.get("supervisor_ok"):
     supervisor_idle_timer()
-if choice in ("Home", "Learn", "Supervisor") or clinic_ok():
+if choice in ("Home", "Learn", "Practice", "Supervisor") or clinic_ok():
     SCREENS[choice]()  # Supervisor has its own sign-in (the supervisor password only)
 else:
     clinic_gate()  # every other screen needs the clinic passcode (when one is set)

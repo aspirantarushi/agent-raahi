@@ -40,8 +40,8 @@ def test_home_is_the_landing_screen_with_every_section(at):
     assert 'id="facts"' in carousel(at)  # the facts carousel, between Safety and Learn (checked on screenshots)
     assert 'href="tel:112"' in html and 'href="tel:15100"' in html
     assert len(re.findall(r'class="card"', html)) == 5 + 6  # five stages, six safety cards
-    assert len([b for b in at.button if str(b.key).startswith("home-learn-")]) == 3
-    assert "Evaluation (practice)" in html  # the 4th card
+    assert len([b for b in at.button if str(b.key).startswith("home-learn-")]) == 2  # cyber fraud: coming soon
+    assert "Practice: test yourself" in html  # the 4th card
 
 
 def test_tagline_is_the_main_heading_and_the_kicker_is_smaller(at):
@@ -73,6 +73,9 @@ def test_facts_band_source_names_are_links_in_italics(at):
     for _, source, link in home.facts("en"):
         name = source.replace("&", "&amp;").replace(chr(34), "&quot;")
         href = link.replace("&", "&amp;")
+        if link == "none":  # broken, with no working official copy: the name only, never a dead link
+            assert f"<em>Source: {name}</em>" in html
+            continue
         assert (f'<em>Source: <a href="{href}" target="_blank" rel="noopener noreferrer">{name}</a></em>') in html
         assert f"({link})" not in html  # no web address in brackets
 
@@ -90,11 +93,12 @@ def test_hero_logo_helplines_and_start_icon(at):
 def test_learn_section_four_cards_with_icons(at):
     html = page_html(at)
     assert '<section id="learn-basics" class="sec center learn">' in html
-    for icon in ["volunteer_activism", "gavel", "phishing", "science"]:
+    for icon in ["volunteer_activism", "gavel", "quiz"]:
         assert f'<div class="card guide"><span class="mi" aria-hidden="true">{icon}</span><h3>' in html
-    assert at.button(key="nav-evaluation").icon == ":material/timer:"
-    at.button(key="nav-evaluation").click().run()
-    assert at.session_state["screen"] == "Evaluation"
+    assert '<div class="card guide soon-card"><span class="mi" aria-hidden="true">phishing</span><span class="soon">Coming soon</span>' in html
+    assert at.button(key="nav-practice").icon == ":material/quiz:"
+    at.button(key="nav-practice").click().run()
+    assert at.session_state["screen"] == "Practice"   # public, like Learn; the timing tool is on Supervisor
 
 
 def test_no_emoji_on_screen_or_in_the_screen_text():
@@ -129,23 +133,26 @@ def test_a_changed_knowledge_entry_stops_the_fact(monkeypatch):
 
 def test_every_fact_has_plain_english_and_hindi():
     en, hi = home.facts("en"), home.facts("hi")
-    assert len(en) == len(hi) == 8
+    assert len(en) == len(hi) == 6  # legal aid and Section 479 only
+    assert not any("1930" in e or "arrest over a video call" in e for e, _, _ in en)
     for (e, se, le), (h, sh, lh) in zip(en, hi):
         assert re.search(r"[ऀ-ॿ]", h) and not re.search(r"[ऀ-ॿ]", e)
-        assert (se, le) == (sh, lh) and le.startswith("https://")  # the same source and link in both
+        assert (se, le) == (sh, lh) and (le.startswith("https://") or le == "none")  # the same source and link in both
+    # a link that is broken with no working official copy shows the source name only (Khatri II)
+    assert [le for _, _, le in en].count("none") == 1
     assert "death or life imprisonment" in en[2][0]  # Section 479: the exception from knowledge/ is stated
     assert "case to file or defend" in en[0][0]      # Section 12: free legal aid is for a case
 
 
 def test_facts_carousel_controls(at):
     page = carousel(at)
-    assert page.count('class="slide"') == 8 and 'aria-roledescription="carousel"' in page
-    for label in ("Previous fact", "Next fact", "Pause the facts", "Fact 1 of 8"):
+    assert page.count('class="slide"') == 6 and 'aria-roledescription="carousel"' in page
+    for label in ("Previous fact", "Next fact", "Pause the facts", "Fact 1 of 6"):
         assert label in page
     assert "prefers-reduced-motion: reduce" in page and "7000" in page   # no motion when asked; 7 seconds
     assert "scroll-snap-type: x mandatory" in page                       # swipe on phones
     assert "mouseenter" in page and "touchstart" in page                 # pause on hover or tap
-    assert page.count('target="_blank" rel="noopener noreferrer"') == 8 and "<em>Source: <a" in page
+    assert page.count('target="_blank" rel="noopener noreferrer"') == 5  # one source shown by name only and "<em>Source: <a" in page
     at.radio(key="ui_lang").set_value("hi").run()
     assert "पिछला तथ्य" in carousel(at) and "<em>स्रोत: <a" in carousel(at)
 

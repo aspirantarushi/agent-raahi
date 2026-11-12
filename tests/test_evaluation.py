@@ -101,10 +101,27 @@ def eval_folder(monkeypatch, tmp_path):
     return tmp_path
 
 
-def test_screen_by_hand(eval_folder):
-    at = AppTest.from_file("../app.py", default_timeout=20).run()
-    at.button(key="nav-home").click().run()
-    at.button(key="nav-evaluation").click().run()  # the 4th card in "Learn the basics" on Home
+def trainer_page(monkeypatch):
+    monkeypatch.setenv("SUPERVISOR_PASSWORD", "practice-sup-9")
+    at = AppTest.from_file("../app.py", default_timeout=20)
+    for k, v in dict(screen="Supervisor", supervisor_ok=True, supervisor_name="Trainer T",
+                     sup_last_active=__import__("time").time()).items():
+        at.session_state[k] = v
+    return at.run()
+
+
+def test_the_timing_tool_is_on_the_supervisor_page_not_public(monkeypatch):
+    monkeypatch.setenv("SUPERVISOR_PASSWORD", "practice-sup-9")
+    at = AppTest.from_file("../app.py", default_timeout=20)
+    at.query_params["screen"] = "evaluation"  # an old link: goes to the Supervisor page (sign-in first)
+    at.run()
+    assert at.session_state["screen"] == "Supervisor" and not any(s.key == "ev-case" for s in at.selectbox)
+    at = trainer_page(monkeypatch)
+    assert any(s.key == "ev-case" for s in at.selectbox)
+
+
+def test_screen_by_hand(eval_folder, monkeypatch):
+    at = trainer_page(monkeypatch)  # "Evaluation (for trainers)" on the Supervisor page
     at.selectbox(key="ev-case").set_value("E2")
     at.radio(key="ev-method").set_value("by hand")
     at.text_input(key="ev-volunteer").set_value("Volunteer 1").run()
@@ -122,9 +139,7 @@ def test_screen_with_agent_stops_when_sent(eval_folder, monkeypatch, tmp_path):
     import store
     original = store.submit
     monkeypatch.setattr(store, "submit", lambda *a, **k: original(*a, base=tmp_path, **k))
-    at = AppTest.from_file("../app.py", default_timeout=20).run()
-    at.button(key="nav-home").click().run()
-    at.button(key="nav-evaluation").click().run()  # the 4th card in "Learn the basics" on Home
+    at = trainer_page(monkeypatch)  # "Evaluation (for trainers)" on the Supervisor page
     at.selectbox(key="ev-case").set_value("O2")
     at.radio(key="ev-method").set_value("with the agent")
     at.text_input(key="ev-volunteer").set_value("Volunteer 2").run()

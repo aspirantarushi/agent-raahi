@@ -24,7 +24,7 @@ Checked: 2026-11-02 · Lawyer checked: no
 ### Free legal aid starts at the first court appearance
 An accused person who cannot afford a lawyer is entitled to free legal aid from the moment they are first produced before a magistrate, and the magistrate must tell them about this right. They do not need to have asked for it. In jails, prison legal aid clinics and the District Legal Services Authority (DLSA) provide this help.
 Source: Khatri (II) v. State of Bihar (1981), Supreme Court (Digital SCR); Suk Das v. Union Territory of Arunachal Pradesh (1986) (secondary: official copy not yet found); Legal Services Authorities Act, 1987, Section 12(g)
-Link: https://digiscr.sci.gov.in/admin/judgement_file/judgement_pdf/1981/volume%202/Part%20I/khatri%20and%20others_state%20of%20bihar%20&%20ors._1698995482.pdf
+Link: none
 Checked: 2026-11-02 · Lawyer checked: no
 
 ### Bailable offences: bail is a right
@@ -85,7 +85,7 @@ Checked: 2026-11-02 · Lawyer checked: no
 ### Section 479 applies to older cases too
 In August 2024 the Supreme Court held that Section 479 applies to undertrials whose cases began before the BNSS came into force on 1 July 2024, and told jail superintendents to identify eligible prisoners. In a later order (19 November 2024) it said special efforts should be made to identify eligible women prisoners, and that jail superintendents should personally attend to them.
 Source: In Re: Inhuman Conditions in 1382 Prisons, W.P. (C) 406/2013 (Supreme Court orders of 23 August 2024 and 19 November 2024; official copy not yet found); Ministry of Home Affairs advisory of 17 October 2024
-Link: https://xn--i1b5bzbybhfo5c8b4bxh.xn--11b7cb3a6a.xn--h2brj9c/sites/default/files/2024-10/AdvisoryWS_17102024.pdf
+Link: none
 Checked: 2026-11-02 · Lawyer checked: no
 
 ### How to work out the Section 479 dates

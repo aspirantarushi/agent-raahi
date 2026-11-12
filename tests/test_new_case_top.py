@@ -36,7 +36,7 @@ def test_one_card_in_order_who_sign_out_camp_continue(monkeypatch):
     assert "Signed in as Arushi" in text(at)
     labels = [b.label for b in at.button if b.key in ("gate-out", "camp-start")]
     assert labels == ["Sign out", "Start today's camp"]
-    assert 'key="gate-out", type="secondary"' in source  # Sign out: outlined (one filled button: the next action)
+    assert 'key="gate-out", type="primary"' in source  # Sign out: navy, filled (not a step action)
     assert any(t.key == "cont-code-new" for t in at.text_input)  # Continue a case (its code box)
 
 

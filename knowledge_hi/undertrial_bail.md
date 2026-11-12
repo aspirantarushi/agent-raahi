@@ -21,7 +21,7 @@ Hindi translation checked: no
 English heading: Free legal aid starts at the first court appearance
 जो आरोपी वकील का ख़र्च नहीं उठा सकता, उसे मजिस्ट्रेट के सामने पहली बार पेश होने से ही मुफ़्त क़ानूनी मदद का हक़ है, और मजिस्ट्रेट को उसे यह हक़ बताना होगा। इसके लिए उसे माँगना ज़रूरी नहीं है। जेलों में यह मदद जेल की क़ानूनी सहायता क्लिनिक और ज़िला विधिक सेवा प्राधिकरण (DLSA) देते हैं।
 Source: Khatri (II) v. State of Bihar (1981), Supreme Court (Digital SCR); Suk Das v. Union Territory of Arunachal Pradesh (1986) (secondary: official copy not yet found); Legal Services Authorities Act, 1987, Section 12(g)
-Link: https://digiscr.sci.gov.in/admin/judgement_file/judgement_pdf/1981/volume%202/Part%20I/khatri%20and%20others_state%20of%20bihar%20&%20ors._1698995482.pdf
+Link: none
 Checked: 2026-11-02 · Lawyer checked: no
 Hindi translation checked: no
 

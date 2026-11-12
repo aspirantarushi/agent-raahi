@@ -339,7 +339,7 @@ def test_what_the_agent_did_card_from_the_audit_record(monkeypatch):
 def test_one_filled_button_per_screen_and_it_is_the_next_action(monkeypatch):
     at = wages(monkeypatch)
     ok(at)
-    filled = lambda: [b.key for b in at.button if b.proto.type == "primary" and b.key not in ("nav-start",)]  # noqa: E731
+    filled = lambda: [b.key for b in at.button if b.proto.type == "primary" and b.key not in ("nav-start", "gate-out")]  # noqa: E731
     assert filled() == ["rs-run-go"]                       # step 3: the problem is not in our files: research
     import html as h
     assert h.unescape([m.value for m in at.markdown if 'class="next-label"' in m.value][0]).endswith(">Next:</p>")

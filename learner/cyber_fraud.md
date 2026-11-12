@@ -1,5 +1,8 @@
 # Learner module: cyber and financial fraud
 
+Status: coming soon
+Why: not shown until it can be made fully accurate. The pilot has no cyber-fraud module; some points rest on a news report rather than an official page (getting frozen money back); the bank rules differ for transactions up to 31 December 2026 and from 1 January 2027; and the explainer's 2025 figures are not in knowledge/.
+
 Lawyer checked: no. Facts here must match knowledge/cyber_fraud.md.
 
 ## Explainer (read aloud, about 2 minutes)
