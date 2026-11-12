@@ -367,3 +367,19 @@ def test_grey_text_edits_and_removed_lines():
     source = (ROOT / "app.py").read_text(encoding="utf-8")
     for key in ("slip.no_url", "ui.practice_only", "eval.caption", "eval.no_sessions", "imp.caption"):
         assert f't("{key}")' not in source, key
+
+
+def test_log_a_visit_boxes_say_no_names_or_numbers(monkeypatch):
+    import lang
+    case_id = tracker.open_case("General", "Volunteer A")["id"]
+    for code, text in (("en", "No names or numbers"), ("hi", "कोई नाम या नंबर नहीं")):
+        at = AppTest.from_file("../app.py", default_timeout=30)
+        at.session_state["screen"] = "New case"
+        at.session_state["case_id"] = case_id
+        at.session_state["ui_lang"] = code
+        at.run()
+        at.button(key="case-tab-visit").click().run()
+        ok(at)
+        boxes = [b for b in list(at.text_area) + list(at.text_input) if str(b.key).startswith("vis-")]
+        assert len(boxes) == 3 and all(b.placeholder == text for b in boxes), [(b.key, b.placeholder) for b in boxes]
+        assert lang.t("visit.caption", code) in [c.value for c in at.caption]   # the caption is unchanged

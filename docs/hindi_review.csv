@@ -1409,6 +1409,7 @@ i18n/hi.json · practice.caption,"Every guide's questions and practice cases, op
 i18n/hi.json · practice.score,Score: {right} right out of {answered} answered ({total} questions in all),स्कोर: {answered} जवाबों में से {right} सही (कुल {total} सवाल),screen text,,
 i18n/hi.json · screen.Practice,Practice,अभ्यास,screen text,,
 i18n/hi.json · eval.trainers,Evaluation (for trainers),मूल्यांकन (ट्रेनरों के लिए),screen text,,
+i18n/hi.json · visit.placeholder,No names or numbers,कोई नाम या नंबर नहीं,screen text,,
 case_notes_hi.txt,(fake practice story; check that it reads naturally),"अभ्यास केस (कोई असली व्यक्ति नहीं)।
 बोलने वाली: एक विचाराधीन क़ैदी की बड़ी बहन।
 उसके भाई को 15 मार्च 2024 को गिरफ़्तार किया गया था। अपराध फ़रवरी 2024 में हुआ था।

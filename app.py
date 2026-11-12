@@ -4154,10 +4154,12 @@ def visit_content(case_id: str):
         c1.date_input(t("visit.on"), key=f"vis-on-{case_id}", value=date.today(), format="DD/MM/YYYY",
                       max_value=date.today())
         c2.selectbox(t("visit.how"), tracker.VISIT_WAYS, key=f"vis-how-{case_id}", format_func=option_text("visit.how."))
-        st.text_area(t("visit.learned"), key=f"vis-learned-{case_id}", max_chars=300, height=80)
-        st.text_area(t("visit.done"), key=f"vis-done-{case_id}", max_chars=300, height=80)
+        st.text_area(t("visit.learned"), key=f"vis-learned-{case_id}", max_chars=300, height=80,
+                     placeholder=t("visit.placeholder"))  # the no-names rule, inside each box
+        st.text_area(t("visit.done"), key=f"vis-done-{case_id}", max_chars=300, height=80,
+                     placeholder=t("visit.placeholder"))
         c3, c4 = st.columns([2, 1])
-        c3.text_input(t("visit.next"), key=f"vis-next-{case_id}", max_chars=200)
+        c3.text_input(t("visit.next"), key=f"vis-next-{case_id}", max_chars=200, placeholder=t("visit.placeholder"))
         c4.date_input(t("visit.next_due"), key=f"vis-due-{case_id}", value=None, format="DD/MM/YYYY",
                       min_value=date.today() - timedelta(days=365))
         st.button(t("visit.save"), key=f"vis-save-{case_id}", on_click=save_visit, args=(case_id,), type="primary")

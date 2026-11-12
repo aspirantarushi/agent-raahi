@@ -1301,5 +1301,6 @@
  "practice.caption": "Every guide's questions and practice cases, open to everyone (no passcode). Your score stays in this browser only; nothing is saved.",
  "practice.score": "Score: {right} right out of {answered} answered ({total} questions in all)",
  "screen.Practice": "Practice",
- "eval.trainers": "Evaluation (for trainers)"
+ "eval.trainers": "Evaluation (for trainers)",
+ "visit.placeholder": "No names or numbers"
 }
