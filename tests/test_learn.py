@@ -75,7 +75,8 @@ def test_opening_a_guide_shows_explainer_sources_quiz_and_practice():
     assert "Section 479: release after a share of the maximum sentence" in labels
     assert "Test yourself: 10 questions" in labels and "Practice cases" in labels
     assert "Source: BNSS, 2023, Section 479" in page  # each key point shows its source
-    assert "Show the answer" in page and "Checked by a lawyer: No." in page
+    assert "Show the answer" in page and "Checked by a lawyer" not in page and "Lawyer checked" not in page
+    assert at.info[0].value == "These guides come from our verified files and have not yet been reviewed by a lawyer."
     assert "undertrial" in at.query_params["guide"]  # kept in the page address
 
 

@@ -176,7 +176,7 @@ def page_title(text: str):
 
 def new_case_screen():
     open_by_code()
-    page_title(t("ui.new_case.title"))
+    page_title(t("screen.New case") if st.session_state.get("case_id") else t("ui.new_case.title"))
     with st.container(key="nc-top", horizontal=True, vertical_alignment="center"):
         with st.container(key="worker-bar", gap="small"):  # one card: who, Sign out, camp, Continue a case
             volunteer_line(card=True)
@@ -1031,13 +1031,14 @@ def general_summary(gen):
     with st.container(border=True, key="send-card"):  # the send section, its reason boxes inside the card
         unticked = readiness.gaps(items)
         if unticked:  # sending with unticked items needs a short reason; the supervisor sees both
-            st.warning(t("ready.sup_unticked", items="; ".join(i.label(code()) for i in unticked)), icon=":material/rule:")
+            st.warning(t("ready.vol_unticked", items="; ".join(i.label(code()) for i in unticked)), icon=":material/rule:")
             st.text_input(t("ready.send_reason"), key="g_send_reason", max_chars=200)
         left_out = [pid for pid, keep in rs_ticks.items() if not keep]
         no_reason = [pid for pid in left_out if not rs_reasons.get(pid)]
         if no_reason:
             st.caption(t("rs.left_out_needs_reason", points=", ".join(no_reason)))
-        checked = st.checkbox(t("ui.general.checked_no_names"), key="g_checked")
+        checked = st.checkbox(t("ui.general.checked_no_names") + " *", key="g_checked")
+        st.markdown(f'<p class="tick-why">{html.escape(t("ready.needed_note"))}</p>', unsafe_allow_html=True)
         label = f"{t('ui.send_to_supervisor')} \u2014 " + (t("ready.button_unticked", n=len(unticked)) if unticked
                                                           else t("ready.button_ready"))
         not_made = not drafts_made or (letter_wanted and research_done and not letter_made)
@@ -1189,10 +1190,10 @@ def fix_checklist(items, g, eligibility, kind, missing_years, approved, gen):
     """A real checklist: a tick box per item, pre-ticked by the app with the reason; the volunteer can
     tick or untick anything. Items not done yet can be fixed right here."""
     st.markdown(f"**{t('ready.title')}**")
-    st.caption(t("ready.ticks_caption"))
+    st.caption(t("ready.ticks_caption") + " " + t("ready.needed_note"))
     for item in items:
         key = f"tick-{item.key}"
-        st.checkbox(item.label(code()), key=key,
+        st.checkbox(item.label(code()) + " *", key=key,
                     on_change=lambda k=key: st.session_state.update({f"{k}-touched": True}))
         st.markdown(f'<p class="tick-why">{html.escape(tick_why(item, g, eligibility))}</p>', unsafe_allow_html=True)
         if item.key == "case_documents":  # the documents themselves, here and nowhere else
@@ -2484,7 +2485,8 @@ def evaluation_screen():
             st.text_input(name, key=f"ev-field-{i}")
         st.text_area(t("eval.notes"), key="ev-notes", height=150)
     else:
-        st.info(t("eval.agent_help", workflow=c["workflow"]))
+        st.info(t("eval.agent_help", workflow={"Any case": t(f"case_type.{ANY_CASE}"),
+                                               "Section 479 aid": t("case_type.Undertrial")}.get(c["workflow"], c["workflow"])))
     col1, col2 = st.columns(2)
     col1.button(t("eval.finish"), type="primary", on_click=finish_eval)
     col2.button(t("eval.cancel"), on_click=cancel_eval)
@@ -2580,6 +2582,7 @@ def learn_screen():
         st.session_state["learn_guide"] = wanted  # reopened from the page address
     current = st.session_state.get("learn_guide")
     st.caption(t("learn.intro"))
+    st.info(t("learn.not_reviewed"), icon=":material/info:")
     with st.container(key="learnlinks"):
         cols = st.columns(len(guides.GUIDES), gap="medium")
         for col, g in zip(cols, guides.GUIDES):
@@ -2599,7 +2602,6 @@ def show_guide(guide):
     content = guides.content(guide.key)
     with st.container(key="guide-page", border=True):
         st.markdown(f"## {ui.icon(guide.icon)} {html.escape(t(f'home.learn{guide.number}'))}", unsafe_allow_html=True)
-        st.caption(t("learn.checked", checked=t("opt.Yes") if content.lawyer_checked == "yes" else t("opt.No")))
         st.markdown(f"#### {t('learn.explainer')}")
         if code() != "en":
             st.caption(t("learn.english_only"))
@@ -3509,6 +3511,8 @@ def clear_case():
     """Start another case: the current one stays saved in the tracker."""
     clear_general()
     clear_notes()
+    for key in ("g_notes", "f_notes"):  # emptied, not just forgotten: the browser would show the old story again
+        st.session_state[key] = ""
     for key in ("case_id", "slip_new", "case_opened", "sent", "case-msg"):
         st.session_state.pop(key, None)
 
@@ -3978,7 +3982,6 @@ def current_case_panel():
                 st.button(t(f"case.tab.{option}"), key=f"case-tab-{option}", icon=icon,
                           type="secondary" if current == option else "tertiary",
                           on_click=toggle_case_tab, args=(tab_key, option))
-            st.button(t("cont.another"), key="case-another", type="tertiary", icon=":material/add:", on_click=clear_case)
         tab = st.session_state.get(tab_key)
         if tab == "slip":
             slip_content(record)
@@ -4054,6 +4057,26 @@ def start_case():
     st.session_state["case_type"] = ANY_CASE
 
 
+def ask_start_case():
+    """"Start a case": with a case open, ask first (the open case stays saved in the tracker)."""
+    st.session_state["menu_open"] = False
+    if st.session_state.get("case_id"):
+        st.session_state["leave_ask"] = True
+    else:
+        start_case()
+
+
+def leave_case_box():
+    if not st.session_state.get("leave_ask"):
+        return
+    with st.container(border=True, key="leave-box"):
+        st.warning(t("nav.leave_q"), icon=":material/logout:")
+        with st.container(horizontal=True, gap="small"):
+            st.button(t("nav.leave_yes"), key="leave-yes", type="primary",
+                      on_click=lambda: (st.session_state.pop("leave_ask", None), start_case()))
+            st.button(t("nav.leave_no"), key="leave-no", on_click=lambda: st.session_state.pop("leave_ask", None))
+
+
 def home_to_case(speak: bool):
     """Home's story box opens step 1 of New case, with the story carried over (and the mic open)."""
     story = (st.session_state.get("home_story") or "").strip()
@@ -4103,7 +4126,7 @@ def home_screen():
         st.button(t("home.mic"), key="home-mic", icon=":material/mic:", on_click=home_to_case, args=(True,))
         st.button(t("home.go"), key="home-go", icon=":material/arrow_forward:", on_click=home_to_case, args=(False,))
     with st.container(key="heroactions", horizontal=True, gap="small"):
-        st.button(t("home.start"), key="home-start", type="primary", icon=":material/note_add:", on_click=start_case)
+        st.button(t("home.start"), key="home-start", type="primary", icon=":material/note_add:", on_click=ask_start_case)
         st.button(t("home.continue"), key="home-continue", icon=":material/folder_open:",
                   on_click=toggle, args=("cont-open-home", "scan-open-home"))
         st.button(t("home.scan"), key="home-scan", icon=":material/qr_code_scanner:",
@@ -4118,7 +4141,7 @@ def home_screen():
     st.markdown(ui.helpline(t("home.free"), t("home.helpline_danger"), t("home.helpline_aid")), unsafe_allow_html=True)
 
     st.markdown(ui.section("how-it-works", t("home.how_title"), t("home.how_h2"),
-                           ui.how_cards([(t(f"home.how{i}_t"), t(f"home.how{i}_p")) for i in range(1, 5)])),
+                           ui.how_cards([(t(f"home.how{i}_t"), t(f"home.how{i}_p")) for i in range(1, 6)])),
                 unsafe_allow_html=True)
     st.markdown(ui.compare(
         {"eyebrow": t("home.today_t"), "title": t("home.today_h"), "chips": [t(f"home.today_c{i}") for i in range(1, 6)],
@@ -4167,12 +4190,14 @@ def top_bar(current: str):
                       else ":material/menu:", on_click=toggle, args=("menu_open",))
         with st.container(key="topactions", horizontal=True, vertical_alignment="center", gap="small"):
             language_switch()
-            st.button(t("nav.start"), type="primary", key="nav-start", on_click=start_case)
+            st.button(t("nav.start"), type="primary", key="nav-start", on_click=ask_start_case)
     if st.session_state.get("menu_open"):
         with st.container(key="phonemenu"):
             for screen, key in NAV:
                 st.button(t(f"screen.{screen}"), key=f"navm-{key}", type="tertiary", on_click=go, args=(screen,),
                           width="stretch")
+            st.button(t("nav.start"), key="navm-start", type="primary", on_click=ask_start_case,
+                      width="stretch")  # phones: "Start a case" lives in the menu (hidden from the top bar)
     here = dict(NAV).get(current)
     if here:  # the current screen is underlined in the navigation
         st.markdown(f"<style>.st-key-nav-{here} button {{ background: var(--sand) !important; }}"
@@ -4206,6 +4231,7 @@ choice = st.session_state["screen"] if st.session_state["screen"] in SCREENS els
 keep_place_in_address(choice)
 st.session_state["shown_drafts"] = []
 top_bar(choice)
+leave_case_box()
 if storage.records_will_be_lost():  # online without Supabase: nothing saved would survive a restart
     st.error(t("online.no_supabase"), icon=":material/cloud_off:")
 if st.session_state.get("supervisor_ok"):

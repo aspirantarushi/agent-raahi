@@ -76,8 +76,9 @@ def test_card_layout_rules():
 
 
 def test_story_box_says_prototype_practice_data_only(monkeypatch):
-    assert lang.t("ui.practice_only") == "Prototype: practice data only. Do not enter real cases."
-    assert lang.t("ui.practice_only", "hi") == "प्रोटोटाइप: सिर्फ़ अभ्यास का डेटा। असली केस न डालें।"
+    assert lang.t("ui.practice_only") == ("Practice Clinic: made-up cases only. Real cases need a partner clinic's "
+                                         "permission and the person's consent.")
+    assert lang.t("ui.practice_only", "hi").startswith("अभ्यास क्लिनिक: सिर्फ़ गढ़े हुए केस।")
     for code in ("en", "hi"):
         at = signed_in(monkeypatch, code)
         assert lang.t("ui.practice_only", code) in [c.value for c in at.caption]

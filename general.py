@@ -30,7 +30,7 @@ HERE = Path(__file__).resolve().parent
 INCOME_LIMITS = HERE / "knowledge" / "income_limits.csv"
 
 CASE_TYPE = "General"
-CASE_TYPE_LABEL = "Any case (general intake)"
+CASE_TYPE_LABEL = "Any problem"
 NOT_COVERED = "not covered by our verified files yet; ask NALSA's free helpline 15100"
 TO_DISCUSS = "to discuss with a lawyer"
 CALL_112 = "Call 112 now."

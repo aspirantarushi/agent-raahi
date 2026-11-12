@@ -93,7 +93,7 @@ div[class*="st-key-case-card-"] { background: var(--card); border: 1px solid var
 .card .num { font-size: 13px; font-weight: 700; color: var(--teal); letter-spacing: .02em; }
 .card .mi { font-size: 28px; color: var(--teal); }
 .grid { display: grid; gap: 20px; }
-.grid.how { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+.grid.how { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
 .grid.safe { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
 
 /* ---------- sections: eyebrow, heading, generous spacing ---------- */

@@ -171,7 +171,7 @@ def test_general_screen_in_hindi_shows_1930_and_no_names_box(monkeypatch, tmp_pa
     assert at.error[0].value.endswith("अभी 1930 पर कॉल करें।")
     while any(b.label == "पता नहीं" for b in at.button):
         next(b for b in at.button if b.label == "पता नहीं").click().run()
-    assert at.checkbox(key="g_checked").label == "मैंने यह सार नोट्स से मिलाकर जाँच लिया है, और इसमें किसी का नाम नहीं है"
+    assert at.checkbox(key="g_checked").label == "मैंने यह सार नोट्स से मिलाकर जाँच लिया है, और इसमें किसी का नाम नहीं है *"  # * needed before sending
     summary = make_drafts(at).session_state["shown_drafts"][0]
     assert "ऑनलाइन धोखाधड़ी" in summary and "(हिंदी अनुवाद की जाँच: नहीं)" in summary
     assert "Source: Ministry of Home Affairs" in summary  # Source lines stay in English

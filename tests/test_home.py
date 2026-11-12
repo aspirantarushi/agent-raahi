@@ -39,7 +39,7 @@ def test_home_is_the_landing_screen_with_every_section(at):
     assert order == sorted(order)  # the sections in the reference design's order
     assert 'id="facts"' in carousel(at)  # the facts carousel, between Safety and Learn (checked on screenshots)
     assert 'href="tel:112"' in html and 'href="tel:15100"' in html
-    assert len(re.findall(r'class="card"', html)) == 4 + 6
+    assert len(re.findall(r'class="card"', html)) == 5 + 6  # five stages, six safety cards
     assert len([b for b in at.button if str(b.key).startswith("home-learn-")]) == 3
     assert "Evaluation (practice)" in html  # the 4th card
 
@@ -52,10 +52,10 @@ def test_tagline_is_the_main_heading_and_the_kicker_is_smaller(at):
 def test_built_to_be_safe_cards_have_icons_and_the_exact_text(at):
     html = page_html(at)
     for icon, title, text in [
-        ("verified_user", "A lawyer approves every draft.", "Nothing is saved, sent or filed until the supervising "
+        ("verified_user", "A lawyer approves every draft.", "Nothing is sent or filed until the supervising "
          "lawyer approves it. No one can approve their own work."),
-        ("menu_book", "Every legal point has a source.", "Information comes only from checked sources or research "
-         "the supervisor has approved, each shown with its reference."),
+        ("menu_book", "Every legal point has a source.", "Points come from our verified files or from official "
+         "websites. Anything not yet checked is labelled until the supervisor approves it."),
         ("lock", "Private by design.", "Phone and Aadhaar numbers are removed before the AI sees anything. The "
          "person&#x27;s story is never stored, and volunteer notes must not include names."),
         ("help", "It stops when facts don&#x27;t add up.", "If details contradict each other or are missing, it says "
@@ -210,7 +210,7 @@ def test_with_agent_raahi_box_lists_five_features_and_no_example_case():
         assert page.count("<li>") == 5 and 'class="mini"' not in page and "progress" not in page
         assert f"<b>{t('home.raahi_f1_b')}</b>" in page
     assert lang.t("home.raahi_h", "en") == "One case file, from first story to follow-up."
-    assert lang.t("home.raahi_f5_b", "en") == "Follow-up dates,"
+    assert lang.t("home.raahi_f5_b", "en") == "Follow-up dates:"
 
 
 def test_footer_is_one_short_line_with_the_privacy_link():

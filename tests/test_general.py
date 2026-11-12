@@ -294,7 +294,7 @@ def test_general_case_flow_through_the_supervisor(tmp_path):
     draft = (tmp_path / "drafts" / f"{case_id}.md").read_text(encoding="utf-8")
     assert "approved by the supervisor on 5 November 2026." in draft
     case = (tmp_path / "cases" / f"{case_id}.md").read_text(encoding="utf-8")
-    assert "- Case type: Any case (general intake)" in case and "- Follow-up date: 12 November 2026" in case
+    assert "- Case type: Any problem" in case and "- Follow-up date: 12 November 2026" in case
     assert [c["case_type"] for c in store.list_cases(tmp_path)] == [general.CASE_TYPE]
 
     record = audit.read_record(case_id, base=tmp_path)
@@ -401,7 +401,7 @@ def test_screen_eligibility_questions_when_needed(pretend_ai, monkeypatch):
     button(at, "Next").click().run()
     ok(at)  # then the app says the rest is not needed and waits
     assert not at.session_state["shown_drafts"]
-    assert "these 4 planned question(s) are not needed" in at.info[0].value
+    assert "these 4 planned questions are not needed" in at.info[0].value
     at.button(key="q-not-needed-go").click().run()
     assert "Qualifies for free legal aid whatever the income, as a woman." in make_drafts(at).session_state["shown_drafts"][0]
 

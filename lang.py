@@ -62,8 +62,16 @@ def strings(code: str) -> Dict[str, str]:
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
 
 
+# The count that decides singular or plural, when it is not {n}
+PLURAL_BY = {"aud.count": "total", "tr.count": "total"}
+
+
 def t(key: str, code: str = DEFAULT, **params) -> str:
-    """The text for a key in a language (English if the language lacks it)."""
+    """The text for a key in a language (English if the language lacks it). A count of exactly 1 uses the
+    key's ".one" form when there is one ("1 case still at intake", not "1 cases")."""
+    count = params.get(PLURAL_BY.get(key, "n"))
+    if count == 1 and f"{key}.one" in strings(DEFAULT):
+        key = f"{key}.one"
     text = strings(code).get(key) if code in LANGUAGES else None
     if text is None:
         text = strings(DEFAULT)[key]  # a key missing from English is a bug: fail loudly

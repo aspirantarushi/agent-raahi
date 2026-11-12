@@ -97,7 +97,7 @@ def general_items(g, eligibility, cannot=None) -> List[Item]:
         Item("legal_aid_decided", PRESENT if eligibility.status != "not decided yet" else UNCERTAIN),
         Item("documents_listed", PRESENT if g.documents_held else UNCERTAIN, "" if g.documents_held else "none mentioned"),
         Item("questions_answered", PRESENT if not g.still_to_ask else UNCERTAIN,
-             "" if not g.still_to_ask else f"{len(g.still_to_ask)} question(s) still open"),
+             "" if not g.still_to_ask else (f"{len(g.still_to_ask)} questions still open" if len(g.still_to_ask) != 1 else "1 question still open")),
     ]
     return apply_cannot(items, cannot)
 

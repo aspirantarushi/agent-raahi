@@ -214,7 +214,7 @@ def test_no_drafts_waiting_says_why_with_counts(monkeypatch, tmp_path):
         sup.session_state[k] = v
     sup.run()
     ok(sup)
-    assert any("No drafts sent for review yet. 3 case(s) still at intake." == i.value for i in sup.info)
+    assert any("No drafts sent for review yet. 3 cases still at intake." == i.value for i in sup.info)
 
 
 def test_a_line_that_says_the_same_and_more_replaces_the_shorter_one(tmp_path):
@@ -225,3 +225,46 @@ def test_a_line_that_says_the_same_and_more_replaces_the_shorter_one(tmp_path):
     lines = [l for l in tracker.load(case_id, base=tmp_path)["summary"] if "WhatsApp" in l]
     assert lines == ["She has WhatsApp messages from the employer as evidence."]
     assert not tracker.same_line("He was arrested.", "He was arrested in Patna.")   # too short to judge: kept apart
+
+
+# ---------- wording and consistency ----------
+
+def test_one_and_many_never_say_s_in_brackets():
+    import json
+    import lang
+    for code in ("en", "hi"):
+        assert not [k for k, v in json.load(open(Path(__file__).parent.parent / "i18n" / f"{code}.json")).items()
+                    if "(s)" in v]
+    assert lang.t("none_waiting.intake", n=1) == "1 case still at intake."
+    assert lang.t("none_waiting.intake", n=2) == "2 cases still at intake."
+    assert lang.t("none_waiting.intake", "hi", n=1) == "1 केस अभी इनटेक में है।"
+    assert lang.t("none_waiting.intake", "hi", n=3) == "3 केस अभी इनटेक में हैं।"
+    assert lang.t("ready.button_unticked", n=1) == "1 item not ticked"
+    assert lang.t("aud.count", n=1, total=1) == "1 of 1 case." and lang.t("aud.count", n=1, total=4) == "1 of 4 cases."
+
+
+def test_no_outdated_wording_left():
+    import json
+    import lang
+    en = json.load(open(Path(__file__).parent.parent / "i18n" / "en.json"))
+    for k, v in en.items():
+        assert "by itself" not in v and "at once" not in v and "Research sent to the supervisor" not in v, k
+        assert "Any case" not in v, k
+    assert lang.t("screen.New case") == "Current case" and "cont.another" not in en and "learn.checked" not in en
+    assert lang.t("case_type.General") == "Any problem"
+
+
+def test_start_a_case_asks_before_leaving_an_open_case(tmp_path, monkeypatch):
+    at = AppTest.from_file("../app.py", default_timeout=30).run()
+    at.button(key="nav-start").click().run()
+    assert "leave_ask" not in at.session_state       # nothing open: starts straight away
+    case_id = tracker.open_case("General", "Volunteer A")["id"]
+    at.session_state["case_id"] = case_id
+    at.button(key="nav-start").click().run()
+    assert "Leave this case? It stays saved in Case tracker." in [w.value for w in at.warning]
+    at.button(key="leave-no").click().run()
+    assert at.session_state["case_id"] == case_id and "leave_ask" not in at.session_state  # same case
+    at.button(key="nav-start").click().run()
+    at.button(key="leave-yes").click().run()
+    assert "case_id" not in at.session_state
+    assert not [b for b in at.button if b.key == "case-another"]

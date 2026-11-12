@@ -4,6 +4,7 @@ Each entry in knowledge/*.md starts with "### Heading", has some text, and ends 
 "Source:", "Link:" and "Checked:" lines. Legal points shown to users come only from here.
 """
 
+import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -48,6 +49,12 @@ class Entry:
         return "\n".join(lines[:max_lines])
 
 
+def _date_checked(value: str) -> str:
+    """"2026-11-02 · Lawyer checked: no" -> "2026-11-02": that no lawyer has reviewed the files yet is said
+    once, at the top of Learn, not on every line ("Lawyer checked: yes" from approved research is kept)."""
+    return re.sub(r"\s*·\s*Lawyer checked: no\b.*$", "", value).strip()
+
+
 @lru_cache(maxsize=None)
 def _entries(file: str, lang: str = "en") -> Tuple[Entry, ...]:
     path = (KNOWLEDGE_HI if lang == "hi" else KNOWLEDGE) / file
@@ -60,7 +67,7 @@ def _entries(file: str, lang: str = "en") -> Tuple[Entry, ...]:
         if heading is not None and meta.get("source"):
             checked = meta.get("hindi translation checked")
             entries.append(Entry(file, heading, "\n".join(body).strip(), meta.get("source", ""),
-                                 meta.get("link", ""), meta.get("checked", ""), lang,
+                                 meta.get("link", ""), _date_checked(meta.get("checked", "")), lang,
                                  meta.get("english heading", ""),
                                  None if checked is None else checked.strip().lower() == "yes"))
 

@@ -376,7 +376,7 @@ def knowledge_source(heading: str, path: Path = BAIL_KNOWLEDGE) -> dict:
         if inside:
             for key in ("Source", "Link", "Checked"):
                 if line.startswith(key + ":"):
-                    found[key.lower()] = line[len(key) + 1:].strip()
+                    found[key.lower()] = line[len(key) + 1:].strip().split(" · Lawyer checked: no")[0]
     if not found:
         raise KeyError(f"No entry '{heading}' with a Source line in {path.name}")
     return found

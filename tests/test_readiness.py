@@ -83,7 +83,7 @@ def test_gaps_listed_at_top_of_draft_after_the_draft_line():
     out = readiness.add_gaps_to_draft(text, note_items({}))
     lines = out.splitlines()
     assert lines[0] == drafts.DRAFT_HEADER  # the hard rule still holds
-    assert lines[2] == "NOT READY FOR REVIEW: 5 item(s) missing or uncertain"
+    assert lines[2] == "NOT READY FOR REVIEW: 5 items missing or uncertain"
     assert readiness.add_gaps_to_draft(text, note_items(DETAILS)) == text  # nothing to list when ready
 
 
