@@ -86,7 +86,8 @@ def test_send_says_exactly_why_it_cannot_be_sent_then_sends(monkeypatch):
         sup.session_state[k] = v
     sup.run()
     ok(sup)
-    assert any(e.label.startswith(f"Case {case_id}") for e in sup.expander)
+    code = tracker.load(case_id)["code"]
+    assert any('class="sup-row' in m.value and code in m.value for m in sup.markdown)   # a row in "Waiting for you"
 
 
 # ---------- 2. every disabled button says why ----------

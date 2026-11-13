@@ -258,7 +258,8 @@ def test_own_research_locks_every_decision(monkeypatch, tmp_path):
     at = supervisor_screen(monkeypatch, name=" Volunteer A ")
     assert at.error[0].value == "You sent this draft, so another supervisor must approve it."
     assert not any(str(c.key).startswith("rsx-") for c in at.checkbox)          # no tick boxes,
-    assert not any(str(b.key).startswith("rs-save-") for b in at.button)         # no save button
+    assert not any(str(b.key).startswith(("rs-save-", "rs-all-", "approve-", "edit-open-", "back-open-"))
+                   for b in at.button)                                          # and no buttons
 
 
 def test_sent_with_a_reason_and_plain_audit_words():
@@ -267,7 +268,7 @@ def test_sent_with_a_reason_and_plain_audit_words():
     assert block.startswith("Sent with 1 item not ticked:") and "NOT READY" not in block
     assert "Sent anyway because: practice run: not known" in block
     assert audit.who_did({"by": "Supervisor", "role": "supervisor"}) == "Supervisor"
-    assert lang.t("sup.Edit then Approve") == "Edit then approve"
+    assert lang.t("sup.edit_then_approve") == "Edit then approve"
     assert llm.display_model("groq:openai/gpt-oss-120b") == "Groq (gpt-oss-120b)"
     assert llm.display_model("gemini-3.5-flash-lite") == "Google Gemini"
 

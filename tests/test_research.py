@@ -272,27 +272,25 @@ def test_research_on_screen(monkeypatch, fake_ai):
     next(b for b in at.button if b.label == "Sign in").click().run()
     at.text_input(key="sup-name").set_value("Supervisor S")  # then the name or initials
     at.button(key="sup-name-go").click().run()
-    at.radio(key=f"action-{case_id}").set_value("Approve").run()   # never locked: says what approving will do
-    assert not at.button(key=f"approve-{case_id}").disabled
+    if not at.button(key=f"sup-open-{case_id}").disabled:          # open it from "Waiting for you"
+        at.button(key=f"sup-open-{case_id}").click().run()
+    assert not at.button(key=f"approve-{case_id}").disabled         # never locked: says what approving will do
     assert any("(1 approved, 0 rejected, 1 not decided)" in c.value for c in at.caption)
     assert any("The volunteer's reason: the forum is for a later step" in c.value for c in at.caption)
-    # one checklist: p1 (kept by the volunteer) ticked, p2 (left out) unticked; the supervisor rejects p2
+    # step 2: p1 (kept by the volunteer) ticked, p2 (left out) unticked; the supervisor rejects p2
     assert at.checkbox(key=f"rsx-{rid}-p1").value is True and at.checkbox(key=f"rsx-{rid}-p2").value is False
+    assert not any(str(b.key).startswith("rs-save-") for b in at.button)  # the ticks are applied in step 3
     at.radio(key=f"rsr-{rid}-p2").set_value("repeats").run()
-    save = at.button(key=f"rs-save-{rid}")
-    assert save.label == "Save point decisions and rebuild the letter (1 approved, 1 rejected, 0 not decided)"
-    save.click().run()                                              # saves both and rebuilds the letter
+    # step 3: the Letter tab shows the letter rebuilt from the ticks (approved points only)
+    preview = next(d for d in at.session_state["shown_drafts"] if "Complaint about" in d)
+    assert "Write first to the Assistant Engineer" in preview and "Consumer Grievance Redressal Forum" not in preview
+    at.button(key=f"approve-{case_id}").click().run()               # saves the points, rebuilds, approves
     assert not at.exception, at.exception[0].stack_trace
-    assert not any(b.key == f"rebuild-{case_id}" for b in at.button)
-    packet = store.get_pending(case_id)["draft"]
-    assert packet.count("DRAFT — to be checked by a lawyer") == 3   # the letter, rebuilt from the approved points
-    letter = next(p for p in casework.split_bundle(packet) if "Complaint about" in p)
+    letter = next(p for p in casework.split_bundle(store.approved_draft(case_id)) if "Complaint about" in p)
     assert "Write first to the Assistant Engineer" in letter and "energy.bihar.gov.in" in letter
     assert "Consumer Grievance Redressal Forum" not in letter      # rejected: not in the letter
     assert "[Name of the person]" in letter and "[Consumer number]" in letter
-    at.radio(key=f"action-{case_id}").set_value("Approve").run()
-    next(b for b in at.button if b.key == f"approve-{case_id}").click().run()
-    assert not at.exception, at.exception[0].stack_trace
+    assert [p["status"] for p in research.load(rid)["points"] if p["kind"] != "letter"] == ["approved", "rejected"]
     saved = store.approved_draft(case_id)
     assert "approved by the supervisor on [date]" not in saved      # every draft in the packet is dated
     assert saved.count("the draft was reviewed and approved by the supervisor on") == 3

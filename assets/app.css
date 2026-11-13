@@ -646,7 +646,7 @@ div[class*="st-key-case-card-"] [data-testid="stMarkdownContainer"]:has(.case-su
 /* Content cards: white, a 1 px border, a soft shadow, 14 px corners */
 .infocard, .card, .st-key-check-col, .st-key-drafts-box, .st-key-research-panel, .st-key-send-card,
 .st-key-legal-aid-screen, .st-key-done-card, [data-testid="stForm"], [data-testid="stExpander"] details,
-div[class*="st-key-case-card-"], div[class*="st-key-review-"] > div, .st-key-signin-wide {
+div[class*="st-key-case-card-"], .st-key-signin-wide {
   background: var(--card) !important; border: 1px solid var(--line) !important; border-radius: 14px !important;
   box-shadow: 0 1px 2px rgba(19, 33, 59, .06), 0 4px 14px rgba(19, 33, 59, .05) !important; }
 .st-key-check-col, .st-key-drafts-box, .st-key-research-panel, .st-key-send-card { padding: 14px 16px !important; }
@@ -746,10 +746,10 @@ div[class*="st-key-case-card-"], div[class*="st-key-review-"] > div, .st-key-sig
    it is part of the outer card. The draft "paper" (.docpage) and fold-outs keep their own look. */
 :is(.infocard, .card, .st-key-check-col, .st-key-drafts-box, .st-key-research-panel, .st-key-send-card,
     .st-key-legal-aid-screen, .st-key-done-card, [data-testid="stForm"], div[class*="st-key-case-card-"],
-    div[class*="st-key-review-"] > div, .st-key-signin-wide, div[class*="st-key-learn-card-"], .st-key-guide-page,
+    .st-key-signin-wide, div[class*="st-key-learn-card-"], .st-key-guide-page,
     .st-key-case-panel, .st-key-research-box, .st-key-continuebox, .st-key-scanbox, .st-key-camp-form,
     .st-key-leave-box, div[class*="st-key-edit-box-"], div[class*="st-key-close-box-"], div[class*="st-key-sup-draft-"],
-    .st-key-f-calc-card, div[class*="st-key-rs-review-"])
+    .st-key-f-calc-card, div[class*="st-key-rs-review-"], div[class*="st-key-sup-understand-"])
   :is([data-testid="stVerticalBlock"], [data-testid="stForm"], .card, .infocard) {
   border: 0 !important; box-shadow: none !important; background: transparent !important; padding: 0 !important;
   border-radius: 0 !important; }
@@ -790,12 +790,34 @@ div[class*="st-key-rs-buttons-"] { margin-top: 8px; }
   div[class*="st-key-rs-save-"], div[class*="st-key-rs-all-"] { width: 100% !important; flex: 1 1 100% !important; }
 }
 
-/* Supervisor case card: Section A (research points) and Section B (the drafts) */
-.sup-section { display: flex; gap: 12px; align-items: flex-start; margin: 22px 0 6px 0; padding-top: 14px;
-  border-top: 1px solid var(--line); }
-.sup-section .sup-letter { flex: 0 0 auto; width: 28px; height: 28px; border-radius: 50%; background: var(--ink);
-  color: #fff; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; }
-.sup-section h4 { margin: 0 !important; padding: 0 !important; font-size: 18px !important; line-height: 1.35 !important; }
-.sup-section p { margin: 2px 0 0 0 !important; color: var(--muted); font-size: 14px; line-height: 1.45; }
 .case-sub .sent-back { color: var(--amber-ink); font-weight: 600; }
 div[class*="st-key-rs-review-"] .tag.undecided { background: var(--amber-bg); color: var(--amber-ink); }
+
+/* ---------- Final fixes E: Supervisor page, "Waiting for you" and one case in three steps ---------- */
+.st-key-sup-list { gap: 6px !important; margin-bottom: 8px; }
+div[class*="st-key-sup-row-"] { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  padding: 10px 14px; }
+div[class*="st-key-sup-row-"]:has(.sup-row.current) { border-color: var(--teal); box-shadow: 0 0 0 1px var(--teal); }
+div[class*="st-key-sup-row-"] { flex-wrap: nowrap !important; }
+div[class*="st-key-sup-row-"] > div:first-child { flex: 1 1 0 !important; min-width: 0; width: auto !important; }
+div[class*="st-key-sup-row-"] > div:last-child { flex: 0 0 auto !important; width: auto !important; }
+.sup-row-head { font-size: 15.5px; line-height: 1.4; }
+.sup-row-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.sup-row-chips .chip { font-size: 13px; }
+.sup-case-head { font-size: 20px !important; margin: 18px 0 2px 0 !important; padding: 0 !important; }
+div[class*="st-key-sup-understand-"] { padding: 14px 16px !important; }
+div[class*="st-key-sup-understand-"] .infocard + .infocard,
+div[class*="st-key-sup-understand-"] [data-testid="stElementContainer"]:has(.infocard) + [data-testid="stElementContainer"]:has(.infocard) {
+  border-top: 1px solid var(--line) !important; padding-top: 10px !important; }
+div[class*="st-key-sup-decide-"] { margin-top: 6px; }
+@media (max-width: 640px) {
+  div[class*="st-key-sup-row-"] { flex-direction: column !important; align-items: stretch !important; }
+  div[class*="st-key-sup-row-"] > div:first-child, div[class*="st-key-sup-row-"] > div:last-child {
+    width: 100% !important; flex: 1 1 auto !important; }
+  div[class*="st-key-sup-row-"] button { width: 100% !important; }
+  div[class*="st-key-sup-decide-"] { flex-direction: column !important; align-items: stretch !important; }
+  div[class*="st-key-sup-decide-"] > div { width: 100% !important; flex: 1 1 100% !important; }
+  div[class*="st-key-sup-decide-"] button { width: 100% !important; }
+}
+div[class*="st-key-sup-row-"] [data-testid="stMarkdownContainer"], div[class*="st-key-sup-row-"] .stMarkdown { margin: 0 !important; }
+.sup-row { padding: 2px 0 4px 0; }

@@ -68,7 +68,7 @@ def test_one_list_ticked_for_kept_points_no_old_controls(monkeypatch, brief):
     asked = brief["asked_at"][:10]
     assert any(f"Asked by Volunteer A on " in c.value and asked not in c.value for c in at.caption)  # "13 November 2026"
     assert at.button(key=f"rs-save-{rid}").label == "Save point decisions (1 approved, 0 rejected, 1 not decided)"
-    assert at.button(key=f"rs-all-{rid}").label == "Approve all points (2)"
+    assert at.button(key=f"rs-all-{rid}").label == "Approve all points (1)"   # only the points in the list
     assert '<span class="tag undecided">Not decided</span>' in page     # the left-out point, until decided
 
 
@@ -141,8 +141,6 @@ def test_self_approval_block_no_ticks_no_button(monkeypatch, brief):
 
 def test_hindi_strings_for_the_checklist():
     import lang
-    assert lang.t("rs.save_all", "hi", a=5, r=1, u=2) == \
-        "बिंदुओं के फ़ैसले सेव करें और पत्र दोबारा बनाएँ (5 मंज़ूर, 1 अस्वीकार, 2 पर फ़ैसला नहीं)"
-    assert lang.t("rs.save_all", a=5, r=1, u=2) == \
-        "Save point decisions and rebuild the letter (5 approved, 1 rejected, 2 not decided)"
+    assert lang.t("rs.save_all_no_letter", "hi", a=5, r=1, u=2) == "बिंदुओं के फ़ैसले सेव करें (5 मंज़ूर, 1 अस्वीकार, 2 पर फ़ैसला नहीं)"
+    assert lang.t("rs.save_all_no_letter", a=5, r=1, u=2) == "Save point decisions (5 approved, 1 rejected, 2 not decided)"
     assert lang.t("home.learn_go") == "Open guide" and lang.t("home.eval_go") == "Test yourself"

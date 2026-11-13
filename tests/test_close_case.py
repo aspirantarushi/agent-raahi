@@ -115,7 +115,7 @@ def test_supervisor_closes_and_reopens_on_screen(monkeypatch):
     at.button(key=f"close-go-{case_id}").click().run()
     assert not at.exception, at.exception[0].stack_trace
     assert tracker.status_of(case_id) == tracker.CLOSED
-    assert at.dataframe[0].value.iloc[0]["Status"] == "Closed"               # the audit table
+    assert next(d.value for d in at.dataframe if "Case code" in d.value.columns).iloc[0]["Status"] == "Closed"               # the audit table
     assert any("Closed: Resolved · the wages were paid · by SK" in m.value for m in at.markdown)
     at.text_input(key=f"reopen-reason-{case_id}").set_value("a new problem came up")
     at.button(key=f"reopen-go-{case_id}").click().run()

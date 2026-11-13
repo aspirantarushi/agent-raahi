@@ -34,20 +34,17 @@ def case(fake_ai, monkeypatch, tmp_path):  # noqa: F811
 def test_two_sections_and_two_different_rejections(monkeypatch, case):
     case_id, rid = case
     at = supervisor_screen(monkeypatch, name="Supervisor S")
-    page = " ".join(m.value for m in at.markdown)
-    assert "Research points (AI, from official websites)" in page
-    assert "The drafts (case summary, letter, legal aid application)" in page
-    assert page.index("Research points (AI") < page.index("The drafts (case summary")
-    assert at.radio(key=f"action-{case_id}").options == ["Approve", "Edit then approve",
-                                                         "Reject the drafts — send back to the volunteer"]
-    assert at.button(key=f"rs-save-{rid}").label.startswith("Save point decisions")
+    page = " ".join(m.value for m in at.markdown if "<style" not in m.value)
+    assert page.index("Check the research points") < page.index("Decide on the drafts")   # E: steps 2 and 3
+    assert [at.button(key=f"{k}-{case_id}").label for k in ("approve", "edit-open", "back-open")] == \
+        ["Approve drafts", "Edit then approve", "Send back to the volunteer"]
+    assert not any(str(b.key).startswith("rs-save-") for b in at.button)    # ticks are applied in step 3
     assert not any(r.label == "Why reject this point? (needed)" for r in at.radio)       # nothing unticked yet
 
 
 def test_approve_is_never_locked_by_undecided_points(monkeypatch, case):  # D3: approve independently
     case_id, rid = case
     at = supervisor_screen(monkeypatch, name="Supervisor S")
-    at.radio(key=f"action-{case_id}").set_value("Approve").run()
     assert not at.button(key=f"approve-{case_id}").disabled
     assert not any("Approve after every research point" in m.value for m in at.markdown)
 
@@ -58,10 +55,7 @@ def test_reject_one_point_then_approve_the_drafts(monkeypatch, case):
     at.checkbox(key=f"rsx-{rid}-p1").uncheck().run()                      # reject this point (a reason)
     at.radio(key=f"rsr-{rid}-p1").set_value("not_about").run()
     at.checkbox(key=f"rsx-{rid}-p2").check().run()                        # include the volunteer's left-out point
-    at.button(key=f"rs-save-{rid}").click().run()
-    assert not at.exception, at.exception[0].stack_trace
     assert store.get_pending(case_id)["status"] == store.WAITING          # the case stays with the supervisor
-    at.radio(key=f"action-{case_id}").set_value("Approve").run()
     assert not at.button(key=f"approve-{case_id}").disabled
     at.button(key=f"approve-{case_id}").click().run()
     assert not at.exception, at.exception[0].stack_trace
@@ -75,7 +69,7 @@ def test_reject_one_point_then_approve_the_drafts(monkeypatch, case):
 def test_send_the_drafts_back_before_deciding_any_point(monkeypatch, case):
     case_id, rid = case
     at = supervisor_screen(monkeypatch, name="Supervisor S")
-    at.radio(key=f"action-{case_id}").set_value("Reject with a reason").run()
+    at.button(key=f"back-open-{case_id}").click().run()
     assert any("not decided yet go back with the case, unchanged" in c.value for c in at.caption)
     at.text_area(key=f"reason-{case_id}").set_value("the dates in the story do not match").run()
     at.button(key=f"reject-{case_id}").click().run()
@@ -106,5 +100,5 @@ def test_wording_never_just_rejected():
     assert lang.t("rs.decided.rejected", by="S", on="14 November 2026") == "Point rejected by S on 14 November 2026."
     assert lang.t("aud.ev.sent back", "hi") == "ड्राफ़्ट वापस भेजे गए" and lang.t("aud.ev.research point rejected", "hi")
     for key in ("ui.status.sent_back", "aud.st.sent back", "rs.decided.rejected", "agent.ev.sent_back",
-                "agent.ev.point_rejected", "sup.Reject with a reason"):
+                "agent.ev.point_rejected", "sup.send_back_open"):
         assert lang.t(key, by="S", on="x") not in ("Rejected", "Sent back")

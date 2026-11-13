@@ -27,7 +27,11 @@ def waiting_case(base=None, by="Volunteer A", case_type="Undertrial"):
     record = tracker.open_case(case_type, by, **kw)
     facts, text = make()
     store.submit(text, facts, case_id=record["id"], by=by, **kw)
+    LAST_SENT[0] = record["id"]
     return record["id"], record["code"]
+
+
+LAST_SENT = [None]  # the case a test sent last: opened on the Supervisor page, as if its row was clicked
 
 
 def supervisor_screen(monkeypatch, name="SK", **state):
@@ -35,8 +39,10 @@ def supervisor_screen(monkeypatch, name="SK", **state):
     monkeypatch.setenv("SUPERVISOR_PASSWORD", SUPERVISOR)
     at = AppTest.from_file("../app.py", default_timeout=30)
     at.session_state["screen"] = "Supervisor"
+    waiting = [r["id"] for r in store.list_pending()]
+    opened = {"sup-open": LAST_SENT[0]} if LAST_SENT[0] in waiting else {}  # as if its row was clicked
     for k, v in {"supervisor_ok": True, "supervisor_name": name, "sup_last_active": time.time(),
-                 "clinic_ok": True, "clinic_via_supervisor": True, "volunteer": name, **state}.items():
+                 "clinic_ok": True, "clinic_via_supervisor": True, "volunteer": name, **opened, **state}.items():
         at.session_state[k] = v
     at.run()
     ok(at)
@@ -45,6 +51,16 @@ def supervisor_screen(monkeypatch, name="SK", **state):
 
 def tables(at):
     return [d.value for d in at.dataframe]
+
+
+def audit_table(at):
+    """The audit table of all cases (in its fold, after the open case's own history)."""
+    return next(t for t in tables(at) if "Case code" in t.columns)
+
+
+def history_after_audit_table(at):
+    found = tables(at)
+    return found[next(i for i, t in enumerate(found) if "Case code" in t.columns) + 1]
 
 
 # ---------- 5. one "sent to supervisor" event, with the volunteer's name ----------
@@ -119,9 +135,8 @@ def test_own_draft_on_screen_cannot_be_approved(monkeypatch):
     at = supervisor_screen(monkeypatch, name="  practice volunteer z ")   # case and spaces don't matter
     # shown first, at the top of the case card, and every decision is locked
     assert at.error[0].value == "You sent this draft, so another supervisor must approve it."
-    assert not any(r.key == f"action-{case_id}" for r in at.radio)          # no decision buttons at all
-    assert not any(str(b.key).endswith(case_id) and str(b.key).startswith(("approve-", "reject-", "edit-approve-"))
-                   for b in at.button)
+    assert not any(str(b.key).endswith(case_id) and str(b.key).startswith(("approve-", "reject-", "edit-open-",
+                                                                            "back-open-")) for b in at.button)
     assert store.get_pending(case_id)["status"] == store.WAITING
 
 
@@ -143,7 +158,6 @@ def test_deciding_twice_says_already_decided(tmp_path):
 def test_second_supervisor_sees_already_decided_not_an_error(monkeypatch):
     case_id, _ = waiting_case()
     at = supervisor_screen(monkeypatch)
-    at.radio(key=f"action-{case_id}").set_value("Approve").run()
     store.approve(case_id, by="Another supervisor")  # decided elsewhere in the meantime
     at.button(key=f"approve-{case_id}").click().run()
     ok(at)
@@ -156,17 +170,18 @@ def test_decision_button_is_disabled_after_the_first_click(monkeypatch):
     calls = []
     monkeypatch.setattr(store, "approve", lambda cid, **kw: calls.append(cid))  # the draft stays waiting
     at = supervisor_screen(monkeypatch)
-    at.radio(key=f"action-{case_id}").set_value("Approve").run()
     assert not at.button(key=f"approve-{case_id}").disabled
     at.button(key=f"approve-{case_id}").click().run()
     ok(at)
+    at.session_state["sup-open"] = case_id  # (the pretend approval left it waiting: open it again)
+    at.run()
     assert calls == [case_id] and at.button(key=f"approve-{case_id}").disabled
 
 
 def test_send_back_without_a_reason_can_be_tried_again(monkeypatch):
     case_id, _ = waiting_case()
     at = supervisor_screen(monkeypatch)
-    at.radio(key=f"action-{case_id}").set_value("Reject with a reason").run()
+    at.button(key=f"back-open-{case_id}").click().run()           # "Send back to the volunteer": a reason box
     at.button(key=f"reject-{case_id}").click().run()
     assert any("reason" in e.value for e in at.error) and not at.button(key=f"reject-{case_id}").disabled
     at.text_area(key=f"reason-{case_id}").set_value("Add the court.")
@@ -235,18 +250,18 @@ def test_audit_table_on_screen_opens_a_history_and_downloads(monkeypatch):
     at = supervisor_screen(monkeypatch)
     at.text_input(key="aud-q").set_value(code).run()  # search by case code
     ok(at)
-    table = tables(at)[0]  # the audit table comes first on the page
+    table = audit_table(at)
     assert list(table.columns) == ["Case code", "Case type", "Status", "Sent by", "Sent on", "Decision by",
                                    "Decision on", "AI used", "Last step"]
     assert table.to_dict("records")[0]["Case code"] == code and table.iloc[0]["Status"] == "Drafts sent back"
     assert table.iloc[0]["Sent by"] == "Volunteer Q" and table.iloc[0]["Decision by"] == "SK (supervisor)"
     at.selectbox(key="aud-status").set_value("approved").run()
-    assert len(tables(at)[0]) == 0
+    assert len(audit_table(at)) == 0
     at.selectbox(key="aud-status").set_value("sent back").run()
     at.session_state["aud-open"] = case_id  # what clicking the row does
     at.run()
     ok(at)
-    history = tables(at)[1]  # right below the audit table
+    history = history_after_audit_table(at)  # right below the audit table
     assert list(history.columns) == ["Time", "What happened", "By", "Details"]
     assert history.iloc[-1]["What happened"] == "Drafts sent back" and history.iloc[-1]["By"] == "SK (supervisor)"
     assert any(f"History of case {code}" in m.value for m in at.markdown)
@@ -363,7 +378,7 @@ def test_stage_labels_and_count_line(monkeypatch):
     sent, sent_code = waiting_case(by="Volunteer M")
     at = supervisor_screen(monkeypatch)
     counts = next(m.value for m in at.markdown if 'class="aud-counts"' in m.value)
-    rows = {r["case_id"]: r for r in tables(at)[0].assign(case_id=st_ids(at)).to_dict("records")}
+    rows = {r["case_id"]: r for r in audit_table(at).assign(case_id=st_ids(at)).to_dict("records")}
     assert rows[intake["id"]]["Status"] == "Intake in progress" and rows[intake["id"]]["AI used"] == "-"
     assert rows[sent]["Status"] == "Waiting for review"
     import re
@@ -376,22 +391,25 @@ def st_ids(at):
     return at.session_state["aud-ids"]
 
 
-def test_audit_table_comes_first_then_waiting_drafts(monkeypatch):
+def test_waiting_first_then_all_cases_then_tools(monkeypatch):
     waiting_case(by="Volunteer O")
     at = supervisor_screen(monkeypatch)
-    headings = [s.value for s in at.subheader]
-    assert headings[0] == "Audit records of all cases" and headings[1].startswith("Cases waiting for you")
-    assert headings.index("Problems reported") > 1
+    assert at.subheader[0].value.startswith("Waiting for you (")
+    folds = [e.label for e in at.expander + at.status]
+    assert "All cases (audit records)" in folds and "Tools" in folds
+    page = " ".join(m.value for m in at.markdown)
+    assert "Problems reported" in page
 
 
-def test_clicking_a_waiting_row_jumps_to_its_review_box(monkeypatch):
-    case_id, _ = waiting_case(by="Volunteer P")
-    at = supervisor_screen(monkeypatch)
-    at.session_state["sup-jump"] = case_id  # what open_audit_row sets for a waiting case
-    at.run()
-    scripts = [e.proto.srcdoc for e in at.get("iframe") if "scrollIntoView" in e.proto.srcdoc]
-    assert scripts and f".st-key-review-{case_id}" in scripts[0]
-    assert any(e.label.startswith(f"Case {case_id}") for e in at.expander)  # its review box is open
+def test_clicking_a_waiting_row_opens_its_review(monkeypatch):
+    first, _ = waiting_case(by="Volunteer P")
+    case_id, _ = waiting_case(by="Volunteer P2")
+    at = supervisor_screen(monkeypatch, **{"sup-open": first})
+    assert any(f"Case {first} ·" in m.value and 'class="sup-case-head"' in m.value for m in at.markdown)
+    at.button(key=f"sup-open-{case_id}").click().run()             # its row in "Waiting for you"
+    heads = [m.value for m in at.markdown if 'class="sup-case-head"' in m.value and "<style" not in m.value]
+    assert len(heads) == 1 and f"Case {case_id} ·" in heads[0]     # one case open at a time
+    assert at.button(key=f"sup-open-{case_id}").disabled and at.button(key=f"sup-open-{case_id}").label == "Open now"
 
 
 def test_open_audit_row_only_jumps_for_waiting_cases():
@@ -405,7 +423,7 @@ def test_open_audit_row_only_jumps_for_waiting_cases():
     exec("def open_audit_row" + code, namespace)
     state["aud-table"] = {"selection": {"rows": [0], "cells": []}}
     namespace["open_audit_row"]()
-    assert state["aud-open"] == "U-1" and "sup-jump" not in state  # intake or decided: only the history
+    assert state["aud-open"] == "U-1" and "sup-open" not in state  # intake or decided: only the history
     state["aud-table"] = {"selection": {"rows": [], "cells": [(1, "Case code")]}}
     namespace["open_audit_row"]()
-    assert state["aud-open"] == "U-2" and state["sup-jump"] == "U-2"  # waiting for review: jump to its box
+    assert state["aud-open"] == "U-2" and state["sup-open"] == "U-2"  # waiting for review: it opens at the top

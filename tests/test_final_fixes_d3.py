@@ -41,7 +41,6 @@ def letter_of(text):
 
 
 def approve(at, case_id):
-    at.radio(key=f"action-{case_id}").set_value("Approve").run()
     at.button(key=f"approve-{case_id}").click().run()
     assert not at.exception, at.exception[0].stack_trace
 
@@ -49,8 +48,8 @@ def approve(at, case_id):
 def test_approve_drafts_with_undecided_points_they_are_not_in_the_letter(monkeypatch, case):
     case_id, rid = case
     at = supervisor_screen(monkeypatch, name="Supervisor S")
-    at.radio(key=f"action-{case_id}").set_value("Approve").run()
     assert any("(1 approved, 0 rejected, 1 not decided)" in c.value for c in at.caption)
+    assert any(c.value == "1 point not decided is not in this letter." for c in at.caption)   # the Letter tab (E)
     at.button(key=f"approve-{case_id}").click().run()                      # one click, nothing saved before
     assert not at.exception, at.exception[0].stack_trace
     letter = letter_of(store.approved_draft(case_id))
@@ -62,7 +61,9 @@ def test_approve_drafts_with_undecided_points_they_are_not_in_the_letter(monkeyp
     assert len(approved) == 1 and approved[0]["details"].endswith("1 point approved, 0 rejected, 1 not decided")
     # the undecided point stays listed for later, in the case's own card, marked "Not decided"
     at = supervisor_screen(monkeypatch, name="Supervisor S")
-    assert any(case_id in s.label and "drafts already approved" in s.label for s in at.expander), [s.label for s in at.expander]
+    code = tracker.load(case_id)["code"]                                    # the list shows the case code
+    row = next(m.value for m in at.markdown if 'class="sup-row' in m.value and code in m.value)
+    assert "Drafts already approved" in row and "1 research point" in row
     assert any("already approved. Points you decide now are not added to that letter." in i.value for i in at.info)
     assert any('<span class="tag undecided">Not decided</span>' in m.value for m in at.markdown)
 
@@ -70,21 +71,22 @@ def test_approve_drafts_with_undecided_points_they_are_not_in_the_letter(monkeyp
 def test_approve_all_points_then_approve(monkeypatch, case):
     case_id, rid = case
     at = supervisor_screen(monkeypatch, name="Supervisor S")
-    at.button(key=f"rs-all-{rid}").click().run()                            # one click: every point approved
+    at.checkbox(key=f"rsx-{rid}-p1").uncheck().run()
+    assert at.button(key=f"rs-all-{rid}").label == "Approve all points (1)"   # E: only the points in the list
+    at.button(key=f"rs-all-{rid}").click().run()                            # ticks them again (applied on approval)
     assert not at.exception, at.exception[0].stack_trace
-    assert [p["status"] for p in research.load(rid)["points"] if p["kind"] != "letter"] == ["approved", "approved"]
+    assert at.checkbox(key=f"rsx-{rid}-p1").value is True and at.checkbox(key=f"rsx-{rid}-p2").value is False
     approve(at, case_id)
     letter = letter_of(store.approved_draft(case_id))
-    assert P1 in letter and P2 in letter and "not decided" not in letter
+    assert P1 in letter and P2 not in letter and "1 research point was not decided" in letter
     events = [e["event"] for e in audit.read_record(case_id)["events"]]
-    assert events.count("research point approved") == 2 and events.count("approved") == 1
+    assert events.count("research point approved") == 1 and events.count("approved") == 1
 
 
 def test_reject_a_point_and_approve_the_drafts_in_one_go(monkeypatch, case):
     case_id, rid = case
     at = supervisor_screen(monkeypatch, name="Supervisor S")
     at.checkbox(key=f"rsx-{rid}-p1").uncheck().run()                      # reject p1 (a reason)...
-    at.radio(key=f"action-{case_id}").set_value("Approve").run()
     assert at.button(key=f"approve-{case_id}").disabled                    # ...the reason is still needed
     assert any("Give a reason for the unticked point." in m.value for m in at.markdown)
     at.radio(key=f"rsr-{rid}-p1").set_value("looks_wrong").run()
@@ -102,9 +104,8 @@ def test_reject_a_point_and_approve_the_drafts_in_one_go(monkeypatch, case):
 def test_edit_then_approve_rebuilds_first(monkeypatch, case):
     case_id, rid = case
     at = supervisor_screen(monkeypatch, name="Supervisor S")
-    at.radio(key=f"action-{case_id}").set_value("Edit then Approve").run()
-    assert not any(a.key == f"edit-{case_id}" for a in at.text_area)        # the letter is rebuilt first
-    at.button(key=f"rebuild-edit-{case_id}").click().run()
+    assert not any(a.key == f"edit-{case_id}" for a in at.text_area)
+    at.button(key=f"edit-open-{case_id}").click().run()                     # the letter is rebuilt first
     assert not at.exception, at.exception[0].stack_trace
     box = at.text_area(key=f"edit-{case_id}")
     assert P1 in box.value and P2 not in box.value
@@ -120,17 +121,24 @@ def test_research_without_drafts_shows_inside_its_case_card(monkeypatch, fake_ai
     rid = research_for(case_id)
     at = supervisor_screen(monkeypatch, name="Supervisor S")
     assert not any("AI research, not yet checked: for supervisor approval" in s.value for s in at.subheader)
-    assert any(s.value == "Cases waiting for you: 1" for s in at.subheader)
-    card = next(s for s in at.expander if case_id in s.label)
-    assert "no drafts sent yet" in card.label
+    assert any(s.value == "Waiting for you (1)" for s in at.subheader)
+    code = tracker.load(case_id)["code"]                                    # the list shows the case code
+    row = next(m.value for m in at.markdown if 'class="sup-row' in m.value and code in m.value)
+    assert "No drafts yet" in row
     assert any(i.value == "No drafts sent yet by the volunteer." for i in at.info)
-    assert at.checkbox(key=f"rsx-{rid}-p1").value is True                   # Section A as usual
-    assert at.button(key=f"rs-save-{rid}").label == "Save point decisions (1 approved, 0 rejected, 1 not decided)"
+    assert at.checkbox(key=f"rsx-{rid}-p1").value is True                   # the research step as usual
+    save = at.button(key=f"rs-save-{rid}")
+    assert save.label == "Save point decisions (1 approved, 0 rejected, 1 not decided)"
+    assert not any(str(b.key).startswith(("approve-", "edit-open-")) for b in at.button)   # no step 3
+    save.click().run()                                                       # research-only case saves points
+    assert not at.exception, at.exception[0].stack_trace
+    p1, p2 = [p for p in research.load(rid)["points"] if p["kind"] != "letter"]
+    assert p1["status"] == "approved" and p2["status"] == research.WAITING
 
 
 def test_self_approval_block_still_holds(monkeypatch, case):
     case_id, rid = case
     at = supervisor_screen(monkeypatch, name="Volunteer A")                 # sent the drafts, asked for the research
     assert not any(str(c.key).startswith("rsx-") for c in at.checkbox)
-    assert not any(str(b.key).startswith(("rs-all-", "rs-save-", "approve-", "reject-")) for b in at.button)
-    assert not any(r.key == f"action-{case_id}" for r in at.radio)
+    assert not any(str(b.key).startswith(("rs-all-", "rs-save-", "approve-", "edit-open-", "back-open-", "reject-"))
+                   for b in at.button)
