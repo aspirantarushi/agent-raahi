@@ -3230,7 +3230,8 @@ def supervisor_screen():
     else:
         st.subheader(t("ui.sup.waiting", n=len(rows)))
         current = waiting_list(rows)
-        review_open_case(next(r for r in rows if r["id"] == current))
+        if current:
+            review_open_case(next(r for r in rows if r["id"] == current))
     changed_after_approval_box()
 
     # 2. All cases (audit records), folded
@@ -4061,13 +4062,21 @@ def case_drafts_approved(case_id: str) -> bool:
 
 def open_case(case_id: str):
     st.session_state["sup-open"] = case_id
+    st.session_state.pop("sup-closed", None)
+
+
+def close_case_view():
+    """"Close this case": back to the list, with no case open until one is opened again."""
+    st.session_state["sup-closed"] = True
+    st.session_state.pop("sup-open", None)
 
 
 def waiting_list(rows: list) -> str:
-    """The compact list at the top; returns the id of the case open below it (the first one if none chosen)."""
+    """The compact list at the top; returns the id of the case open below it (the first one if none chosen,
+    None after "Close this case")."""
     ids = [r["id"] for r in rows]
     current = st.session_state.get("sup-open")
-    current = current if current in ids else ids[0]
+    current = current if current in ids else None if st.session_state.get("sup-closed") else ids[0]
     e = html.escape
     with st.container(key="sup-list"):
         for row in rows:
@@ -4124,12 +4133,15 @@ def review_open_case(row: dict):
     """One case in three steps: 1 Understand the case, 2 Check the research points (if any), 3 Decide on the drafts."""
     case_id, record = row["id"], row["pending"]
     own = own_work(case_id, record)
-    with st.container(key=f"review-{case_id}"):
+    with st.container(border=True, key=f"review-{case_id}"):  # the open case, in one box
         when = show_stamp(row["when"]) if row["when"] else ""
         head_key = "ui.sup.case_head" if record else \
             "ui.sup.case_head_approved" if case_drafts_approved(case_id) else "ui.sup.case_head_research"
-        st.markdown(f'<h3 class="sup-case-head">{html.escape(t(head_key, case_id=case_id, kind=case_type_label(row["kind"]), sent=when, by=row["by"] or "-"))}</h3>',
-                    unsafe_allow_html=True)
+        with st.container(key=f"sup-head-{case_id}", horizontal=True, vertical_alignment="top", gap="small"):
+            st.markdown(f'<h3 class="sup-case-head">{html.escape(t(head_key, case_id=case_id, kind=case_type_label(row["kind"]), sent=when, by=row["by"] or "-"))}</h3>',
+                        unsafe_allow_html=True)
+            st.button(t("sup.close_case"), key=f"sup-close-{case_id}", type="tertiary", icon=":material/close:",
+                      on_click=close_case_view)
         if own:  # first, before anything can be decided: no tick boxes and no decision buttons below
             st.error(t("ui.sup.own_draft"), icon=":material/block:")
         for h in (record or {}).get("history", []):
@@ -4301,6 +4313,7 @@ def decide(case_id: str, kind: str):
         st.session_state[f"decide-err-{case_id}"] = str(err)
     else:  # decided: the case leaves "Waiting for you" and the next one in the list opens
         st.session_state.pop("sup-open", None)
+        st.session_state.pop("sup-closed", None)
         st.session_state.pop(f"sup-mode-{case_id}", None)
 
 

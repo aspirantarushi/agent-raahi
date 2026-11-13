@@ -749,7 +749,8 @@ div[class*="st-key-case-card-"], .st-key-signin-wide {
     .st-key-signin-wide, div[class*="st-key-learn-card-"], .st-key-guide-page,
     .st-key-case-panel, .st-key-research-box, .st-key-continuebox, .st-key-scanbox, .st-key-camp-form,
     .st-key-leave-box, div[class*="st-key-edit-box-"], div[class*="st-key-close-box-"], div[class*="st-key-sup-draft-"],
-    .st-key-f-calc-card, div[class*="st-key-rs-review-"], div[class*="st-key-sup-understand-"])
+    .st-key-f-calc-card, div[class*="st-key-rs-review-"], div[class*="st-key-sup-understand-"],
+    div[class*="st-key-review-"])
   :is([data-testid="stVerticalBlock"], [data-testid="stForm"], .card, .infocard) {
   border: 0 !important; box-shadow: none !important; background: transparent !important; padding: 0 !important;
   border-radius: 0 !important; }
@@ -821,3 +822,19 @@ div[class*="st-key-sup-decide-"] { margin-top: 6px; }
 }
 div[class*="st-key-sup-row-"] [data-testid="stMarkdownContainer"], div[class*="st-key-sup-row-"] .stMarkdown { margin: 0 !important; }
 .sup-row { padding: 2px 0 4px 0; }
+
+/* Supervisor: the open case in one box (a slightly stronger border than the list rows above it) */
+div[class*="st-key-review-"][data-testid="stVerticalBlock"] { background: var(--card) !important;
+  border: 2px solid var(--line2) !important; border-radius: 14px !important; padding: 18px 20px !important;
+  box-shadow: 0 1px 2px rgba(19, 33, 59, .06), 0 6px 18px rgba(19, 33, 59, .07) !important; margin-top: 14px; }
+div[class*="st-key-sup-head-"] { flex-wrap: nowrap !important; }
+div[class*="st-key-sup-head-"] > div:first-child { flex: 1 1 0 !important; min-width: 0; width: auto !important; }
+div[class*="st-key-sup-head-"] > div:last-child { flex: 0 0 auto !important; width: auto !important; }
+div[class*="st-key-sup-head-"] .sup-case-head { margin-top: 0 !important; }
+div[class*="st-key-sup-close-"] button p { text-decoration: underline; font-size: 15px !important; }
+@media (max-width: 640px) {
+  div[class*="st-key-review-"][data-testid="stVerticalBlock"] { padding: 14px 12px !important; }
+  div[class*="st-key-sup-head-"] { flex-direction: column-reverse !important; gap: 2px !important; }
+  div[class*="st-key-sup-head-"] > div:first-child { width: 100% !important; flex: 1 1 auto !important; }
+  div[class*="st-key-sup-head-"] > div:last-child { align-self: flex-end; }
+}

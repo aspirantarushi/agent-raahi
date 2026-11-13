@@ -1438,5 +1438,6 @@
  "ui.sup.case_head_approved": "केस {case_id} · {kind} · {by} ने {sent} को शोध किया · ड्राफ़्ट पहले ही मंज़ूर",
  "sup.chip.research_only": "सिर्फ़ शोध — अभी कोई ड्राफ़्ट नहीं",
  "sup.no_drafts_line": "स्वयंसेवक ने अभी ड्राफ़्ट नहीं भेजे हैं।",
- "sup.still_missing": "अभी बाक़ी"
+ "sup.still_missing": "अभी बाक़ी",
+ "sup.close_case": "यह केस छिपाएँ"
 }

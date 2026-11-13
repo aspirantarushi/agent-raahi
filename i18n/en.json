@@ -1438,5 +1438,6 @@
  "ui.sup.case_head_approved": "Case {case_id} · {kind} · research run {sent} by {by} · drafts already approved",
  "sup.chip.research_only": "Research only — no drafts yet",
  "sup.no_drafts_line": "The volunteer has not sent drafts yet.",
- "sup.still_missing": "Still missing"
+ "sup.still_missing": "Still missing",
+ "sup.close_case": "Close this case"
 }

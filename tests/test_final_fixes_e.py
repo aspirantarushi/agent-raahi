@@ -127,3 +127,22 @@ def test_research_only_case_is_labelled_and_built_from_the_tracker(monkeypatch, 
     at.button(key=f"sup-open-{sent_case}").click().run()
     head = next(m.value for m in at.markdown if 'class="sup-case-head"' in m.value and "<style" not in m.value)
     assert " sent " in head and "research run" not in head and "Decide on the drafts" in page(at)
+
+
+def test_open_case_in_one_box_and_close_returns_to_the_list(monkeypatch, fresh):
+    case_id, _ = general_case(research_too=False)
+    at = supervisor_screen(monkeypatch, name="Supervisor S", **{"sup-open": case_id})
+    heads = [m.value for m in at.markdown if 'class="sup-case-head"' in m.value and "<style" not in m.value]
+    assert len(heads) == 1 and at.button(key=f"approve-{case_id}")                # heading .. decision buttons
+    close = at.button(key=f"sup-close-{case_id}")
+    assert close.label == "Close this case"
+    close.click().run()
+    assert not any('class="sup-case-head"' in m.value and "<style" not in m.value for m in at.markdown)
+    assert at.subheader[0].value == "Waiting for you (1)"                           # the list stays
+    assert not at.button(key=f"sup-open-{case_id}").disabled                        # nothing open
+    at.button(key=f"sup-open-{case_id}").click().run()
+    assert at.button(key=f"approve-{case_id}")                                       # open again
+    css = (ROOT / "assets" / "app.css").read_text(encoding="utf-8")
+    assert 'div[class*="st-key-review-"][data-testid="stVerticalBlock"] { background: var(--card) !important;\n  border: 2px solid var(--line2)' in css
+    rule = css[css.index("never a box inside a box"):]
+    assert 'div[class*="st-key-review-"])' in rule[:2000]                             # no second border inside

@@ -1547,6 +1547,7 @@ i18n/hi.json · ui.sup.case_head_approved,Case {case_id} · {kind} · research r
 i18n/hi.json · sup.chip.research_only,Research only — no drafts yet,सिर्फ़ शोध — अभी कोई ड्राफ़्ट नहीं,screen text,,
 i18n/hi.json · sup.no_drafts_line,The volunteer has not sent drafts yet.,स्वयंसेवक ने अभी ड्राफ़्ट नहीं भेजे हैं।,screen text,,
 i18n/hi.json · sup.still_missing,Still missing,अभी बाक़ी,screen text,,
+i18n/hi.json · sup.close_case,Close this case,यह केस छिपाएँ,screen text,,
 case_notes_hi.txt,(fake practice story; check that it reads naturally),"अभ्यास केस (कोई असली व्यक्ति नहीं)।
 बोलने वाली: एक विचाराधीन क़ैदी की बड़ी बहन।
 उसके भाई को 15 मार्च 2024 को गिरफ़्तार किया गया था। अपराध फ़रवरी 2024 में हुआ था।
