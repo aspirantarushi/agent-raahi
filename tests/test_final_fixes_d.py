@@ -67,7 +67,9 @@ def test_one_list_ticked_for_kept_points_no_old_controls(monkeypatch, brief):
     assert '<span class="tag">Route</span>' in page and "p1 ·" not in page and "waiting for the supervisor" not in page
     asked = brief["asked_at"][:10]
     assert any(f"Asked by Volunteer A on " in c.value and asked not in c.value for c in at.caption)  # "13 November 2026"
-    assert at.button(key=f"rs-save-{rid}").label == "Save point decisions (1 approved, 1 rejected)"
+    assert at.button(key=f"rs-save-{rid}").label == "Save point decisions (1 approved, 0 rejected, 1 not decided)"
+    assert at.button(key=f"rs-all-{rid}").label == "Approve all points (2)"
+    assert '<span class="tag undecided">Not decided</span>' in page     # the left-out point, until decided
 
 
 def test_approve_all_saves_every_point_with_name_and_one_audit_entry_each(monkeypatch, brief):
@@ -75,7 +77,7 @@ def test_approve_all_saves_every_point_with_name_and_one_audit_entry_each(monkey
     at = supervisor_screen(monkeypatch, name="Supervisor S")
     at.checkbox(key=f"rsx-{rid}-p2").check().run()                       # include the volunteer's left-out point
     save = at.button(key=f"rs-save-{rid}")
-    assert save.label == "Save point decisions (2 approved, 0 rejected)"
+    assert save.label == "Save point decisions (2 approved, 0 rejected, 0 not decided)"
     save.click().run()
     assert not at.exception, at.exception[0].stack_trace
     record = research.load(rid)
@@ -94,13 +96,14 @@ def test_edit_one_and_reject_one_with_a_required_reason(monkeypatch, brief):
     at.button(key=f"rsedit-{rid}-p1").click().run()                      # closed again: the edit is kept
     assert any('<span class="tag edited">edited</span>' in m.value for m in at.markdown)
     at.checkbox(key=f"rsx-{rid}-p2").check().run()
-    at.checkbox(key=f"rsx-{rid}-p2").uncheck().run()                     # still left out: the volunteer's reason stands
+    at.checkbox(key=f"rsx-{rid}-p2").uncheck().run()                     # left out again: not decided
+    at.radio(key=f"rsr-{rid}-p2").set_value("repeats").run()            # ...until the supervisor rejects it
     assert not at.button(key=f"rs-save-{rid}").disabled
     # a kept point unticked needs the supervisor's own reason
     at2 = supervisor_screen(monkeypatch, name="Supervisor S")
     at2.checkbox(key=f"rsx-{rid}-p1").uncheck().run()
     save = at2.button(key=f"rs-save-{rid}")
-    assert save.disabled and save.label == "Save point decisions (0 approved, 2 rejected)"
+    assert save.disabled and save.label == "Save point decisions (0 approved, 0 rejected, 1 not decided)"
     assert any("Give a reason for the unticked point." in m.value for m in at2.markdown)
     at2.radio(key=f"rsr-{rid}-p1").set_value("other").run()
     at2.text_input(key=f"rsrt-{rid}-p1").set_value("the sub-division is wrong").run()
@@ -111,9 +114,9 @@ def test_edit_one_and_reject_one_with_a_required_reason(monkeypatch, brief):
     record = research.load(rid)
     p1, p2 = [p for p in record["points"] if p["kind"] != "letter"]
     assert p1["status"] == "approved after editing" and p1["text"].endswith("in writing.")
-    assert p2["status"] == "rejected" and p2["reject_reason"] == "left out by the volunteer: the forum is for a later step"
+    assert p2["status"] == "rejected" and p2["reject_reason"] == "Repeats another point"
     last = audit.read_record(record["case_id"])["events"][-1]
-    assert last["event"] == "research point rejected" and "the forum is for a later step" in last["details"]
+    assert last["event"] == "research point rejected" and "Repeats another point" in last["details"]
     assert any(c.value.startswith("Edited and approved by Supervisor S on ") for c in at.caption)  # a readable date
 
 
@@ -138,6 +141,8 @@ def test_self_approval_block_no_ticks_no_button(monkeypatch, brief):
 
 def test_hindi_strings_for_the_checklist():
     import lang
-    assert lang.t("rs.save_all", "hi", a=5, r=1) == "बिंदुओं के फ़ैसले सेव करें और पत्र दोबारा बनाएँ (5 मंज़ूर, 1 अस्वीकार)"
-    assert lang.t("rs.save_all", a=5, r=1) == "Save point decisions and rebuild the letter (5 approved, 1 rejected)"
+    assert lang.t("rs.save_all", "hi", a=5, r=1, u=2) == \
+        "बिंदुओं के फ़ैसले सेव करें और पत्र दोबारा बनाएँ (5 मंज़ूर, 1 अस्वीकार, 2 पर फ़ैसला नहीं)"
+    assert lang.t("rs.save_all", a=5, r=1, u=2) == \
+        "Save point decisions and rebuild the letter (5 approved, 1 rejected, 2 not decided)"
     assert lang.t("home.learn_go") == "Open guide" and lang.t("home.eval_go") == "Test yourself"

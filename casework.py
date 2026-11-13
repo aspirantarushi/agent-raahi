@@ -533,11 +533,13 @@ def letter_facts(g, code: str = "en") -> List[str]:
         [f"- {w}: {x}" for w, x in left]
 
 
-def complaint_letter(g, approved: List[dict], issue: str, ai_model: Optional[str], code: str = "en") -> str:
+def complaint_letter(g, approved: List[dict], issue: str, ai_model: Optional[str], code: str = "en",
+                     not_decided: int = 0) -> str:
     """The complaint letter. Its body holds only facts of the case (what happened, dates, documents
     the person has, what they want); where to send it and the legal basis are only the research points
     given: the volunteer's ticked points (marked "AI research, not yet checked by a lawyer") until the
-    supervisor decides, then only the supervisor's approved points. Blanks for name, address and numbers."""
+    supervisor decides, then only the supervisor's approved points. Blanks for name, address and numbers.
+    not_decided: research points the supervisor has not decided (never in the letter; said in the notes)."""
     def t(key, **p):
         return lang.t(key, code, **p)
     b = LETTER_BLANKS[code]
@@ -563,7 +565,8 @@ def complaint_letter(g, approved: List[dict], issue: str, ai_model: Optional[str
         # "Where to send it" only when no route point says it already (it would only repeat the first one)
         (b["route"], "" if routes else "- " + t("cw.where_to_send", route=t("cw.letter_route_blank"))),
         (b["heading"], heading),
-        (b["basis"], "\n".join(basis) or t("cw.letter_no_basis")),
+        (b["basis"], "\n".join(basis + (["- " + t("cw.not_decided", n=not_decided)] if not_decided else []))
+         or t("cw.letter_no_basis")),
     ])
     text = re.sub(r"\n{3,}", "\n\n", text)
     rules = drafts.RULES_RESEARCH if points else general.RULES_USED  # legal points from official websites
@@ -574,7 +577,7 @@ OFFICE_TYPES = ("wages", "electricity", "water", "ration", "land")  # an office 
 OFFICE_BLANK = {"en": "[Name and address of the office]", "hi": "[कार्यालय का नाम और पता]"}
 
 
-def facts_only_letter(g, issue: str, ai_model: Optional[str], code: str = "en") -> str:
+def facts_only_letter(g, issue: str, ai_model: Optional[str], code: str = "en", not_decided: int = 0) -> str:
     """The fallback when no research point is ticked (or research failed, or the supervisor rejected
     every point): a short request letter to the right type of office, using ONLY the facts of the case
     and what the person wants. No sections, no Acts, no deadlines. Labelled as facts-only."""
@@ -588,7 +591,8 @@ def facts_only_letter(g, issue: str, ai_model: Optional[str], code: str = "en") 
     text = complaint_letter(clean, [], issue, ai_model, code)
     text = text.replace(OFFICE_BLANK[code], f"[{office}]", 1)
     text = text.replace(lang.t("cw.letter_route_blank", code), f"[{office}]", 1)  # in "Where to send it"
-    text = text.replace(lang.t("cw.letter_no_basis", code), "- " + lang.t("cw.facts_only_basis", code), 1)
+    text = text.replace(lang.t("cw.letter_no_basis", code), "- " + lang.t("cw.facts_only_basis", code)
+                        + ("\n- " + lang.t("cw.not_decided", code, n=not_decided) if not_decided else ""), 1)
     lines = text.split("\n")
     header = 1
     while header < len(lines) and lines[header].strip() and header < 3:  # the DRAFT line(s) stay first

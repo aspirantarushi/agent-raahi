@@ -781,12 +781,13 @@ div[class*="st-key-rs-row-"] [data-testid="stCaptionContainer"],
 div[class*="st-key-rs-row-"] div[class*="st-key-rsedit-"] { margin-left: 28px; }
 div[class*="st-key-rsedit-"] button { min-height: 28px !important; padding: 0 !important; font-size: 14px !important; }
 div[class*="st-key-rsedit-"] button p { font-size: 14px !important; text-decoration: underline; }
-div[class*="st-key-rs-save-"] { margin-top: 8px; }
+div[class*="st-key-rs-buttons-"] { margin-top: 8px; }
 @media (max-width: 640px) {
   .rs-meta, div[class*="st-key-rs-row-"] [data-testid="stCaptionContainer"],
   div[class*="st-key-rs-row-"] div[class*="st-key-rsedit-"] { margin-left: 0; }
   .rs-meta { flex-direction: column; align-items: flex-start; }
-  div[class*="st-key-rs-save-"] button { width: 100% !important; }
+  div[class*="st-key-rs-save-"] button, div[class*="st-key-rs-all-"] button { width: 100% !important; }
+  div[class*="st-key-rs-save-"], div[class*="st-key-rs-all-"] { width: 100% !important; flex: 1 1 100% !important; }
 }
 
 /* Supervisor case card: Section A (research points) and Section B (the drafts) */
@@ -797,3 +798,4 @@ div[class*="st-key-rs-save-"] { margin-top: 8px; }
 .sup-section h4 { margin: 0 !important; padding: 0 !important; font-size: 18px !important; line-height: 1.35 !important; }
 .sup-section p { margin: 2px 0 0 0 !important; color: var(--muted); font-size: 14px; line-height: 1.45; }
 .case-sub .sent-back { color: var(--amber-ink); font-weight: 600; }
+div[class*="st-key-rs-review-"] .tag.undecided { background: var(--amber-bg); color: var(--amber-ink); }

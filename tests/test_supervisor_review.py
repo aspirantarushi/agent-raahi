@@ -380,7 +380,7 @@ def test_audit_table_comes_first_then_waiting_drafts(monkeypatch):
     waiting_case(by="Volunteer O")
     at = supervisor_screen(monkeypatch)
     headings = [s.value for s in at.subheader]
-    assert headings[0] == "Audit records of all cases" and headings[1].startswith("Drafts waiting for approval")
+    assert headings[0] == "Audit records of all cases" and headings[1].startswith("Cases waiting for you")
     assert headings.index("Problems reported") > 1
 
 

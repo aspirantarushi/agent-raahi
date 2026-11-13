@@ -146,10 +146,11 @@ def list_pending(base: Path = HERE, status: str = WAITING) -> List[dict]:
 
 
 def approve(case_id: str, edited_text: Optional[str] = None, base: Path = HERE,
-            approved_on: Optional[date] = None, by: str = "") -> None:
+            approved_on: Optional[date] = None, by: str = "", note: str = "") -> None:
     """Save the draft in drafts/ and a case file in cases/, then remove it from pending/.
     by: the supervisor's name or initials, recorded with the approval. A supervisor who sent (or last
-    resent) the draft cannot approve it (OwnDraft); a case no longer waiting raises AlreadyDecided."""
+    resent) the draft cannot approve it (OwnDraft); a case no longer waiting raises AlreadyDecided.
+    note: added to the one audit entry (for example "3 points approved, 1 rejected, 2 not decided")."""
     record = _waiting(case_id, base)
     if sent_this(record, by):
         raise OwnDraft()
@@ -180,7 +181,8 @@ def approve(case_id: str, edited_text: Optional[str] = None, base: Path = HERE,
     store.write("cases", case_id, case_text)
     store.delete("pending", case_id)
     audit.add_event(case_id, "approved", by or audit.SUPERVISOR,
-                    "edited by the supervisor before approval" if edited else "approved as sent", base=base,
+                    ("edited by the supervisor before approval" if edited else "approved as sent")
+                    + (f"; {note}" if note else ""), base=base,
                     role="supervisor" if by else "")
     # Next-step timeline for the approved case
     if is_general:

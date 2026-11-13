@@ -3226,12 +3226,15 @@ def supervisor_screen():
     audit_records_box()  # first: every case, with search and filters
 
     waiting = store.list_pending()
-    if not waiting:
+    research_only = research_only_cases()
+    if not waiting and not research_only:
         st.info(no_drafts_waiting_text(), icon=":material/inbox:")
     else:
-        st.subheader(t("ui.sup.waiting", n=len(waiting)))
+        st.subheader(t("ui.sup.waiting", n=len(waiting) + len(research_only)))
         for record in waiting:
             review_one(record)
+        for case_id in research_only:  # research with no drafts sent yet: inside its own case card
+            research_case_card(case_id)
     jump = st.session_state.pop("sup-jump", None)
     if jump and any(r["id"] == jump for r in waiting):  # a waiting row was clicked: scroll to its review box
         components.html(f"<script>const box = window.parent.document.querySelector('.st-key-review-{jump}');"
@@ -3523,37 +3526,33 @@ def problems_summary(problems: list) -> str:
     return " · ".join(parts) or t("ui.sup.problems_earlier", n=len(problems))
 
 
-def letter_rebuild_needed(record: dict, locked: bool = False) -> bool:
-    """Every research point is decided: the supervisor rebuilds the letter from the approved points (a
-    button, not by itself) before the draft can be approved. True while that is still to do."""
-    reviewed = [r for r in research.for_case(record["id"]) if r["status"] == research.REVIEWED]
-    if not reviewed or record.get("letter_rebuilt") or record.get("case_type") != general.CASE_TYPE:
-        return False
-    st.info(t("rs.rebuild_first"), icon=":material/edit_document:")
-    st.button(t("rs.rebuild"), key=f"rebuild-{record['id']}", type="primary", icon=":material/edit_document:",
-              on_click=add_letter_to_pending, args=(record["id"], reviewed[-1]["issue"]), disabled=locked)
-    if locked:
-        why_disabled(t("ui.sup.own_draft"))
-    return True
+def point_counts(case_id: str) -> tuple:
+    """(approved, rejected, not decided) research points for a case, from the saved records."""
+    points = [p for r in research.for_case(case_id) for p in r["points"] if p.get("kind") != "letter"]
+    return (sum(p["status"].startswith("approved") for p in points), sum(p["status"] == "rejected" for p in points),
+            sum(p["status"] == research.WAITING for p in points))
 
 
-def add_letter_to_pending(case_id: str, issue: str):
-    """Once all research points are decided: the complaint letter, built only from the approved points
-    and the facts of the case, is added to the draft waiting for this same review."""
+def add_letter_to_pending(case_id: str, issue: str = ""):
+    """The complaint letter, rebuilt from the facts of the case and ONLY the points the supervisor approved
+    (points not decided are left out, and the notes say how many). No point approved: a facts-only letter."""
     try:
         pending = store.get_pending(case_id)
     except ValueError:
         return
+    briefs = research.for_case(case_id)
+    if pending.get("case_type") != general.CASE_TYPE or not briefs:
+        return
+    issue = issue or briefs[-1]["issue"]
     approved = research.approved_points(case_id)
-    if pending.get("case_type") != general.CASE_TYPE:
-        return
+    not_decided = point_counts(case_id)[2]
     g = general.GeneralFacts.from_dict(pending["facts"])
-    if not approved:  # every point rejected: the letter goes back to facts only (no legal points)
-        store.replace_letter(case_id, casework.facts_only_letter(g, issue, pending.get("ai_model"),
-                                                                 pending.get("draft_lang", "en")))
+    lang_code = pending.get("draft_lang", "en")
+    if not approved:  # no point approved: the letter goes back to facts only (no legal points)
+        store.replace_letter(case_id, casework.facts_only_letter(g, issue, pending.get("ai_model"), lang_code, not_decided))
         return
-    letter = casework.complaint_letter(g, approved, issue, pending.get("ai_model"), pending.get("draft_lang", "en"))
-    store.replace_letter(case_id, letter)
+    store.replace_letter(case_id, casework.complaint_letter(g, approved, issue, pending.get("ai_model"), lang_code,
+                                                            not_decided))
 
 
 def save_research_knowledge(research_id: str, point_id: str):
@@ -3619,36 +3618,75 @@ def toggle_flag(key: str):
 
 
 def rs_reject_reason(r: dict, p: dict) -> str:
-    """Why an unticked point is rejected: the supervisor's quick choice ("Other": a short text), or, for a
-    point the volunteer left out and the supervisor leaves out too, the volunteer's reason."""
+    """The supervisor's reason for rejecting a point: a quick choice, or "Other" with a short text ("" if none)."""
     get = st.session_state.get
     kb = f"{r['id']}-{p['id']}"
     choice = get(f"rsr-{kb}")
     if choice == "other":
         return (get(f"rsrt-{kb}") or "").strip()
-    if choice:
-        return t(f"rs.why_left.{choice}")
-    if p.get("volunteer") == research.LEFT_OUT and (p.get("volunteer_reason") or "").strip():
-        return t("rs.sup_left_reason", reason=p["volunteer_reason"].strip())
-    return ""
+    return t(f"rs.why_left.{choice}") if choice else ""
+
+
+def rs_state(r: dict, p: dict) -> str:
+    """What saving does with a waiting point: "approve" (ticked), "reject" (unticked, with a reason),
+    "undecided" (left out by the volunteer and not touched: stays out of the letter, for later) or
+    "missing" (kept by the volunteer, then unticked: a reason is needed)."""
+    if rs_ticked(r, p):
+        return "approve"
+    if rs_reject_reason(r, p):
+        return "reject"
+    return "undecided" if p.get("volunteer") == research.LEFT_OUT else "missing"
 
 
 def rs_checklist_state(r: dict, waiting: list) -> tuple:
-    """(approved, rejected, [what still stops the save])."""
+    """(approved, rejected, not decided, [what still stops the save])."""
     import replaced_laws
-    approved, rejected, no_reason, needs_edit = 0, 0, 0, 0
+    counts = {"approve": 0, "reject": 0, "undecided": 0, "missing": 0}
+    needs_edit = 0
     for p in waiting:
-        if rs_ticked(r, p):
-            approved += 1
-            edited = rs_edited(r, p)
-            if (research.blocked(p) and not edited) or (edited and replaced_laws.still_relies_on_old(edited)):
-                needs_edit += 1
-        else:
-            rejected += 1
-            no_reason += not rs_reject_reason(r, p)
-    problems = ([t("why.rs_reason_missing", n=no_reason)] if no_reason else []) + \
+        state = rs_state(r, p)
+        counts[state] += 1
+        edited = rs_edited(r, p)
+        if state == "approve" and ((research.blocked(p) and not edited) or
+                                   (edited and replaced_laws.still_relies_on_old(edited))):
+            needs_edit += 1
+    problems = ([t("why.rs_reason_missing", n=counts["missing"])] if counts["missing"] else []) + \
                ([t("why.rs_edit_needed", n=needs_edit)] if needs_edit else [])
-    return approved, rejected, problems
+    return counts["approve"], counts["reject"], counts["undecided"], problems
+
+
+def case_point_problems(case_id: str) -> list:
+    """What stops the point decisions of a case being saved (a missing reason, a replaced law not edited)."""
+    problems = []
+    for r in research.for_case(case_id):
+        waiting = [p for p in r["points"] if p.get("kind") != "letter" and p["status"] == research.WAITING]
+        problems += rs_checklist_state(r, waiting)[3]
+    return list(dict.fromkeys(problems))
+
+
+def save_point_decisions(case_id: str, approve_all: bool = False):
+    """Save the decisions on screen for every waiting point of a case (one audit entry per point, with the
+    supervisor's name and the date). Points not decided stay waiting. approve_all: every point approved
+    (a point naming a replaced law only once edited). Raises ValueError for anything that stops the save.
+    Returns the number of points left as they were because they name a replaced law."""
+    import replaced_laws
+    if not approve_all:
+        problems = case_point_problems(case_id)
+        if problems:
+            raise ValueError(problems[0])
+    by, skipped = supervisor_name(), 0
+    for r in research.for_case(case_id):
+        for p in [p for p in r["points"] if p.get("kind") != "letter" and p["status"] == research.WAITING]:
+            edited = rs_edited(r, p)
+            state = "approve" if approve_all else rs_state(r, p)
+            if state == "approve":
+                if (research.blocked(p) and not edited) or (edited and replaced_laws.still_relies_on_old(edited)):
+                    skipped += 1
+                    continue
+                research.decide(r["id"], p["id"], research.EDIT if edited else research.APPROVE, edited or None, by=by)
+            elif state == "reject":
+                research.decide(r["id"], p["id"], research.REJECT, by=by, reason=rs_reject_reason(r, p))
+    return skipped
 
 
 def research_row(r: dict, p: dict, locked: bool):
@@ -3665,8 +3703,11 @@ def research_row(r: dict, p: dict, locked: bool):
             st.checkbox(md_plain(text), key=f"rsx-{kb}")
         links = " · ".join(f'<a href="{html.escape(url)}" target="_blank" rel="noopener">{html.escape(label)}</a>'
                            for label, url in research.source_labels(p["sources"]))
+        undecided = not locked and rs_state(r, p) == "undecided"
         st.markdown(f'<div class="rs-meta">{ui.tag(kind_label(p["kind"]))}'
                     + (f' <span class="tag edited">{html.escape(t("rs.edited"))}</span>' if edited else "")
+                    + (f' <span class="tag undecided">{html.escape(t("rs.not_decided"))}</span>'
+                       if undecided or locked else "")
                     + (f' <span class="rs-src">{ui.icon("link")} {links}</span>' if links else "") + "</div>",
                     unsafe_allow_html=True)
         if p.get("volunteer") == research.LEFT_OUT:
@@ -3684,11 +3725,10 @@ def research_row(r: dict, p: dict, locked: bool):
         if st.session_state.get(open_key):
             st.session_state.setdefault(f"rse-{kb}", st.session_state.get(f"rsedv-{kb}") or p["text"])
             st.text_area(t("rs.edit_label"), key=f"rse-{kb}", height=110, on_change=keep_edit, args=(f"rse-{kb}",))
-        if not st.session_state.get(f"rsx-{kb}"):
-            if p.get("volunteer") == research.LEFT_OUT and (p.get("volunteer_reason") or "").strip():
-                return  # left out by the volunteer and by the supervisor: the volunteer's reason stands
-            st.radio(t("rs.reject_reason"), LEFT_OUT_CHOICES, index=None, horizontal=True, key=f"rsr-{kb}",
-                     format_func=lambda c: t(f"rs.why_left.{c}"))
+        if not st.session_state.get(f"rsx-{kb}"):  # kept by the volunteer: a reason is needed; left out: optional
+            left_out = p.get("volunteer") == research.LEFT_OUT
+            st.radio(t("rs.reject_optional" if left_out else "rs.reject_reason"), LEFT_OUT_CHOICES, index=None,
+                     horizontal=True, key=f"rsr-{kb}", format_func=lambda c: t(f"rs.why_left.{c}"))
             if st.session_state.get(f"rsr-{kb}") == "other":
                 st.text_input(t("rs.why_left.other_text"), key=f"rsrt-{kb}", max_chars=200)
 
@@ -3744,64 +3784,90 @@ def research_checklist(r: dict, locked: bool = False, letter: bool = False):
         if locked:
             why_disabled(t("ui.sup.own_draft"))
             return
-        approved, rejected, problems = rs_checklist_state(r, waiting)
-        st.button(t("rs.save_all" if letter else "rs.save_all_no_letter", a=approved, r=rejected),
-                  key=f"rs-save-{r['id']}", type="primary", icon=":material/task_alt:", disabled=bool(problems),
-                  on_click=save_research_checklist, args=(r["id"], letter))
-        for problem in problems:
+        approved, rejected, undecided, problems = rs_checklist_state(r, waiting)
+        nothing = not (approved or rejected)
+        with st.container(horizontal=True, gap="small", vertical_alignment="center", key=f"rs-buttons-{r['id']}"):
+            st.button(t("rs.save_all" if letter else "rs.save_all_no_letter", a=approved, r=rejected, u=undecided),
+                      key=f"rs-save-{r['id']}", type="primary", icon=":material/task_alt:",
+                      disabled=bool(problems) or nothing, on_click=save_research_checklist, args=(r["id"], letter))
+            st.button(t("rs.approve_all", n=len(waiting)), key=f"rs-all-{r['id']}", icon=":material/done_all:",
+                      on_click=approve_all_points, args=(r["id"], letter))
+        for problem in problems or ([t("why.rs_nothing_to_save")] if nothing else []):
             why_disabled(problem)
 
 
 def save_research_checklist(research_id: str, letter: bool):
-    """Save every decision in the list (with the supervisor's name and the date), then rebuild the letter
-    from the approved points only (or take it out to a facts-only letter if every point is rejected)."""
+    """"Save point decisions": every point decided on screen is saved (with the supervisor's name and the
+    date); points not decided stay for later. For a waiting draft, the letter is rebuilt from the approved
+    points only."""
     case_id = research_id.rsplit(".r", 1)[0]
     if own_work(case_id):  # checked again on saving, not only on screen
         st.session_state["supervisor_flash"] = t("ui.sup.own_draft")
         return
     try:
-        r = research.load(research_id)
+        save_point_decisions(case_id)
     except (research.ResearchFailed, storage.StorageError, ValueError) as err:
         st.session_state["supervisor_flash"] = str(err)
         return
-    waiting = [p for p in r["points"] if p.get("kind") != "letter" and p["status"] == research.WAITING]
-    approved, rejected, problems = rs_checklist_state(r, waiting)
-    if problems:
-        st.session_state["supervisor_flash"] = problems[0]
+    if letter:
+        add_letter_to_pending(case_id)
+    a, r, u = point_counts(case_id)
+    st.session_state["supervisor_flash_info"] = t("rs.saved_all" if letter else "rs.saved_all_no_letter", a=a, r=r, u=u)
+
+
+def approve_all_points(research_id: str, letter: bool):
+    """"Approve all points": one click approves every waiting point (with the supervisor's name and the date);
+    a point naming a replaced law is left until it is edited to the current law."""
+    case_id = research_id.rsplit(".r", 1)[0]
+    if own_work(case_id):
+        st.session_state["supervisor_flash"] = t("ui.sup.own_draft")
         return
-    by = supervisor_name()
     try:
-        for p in waiting:
-            if rs_ticked(r, p):
-                edited = rs_edited(r, p)
-                research.decide(research_id, p["id"], research.EDIT if edited else research.APPROVE, edited or None, by=by)
-            else:
-                research.decide(research_id, p["id"], research.REJECT, by=by, reason=rs_reject_reason(r, p))
+        skipped = save_point_decisions(case_id, approve_all=True)
     except (research.ResearchFailed, storage.StorageError, ValueError) as err:
         st.session_state["supervisor_flash"] = str(err)
         return
-    rebuilt = letter and not any(b["status"] == research.WAITING for b in research.for_case(case_id))
-    if rebuilt:
-        add_letter_to_pending(case_id, r["issue"])
-    st.session_state["supervisor_flash_info"] = t("rs.saved_all" if rebuilt else "rs.saved_all_no_letter",
-                                                  a=approved, r=rejected)
+    if letter:
+        add_letter_to_pending(case_id)
+    a, r, u = point_counts(case_id)
+    st.session_state["supervisor_flash_info"] = t("rs.saved_all" if letter else "rs.saved_all_no_letter", a=a, r=r, u=u) \
+        + (" " + t("rs.all_skipped", n=skipped) if skipped else "")
+
+
+def research_only_cases() -> list:
+    """Cases with research points still to decide and no draft waiting (no drafts sent yet, or drafts
+    already approved with points left for later). Drafts sent back are with the volunteer."""
+    with_draft = {r["id"] for r in store.list_pending() + store.list_pending(status=store.SENT_BACK)}
+    return list(dict.fromkeys(r["case_id"] for r in research.waiting() if r["case_id"] not in with_draft))
+
+
+def research_case_card(case_id: str):
+    """A case with research but no draft waiting: Section A as usual, Section B says why there is nothing to approve."""
+    own = own_work(case_id)
+    record = tracker.load(case_id) or {}
+    try:
+        status = tracker.status_of(case_id)
+    except (ValueError, tracker.TrackerError, storage.StorageError):
+        status = ""
+    approved = status in tracker.APPROVED_STATUSES + (tracker.CHANGED, tracker.CLOSED)
+    with st.container(key=f"review-{case_id}"):
+        with st.expander(t("ui.sup.case_row_research", case_id=case_id, kind=case_type_label(record.get("case_type", "")),
+                           status=t("sup.drafts_approved_short" if approved else "sup.no_drafts_short")), expanded=True):
+            if own:
+                st.error(t("ui.sup.own_draft"), icon=":material/block:")
+            st.markdown(ui.sup_section("A", t("sup.section_points"), t("sup.section_points_note")), unsafe_allow_html=True)
+            for r in [r for r in research.for_case(case_id) if r["status"] == research.WAITING or savable_points(r)]:
+                research_checklist(r, own, letter=False)
+            st.markdown(ui.sup_section("B", t("sup.section_drafts")), unsafe_allow_html=True)
+            st.info(t("sup.drafts_approved_before" if approved else "sup.no_drafts_yet"), icon=":material/draft:")
 
 
 def research_review_box():
-    """AI research for cases with no draft sent yet (research for a case whose draft is waiting is
-    reviewed together with that draft, in one review)."""
+    """Decided research (no draft waiting) whose approved points can still be saved to our verified files."""
     with_draft = {r["id"] for r in store.list_pending() + store.list_pending(status=store.SENT_BACK)}
-    records = [r for r in research.waiting() if r["case_id"] not in with_draft]
-    decided = [r for r in research.all_records()  # decided research whose approved points can still be saved
-               if r["status"] != research.WAITING and r["case_id"] not in with_draft and savable_points(r)]
-    if not records and not decided:
-        return
-    if records:
-        st.subheader(t("rs.sup_title", n=len(records)))
-    for r in records:
-        with st.expander(t("rs.sup_row", case_id=r["case_id"], state=r["state"], issue=r["issue"]), expanded=True,
-                         icon=":material/travel_explore:"):
-            research_checklist(r, own_work(r["case_id"]))
+    later = set(research_only_cases())
+    decided = [r for r in research.all_records()
+               if r["status"] != research.WAITING and r["case_id"] not in with_draft | later and savable_points(r)]
     for r in decided:
         with st.expander(t("rs.sup_row", case_id=r["case_id"], state=r["state"], issue=r["issue"]),
                          icon=":material/travel_explore:"):
@@ -3900,17 +3966,11 @@ def delete_case_box():
             (st.success if msg[0] == "ok" else st.error)(msg[1])
 
 
-def review_research_inside(record: dict, locked: bool = False) -> bool:
-    """Research points for this case, decided in the same review (one checklist per research brief).
-    True while any is still undecided."""
-    case_id = record["id"]
-    briefs = research.for_case(case_id)
-    waiting = [r for r in briefs if r["status"] == research.WAITING]
-    for r in [r for r in briefs if r["status"] == research.WAITING or savable_points(r)]:
+def review_research_inside(record: dict, locked: bool = False):
+    """Section A of a waiting case: one checklist per research brief (the letter is rebuilt from the approved
+    points when they are saved, and again when the drafts are approved)."""
+    for r in [r for r in research.for_case(record["id"]) if r["status"] == research.WAITING or savable_points(r)]:
         research_checklist(r, locked, letter=record.get("case_type") == general.CASE_TYPE)
-    if waiting:
-        st.info(t("rs.decide_first"), icon=":material/lock:")
-    return bool(waiting)
 
 
 def supervisor_case_cards(record: dict):
@@ -3965,7 +4025,7 @@ def review_case(record: dict):
         # Section A: the research points (deciding one only changes the letter; the case stays here)
         if research.for_case(case_id):
             st.markdown(ui.sup_section("A", t("sup.section_points"), t("sup.section_points_note")), unsafe_allow_html=True)
-        blocked = review_research_inside(record, locked=own) or letter_rebuild_needed(record, locked=own)
+        review_research_inside(record, locked=own)
         # Section B: the drafts, and the decision on them (approve, or send them back to the volunteer)
         st.markdown(ui.sup_section("B", t("sup.section_drafts"), t("sup.section_drafts_note")), unsafe_allow_html=True)
         for n, part in enumerate(casework.split_bundle(record["draft"])):  # the same page previews as the volunteer's
@@ -3997,21 +4057,33 @@ def review_case(record: dict):
         action = st.radio(t("ui.sup.decision"), ["Approve", "Edit then Approve", "Reject with a reason"],
                           index=None, horizontal=True, key=f"action-{case_id}", format_func=option_text("sup."))
         busy = bool(st.session_state.get(f"deciding-{case_id}"))  # one click only
-        if action == "Approve":  # locked until every research point is decided and the letter rebuilt
-            st.button(t("ui.sup.approve_save"), type="primary", key=f"approve-{case_id}", disabled=busy or blocked,
+        has_points = bool(research.for_case(case_id))
+        problems = case_point_problems(case_id) if has_points else []
+        if action == "Approve":  # one click: point decisions saved, letter rebuilt from approved points, approved
+            if has_points:
+                st.caption(approve_note(case_id))
+            st.button(t("ui.sup.approve_save"), type="primary", key=f"approve-{case_id}", disabled=busy or bool(problems),
                       on_click=decide, args=(case_id, "approve"))
-            if blocked or busy:
-                why_disabled(t("why.approve_after_points") if blocked else t("why.busy"))
-        elif action == "Edit then Approve":
-            st.text_area(t("ui.sup.edit"), value=record["draft"], height=500, key=f"edit-{case_id}")
-            st.caption(t("ui.sup.no_personal"))
-            st.button(t("ui.sup.save_approve"), type="primary", key=f"edit-approve-{case_id}", disabled=busy or blocked,
-                      on_click=decide, args=(case_id, "edit"))
-            if blocked or busy:
-                why_disabled(t("why.approve_after_points") if blocked else t("why.busy"))
+            for why in problems or ([t("why.busy")] if busy else []):
+                why_disabled(why)
+        elif action == "Edit then Approve":  # the same, but the letter is rebuilt first, then edited
+            if has_points and not st.session_state.get(f"rebuilt-{case_id}"):
+                st.caption(t("ui.sup.rebuild_first_note"))
+                st.button(t("ui.sup.rebuild_then_edit"), key=f"rebuild-edit-{case_id}", type="primary",
+                          icon=":material/edit_document:", disabled=bool(problems), on_click=rebuild_for_edit,
+                          args=(case_id,))
+                for why in problems:
+                    why_disabled(why)
+            else:
+                st.text_area(t("ui.sup.edit"), value=record["draft"], height=500, key=f"edit-{case_id}")
+                st.caption(t("ui.sup.no_personal"))
+                st.button(t("ui.sup.save_approve"), type="primary", key=f"edit-approve-{case_id}", disabled=busy,
+                          on_click=decide, args=(case_id, "edit"))
+                if busy:
+                    why_disabled(t("why.busy"))
         elif action == "Reject with a reason":  # at any time, even before the points are decided
             st.text_area(t("ui.sup.reason"), key=f"reason-{case_id}")
-            if blocked:
+            if any(r["status"] == research.WAITING for r in research.for_case(case_id)):
                 st.caption(t("ui.sup.points_go_back"))
             st.button(t("ui.sup.send_back"), key=f"reject-{case_id}", disabled=busy, icon=":material/undo:",
                       on_click=decide, args=(case_id, "send back"))
@@ -4022,17 +4094,39 @@ def review_case(record: dict):
             st.error(err)
 
 
-def points_undecided(case_id: str) -> bool:
-    """True while a research point for the case is undecided, or the letter is still to be rebuilt from them."""
+def approve_note(case_id: str) -> str:
+    """What "Approve and save" will do with the research points, from the ticks on screen."""
+    counts = [0, 0, 0]
+    for r in research.for_case(case_id):
+        waiting = [p for p in r["points"] if p.get("kind") != "letter" and p["status"] == research.WAITING]
+        a, rj, u, _ = rs_checklist_state(r, waiting)
+        counts = [counts[0] + a, counts[1] + rj, counts[2] + u]
+    done = point_counts(case_id)
+    return t("ui.sup.approve_note", a=counts[0] + done[0], r=counts[1] + done[1], u=counts[2])
+
+
+def rebuild_for_edit(case_id: str):
+    """"Edit then approve" with research: save the point decisions and rebuild the letter first; the edit box
+    then holds the rebuilt drafts."""
+    if own_work(case_id):
+        st.session_state[f"decide-err-{case_id}"] = t("ui.sup.own_draft")
+        return
     try:
-        briefs = research.for_case(case_id)
-        record = store.get_pending(case_id)
-    except (ValueError, storage.StorageError):
-        return False
-    if any(r["status"] == research.WAITING for r in briefs):
-        return True
-    return (record.get("case_type") == general.CASE_TYPE and not record.get("letter_rebuilt")
-            and any(r["status"] == research.REVIEWED for r in briefs))
+        save_point_decisions(case_id)
+    except (research.ResearchFailed, storage.StorageError, ValueError) as err:
+        st.session_state[f"decide-err-{case_id}"] = str(err)
+        return
+    add_letter_to_pending(case_id)
+    st.session_state[f"rebuilt-{case_id}"] = True
+    st.session_state.pop(f"edit-{case_id}", None)  # the edit box starts from the rebuilt drafts
+
+
+def points_note(case_id: str) -> str:
+    """For the drafts' one audit entry: "3 points approved, 1 rejected, 2 not decided" ("" with no research)."""
+    if not research.for_case(case_id):
+        return ""
+    a, r, u = point_counts(case_id)
+    return f"{a} point{'' if a == 1 else 's'} approved, {r} rejected, {u} not decided"
 
 
 def decide(case_id: str, kind: str):
@@ -4042,16 +4136,20 @@ def decide(case_id: str, kind: str):
     if own_work(case_id):  # checked again on saving, not only on screen
         st.session_state[f"decide-err-{case_id}"] = t("ui.sup.own_draft")
         return
-    if kind in ("approve", "edit") and points_undecided(case_id):  # checked again on saving, not only on screen
-        st.session_state[f"decide-err-{case_id}"] = t("why.approve_after_points")
-        return
+    if kind == "approve" and research.for_case(case_id):  # one click: the point decisions on screen are saved,
+        try:                                                # the letter is rebuilt from the approved points only
+            save_point_decisions(case_id)
+        except (research.ResearchFailed, storage.StorageError, ValueError) as err:
+            st.session_state[f"decide-err-{case_id}"] = str(err)
+            return
+        add_letter_to_pending(case_id)
     st.session_state[f"deciding-{case_id}"] = True
     try:
         if kind == "approve":
-            store.approve(case_id, by=supervisor_name())
+            store.approve(case_id, by=supervisor_name(), note=points_note(case_id))
             st.session_state["supervisor_flash"] = t("ui.sup.approved", case_id=case_id)
         elif kind == "edit":
-            store.approve(case_id, edited_text=get(f"edit-{case_id}"), by=supervisor_name())
+            store.approve(case_id, edited_text=get(f"edit-{case_id}"), by=supervisor_name(), note=points_note(case_id))
             st.session_state["supervisor_flash"] = t("ui.sup.edited_approved", case_id=case_id)
         else:
             store.reject(case_id, get(f"reason-{case_id}") or "", by=supervisor_name())

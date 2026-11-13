@@ -44,15 +44,12 @@ def test_two_sections_and_two_different_rejections(monkeypatch, case):
     assert not any(r.label == "Why reject this point? (needed)" for r in at.radio)       # nothing unticked yet
 
 
-def test_approve_locked_until_points_are_decided(monkeypatch, case):
+def test_approve_is_never_locked_by_undecided_points(monkeypatch, case):  # D3: approve independently
     case_id, rid = case
     at = supervisor_screen(monkeypatch, name="Supervisor S")
     at.radio(key=f"action-{case_id}").set_value("Approve").run()
-    assert at.button(key=f"approve-{case_id}").disabled
-    assert any("Approve after every research point is decided and the letter is rebuilt (section A)." in m.value
-               for m in at.markdown)
-    at.radio(key=f"action-{case_id}").set_value("Edit then Approve").run()
-    assert at.button(key=f"edit-approve-{case_id}").disabled
+    assert not at.button(key=f"approve-{case_id}").disabled
+    assert not any("Approve after every research point" in m.value for m in at.markdown)
 
 
 def test_reject_one_point_then_approve_the_drafts(monkeypatch, case):

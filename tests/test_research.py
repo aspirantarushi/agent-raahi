@@ -272,14 +272,15 @@ def test_research_on_screen(monkeypatch, fake_ai):
     next(b for b in at.button if b.label == "Sign in").click().run()
     at.text_input(key="sup-name").set_value("Supervisor S")  # then the name or initials
     at.button(key="sup-name-go").click().run()
-    at.radio(key=f"action-{case_id}").set_value("Approve").run()   # Approve is locked until the points are decided
-    assert at.button(key=f"approve-{case_id}").disabled
-    assert any("Approve after every research point is decided" in m.value for m in at.markdown)
+    at.radio(key=f"action-{case_id}").set_value("Approve").run()   # never locked: says what approving will do
+    assert not at.button(key=f"approve-{case_id}").disabled
+    assert any("(1 approved, 0 rejected, 1 not decided)" in c.value for c in at.caption)
     assert any("The volunteer's reason: the forum is for a later step" in c.value for c in at.caption)
-    # one checklist: p1 (kept by the volunteer) ticked, p2 (left out) unticked; the volunteer's reason stands
+    # one checklist: p1 (kept by the volunteer) ticked, p2 (left out) unticked; the supervisor rejects p2
     assert at.checkbox(key=f"rsx-{rid}-p1").value is True and at.checkbox(key=f"rsx-{rid}-p2").value is False
+    at.radio(key=f"rsr-{rid}-p2").set_value("repeats").run()
     save = at.button(key=f"rs-save-{rid}")
-    assert save.label == "Save point decisions and rebuild the letter (1 approved, 1 rejected)" and not save.disabled
+    assert save.label == "Save point decisions and rebuild the letter (1 approved, 1 rejected, 0 not decided)"
     save.click().run()                                              # saves both and rebuilds the letter
     assert not at.exception, at.exception[0].stack_trace
     assert not any(b.key == f"rebuild-{case_id}" for b in at.button)
