@@ -9,15 +9,14 @@ Subject: [subject]
 
 Sir or Madam,
 
-I, [Name of the person], of [Address], write to complain about [problem].
-
-What happened:
+This complaint is made by [Name of the person], of [Address]. The facts are:
 [facts]
 
+[rules]
 [documents]
 [reference number]
 
-I request: [request]
+The person requests: [request]
 
 Yours faithfully,
 
@@ -27,6 +26,6 @@ Yours faithfully,
 
 ---
 For the volunteer and the supervisor (remove this part before the letter is sent)
-- Where to send it: [route]
-- This letter uses only the facts of the case and these points approved by the supervisor:
+[route line]
+- [basis heading]
 [basis]

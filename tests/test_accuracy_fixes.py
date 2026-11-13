@@ -96,7 +96,7 @@ def test_a_source_about_a_different_law_is_flagged(wages):
 def test_a_letter_with_only_blanks_is_dropped(wages):
     record, _ = wages
     assert "letter" not in [p["kind"] for p in record["points"]]
-    assert any(d["reason"] == "a letter with nothing but blanks" for d in record["dropped"])
+    assert not any(d["kind"] == "letter" for d in record["dropped"])  # never shown to anyone: the app writes the letter
 
 
 def test_source_titles_are_clean_and_links_not_repeated(wages):

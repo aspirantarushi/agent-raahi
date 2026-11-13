@@ -42,7 +42,7 @@ def test_facts_only_letter_has_no_legal_points():
     assert "[Name and address of the Labour Department office for the district]" in letter
     assert "Section 15" not in letter and casework.legal_claims(letter.split("---")[0]) == []
     assert "The employer stopped paying salary after 30 September." in letter
-    assert "I request: his three months' wages paid" in letter
+    assert "The person requests: his three months' wages paid" in letter  # neutral third person
     assert "[Name of the person]" in letter and "[Signature or thumb impression]" in letter
     hi = casework.facts_only_letter(WAGES, "unpaid wages", "gemini-test", "hi")
     assert "सिर्फ़ तथ्यों वाला पत्र" in hi and "श्रम विभाग" in hi

@@ -135,7 +135,7 @@ def test_hindi_practice_case_on_screen(monkeypatch, tmp_path):
     draft = make_drafts(at).session_state["shown_drafts"][0]
     assert draft.startswith("DRAFT — to be checked by a lawyer\nड्राफ़्ट — वकील से जाँच करवाना ज़रूरी है\n"
                             "हिंदी अनुवाद की जाँच: नहीं (Hindi translation checked: no)")
-    assert "तथ्य केस नोट्स से AI की मदद (gemini-3.5-flash-lite) से पढ़े गए" in draft
+    assert "तथ्य केस नोट्स से AI की मदद (Google Gemini) से पढ़े गए" in draft
     next(b for b in at.button if b.label.startswith("Supervisor को भेजें")).click().run()
     assert not at.exception
     [record] = store.list_pending(tmp_path)

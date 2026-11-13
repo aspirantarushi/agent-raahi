@@ -16,6 +16,7 @@ import section479
 
 TOLD, AI_CHECKED, CALCULATED, VERIFIED, UNRESOLVED = "told", "ai_checked", "calculated", "verified", "unresolved"
 PRECAUTION = "precaution"  # an unconfirmed AI "yes" used only to show a safety warning
+RESEARCH, RESEARCH_APPROVED = "research", "research_approved"  # official-website research: waiting / approved
 
 
 @dataclass
@@ -97,6 +98,10 @@ def general(g, reading_facts: Dict[str, object], eligibility, ai_checked: bool =
                                  _origin(fact, g.facts[fact], reading_facts, ai_checked)))
     for fact in g.precautions:
         entries.append(Entry(f"ledger.f.{fact}", "yes (not confirmed by the notes' own words)", PRECAUTION))
+    quote = (g.evidence or {}).get("outcome", "")
+    if g.outcome or quote:  # the plain-words version, and the notes' exact words (only here)
+        entries.append(Entry("ledger.outcome", g.outcome or "-", TOLD if not quote else AI_CHECKED,
+                             f"“{quote}”" if quote else ""))
     for question, answer in g.answers:
         entries.append(Entry("ledger.answer", f"{question} — {answer}", TOLD))
     for action in gen.urgent_actions(g.facts, g.precautions):
@@ -106,6 +111,10 @@ def general(g, reading_facts: Dict[str, object], eligibility, ai_checked: bool =
         sources = [e.source_line for e in gen.issue_guidance(category)]
         if sources:
             entries.append(Entry("ledger.issue", name, VERIFIED, " | ".join(sources)))
+        elif gen.research_for(g, name):  # the supervisor approved research points for it
+            entries.append(Entry("ledger.issue", name, RESEARCH_APPROVED))
+        elif g.research_state == "waiting" and getattr(g, "research_pending", 0):
+            entries.append(Entry("ledger.issue", name, RESEARCH))
         else:
             entries.append(Entry("ledger.issue", name, UNRESOLVED))
     return entries

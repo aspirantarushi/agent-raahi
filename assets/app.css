@@ -631,3 +631,8 @@ div[class*="_audio-actions"] button p { white-space: normal !important; line-hei
 .learn-src a { color: var(--teal-dark); text-decoration: underline; text-underline-offset: 3px; }
 .learn-intro { font-style: italic; color: var(--ink); margin: 0 0 10px 0 !important; }
 .practice-score { font-size: 18px; font-weight: 700; color: var(--teal-dark); margin: 4px 0 12px 0 !important; }
+.step-done .mi { color: var(--teal); font-size: 18px; vertical-align: -3px; }
+
+/* Case tracker card: the next step (and its due date) never runs into the buttons below, on any width */
+div[class*="st-key-case-card-"] [data-testid="stMarkdownContainer"]:has(.case-sub) { padding-bottom: 18px; overflow: visible; }
+.case-sub { display: block; line-height: 1.45; }

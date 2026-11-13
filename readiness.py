@@ -184,12 +184,14 @@ def gaps_block(items: List[Item], code: str = "en", reason: str = "") -> str:
     lines = []
     open_items = gaps(items)
     cannot = [i for i in items if i.status == CANNOT]
-    if open_items:
+    if open_items and reason.strip():  # sent on purpose, with a reason: say so plainly, the reason underneath
+        lines.append(lang.t("ready.block_sent_unticked", code, n=len(open_items)))
+        lines += [f"- {i.label(code)}" for i in open_items]
+        lines.append(lang.t("ready.block_reason", code, reason=reason.strip()))
+    elif open_items:
         lines.append(lang.t("ready.block_not_ready", code, n=len(open_items)))
         lines += [f"- {i.label(code)}: {lang.t('ready.status.' + i.status, code)}" + (f" ({i.note})" if i.note else "")
                   for i in open_items]
-    if open_items and reason.strip():
-        lines.append(lang.t("ready.block_reason", code, reason=reason.strip()))
     if cannot:
         lines.append(lang.t("ready.block_cannot", code))
         lines += [f"- {i.label(code)}: {i.note}" for i in cannot]

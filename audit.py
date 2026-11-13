@@ -143,7 +143,10 @@ NOT_RECORDED = "not recorded"
 def who_did(event: dict) -> str:
     """"Asha (supervisor)" when a name and role were saved; otherwise what was saved."""
     by = event.get("by", "")
-    return f"{by} ({event['role']})" if event.get("role") and by not in (VOLUNTEER, SUPERVISOR) else by
+    role = event.get("role") or ""
+    if not role or by in (VOLUNTEER, SUPERVISOR) or by.strip().casefold() == role.casefold():
+        return by  # "Supervisor", never "Supervisor (supervisor)"
+    return f"{by} ({role})"
 
 
 def _sender(event: dict) -> str:

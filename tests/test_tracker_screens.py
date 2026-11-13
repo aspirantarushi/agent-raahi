@@ -76,11 +76,11 @@ def volunteer_a_starts():
     assert "What does the person want to happen?" in texts(at)
     at.text_input(key="gq-1").set_value("To get the unpaid wages")
     button(at, "Next").click().run()
-    assert "Is the person needing help in jail or police custody now?" in texts(at)
-    at.radio(key="ge-in_custody").set_value("No")
-    button(at, "Next").click().run()
+    # The free legal aid questions on one screen: Volunteer A knows only that he is not in custody
+    assert "Free legal aid: which of these apply to the person?" in texts(at)
+    at.radio(key="la-in_custody").set_value("No")
+    at.button(key="la-next").click().run()   # the rest left as "Don't know"
     ok(at)
-    assert "Is the person needing help a woman?" in texts(at)   # Volunteer A stops here
     return case_id, record["code"]
 
 
@@ -99,15 +99,15 @@ def test_second_volunteer_continues_without_re_asking(pretend_ai):
     assert at.session_state["case_id"] == case_id
     shown = texts(at)
     # Not asked again: state, custody, or the AI's question already answered
-    assert "Is the person needing help a woman?" in shown
-    assert "jail or police custody now?" not in shown and "Which state" not in shown
+    assert "Free legal aid: which of these apply to the person?" in shown
+    assert not any(r.key == "la-in_custody" for r in at.radio) and "Which state" not in shown
+    assert any(r.key == "la-woman" for r in at.radio)
     assert "Does the worker have a written contract?" not in shown
     # The case file shows what is known, by whom
     assert "Bihar" in shown and "added" in shown and "Volunteer A" in shown
-    at.radio(key="ge-woman").set_value("Yes")
-    button(at, "Next").click().run()
+    at.radio(key="la-woman").set_value("Yes")
+    at.button(key="la-next").click().run()
     ok(at)
-    at.button(key="q-not-needed-go").click().run()  # legal aid decided: the app says so, the volunteer continues
     facts = tracker.load(case_id)["facts"]
     assert facts["woman"]["by"] == "Volunteer B" and facts["state"]["by"] == "Volunteer A"
     assert make_drafts(at).session_state["shown_drafts"], "eligible as a woman: the summary is shown with no more questions"
@@ -141,8 +141,8 @@ def test_sending_uses_the_slip_case_number(pretend_ai, monkeypatch, tmp_path):
     at = as_volunteer("Volunteer A")
     at.text_input(key="cont-code-new").set_value(code)
     button(at, "Open the case").click().run()
-    at.radio(key="ge-woman").set_value("Yes")
-    button(at, "Next").click().run()
+    at.radio(key="la-woman").set_value("Yes")
+    at.button(key="la-next").click().run()
     if any(s.key == "ge-state" for s in at.selectbox):  # the story names no state: it is asked
         at.selectbox(key="ge-state").set_value("Bihar")
         button(at, "Next").click().run()

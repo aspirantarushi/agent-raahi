@@ -167,8 +167,9 @@ def test_bihar_points_without_an_official_source_are_dropped(tmp_path, fake_ai):
     assert record["status"] == research.WAITING and record["id"] == f"{case_id}.r1"
     kept = {p["kind"] + ":" + p["text"]: p for p in record["points"]}
     assert list(kept) == ["route:Write first to the Assistant Engineer of the supply sub-division.",
-                          "route:If there is no reply, complain to the Consumer Grievance Redressal Forum.",
-                          "letter:" + BIHAR_POINTS[-1]["text"]]
+                          "route:If there is no reply, complain to the Consumer Grievance Redressal Forum."]
+    # the AI's own draft letter is never kept or listed (the app builds the letter itself)
+    assert not any(d["kind"] == "letter" for d in record["dropped"])
     first = record["points"][0]
     assert [s["url"] for s in first["sources"]] == ["https://energy.bihar.gov.in/complaints"]  # the blog is left out
     reasons = {d["text"]: d["reason"] for d in record["dropped"]}
@@ -179,14 +180,10 @@ def test_bihar_points_without_an_official_source_are_dropped(tmp_path, fake_ai):
         "no official source among its search results"  # its link could not be resolved
     assert reasons["Most people win these complaints within a month."] == "predicts an outcome"
     assert reasons["Call the minister's office."] == "its words are not in the brief"
-    letter = record["points"][-1]
-    assert {s["url"] for s in letter["sources"]} == {"https://energy.bihar.gov.in/complaints",
-                                                     "https://berc.co.in/consumer-corner/cgrf"}
-    assert "[Name]" in letter["text"] and "[Address]" in letter["text"]
     for p in record["points"]:  # every link is one Google Search returned, and official
         assert all(s["url"] in RESOLVED.values() and research.allowed_link(s["url"]) for s in p["sources"])
     event = audit.read_record(case_id, base=tmp_path)["events"][-1]
-    assert event["event"] == "research asked" and "3 points kept, 5 dropped" in event["details"]
+    assert event["event"] == "research asked" and "2 points kept, 5 dropped" in event["details"]
 
 
 def test_only_state_and_issue_are_sent_never_numbers(monkeypatch):
@@ -236,7 +233,8 @@ def test_research_on_screen(monkeypatch, fake_ai):
     at.run()
     assert len(fake_ai) == 1                                       # not again on a page reload
     shown = make_drafts(at).session_state["shown_drafts"]          # "Make the drafts", "Draft the letter"
-    assert "Not covered by our verified files yet" in shown[0]
+    assert "Not covered by our verified files yet" not in shown[0]   # research was run: the summary says so
+    assert "Research from official websites: 2 points, listed with the complaint letter" in shown[0]
     # New order: the research is shown to the volunteer and the letter is drafted straight away from it
     assert len(shown) == 3                                         # summary + draft letter + free legal aid application
     letter = shown[1]
@@ -274,7 +272,7 @@ def test_research_on_screen(monkeypatch, fake_ai):
     at.button(key="sup-name-go").click().run()
     assert not any(r.key == f"action-{case_id}" for r in at.radio)  # no approve until the points are decided
     assert any("left this point out of the letter. Reason: the forum is for a later step" in w.value for w in at.warning)
-    for point, choice in (("p1", "Approve"), ("p2", "Reject"), ("p3", "Approve")):
+    for point, choice in (("p1", "Approve"), ("p2", "Reject")):  # (no AI letter item to decide)
         at.radio(key=f"rsd-{rid}-{point}").set_value(choice).run()
         at.button(key=f"rss-{rid}-{point}").click().run()
     assert not at.exception, at.exception[0].stack_trace
@@ -303,7 +301,6 @@ def test_supervisor_decides_each_point(tmp_path, fake_ai):
     research.decide(rid, "p1", research.APPROVE, base=tmp_path, today=date(2026, 11, 5))
     research.decide(rid, "p2", research.EDIT, "If there is no reply in 7 days, complain to the CGRF.", base=tmp_path,
                     today=date(2026, 11, 5))
-    research.decide(rid, "p3", research.REJECT, base=tmp_path)
     with pytest.raises(research.ResearchFailed, match="already decided"):
         research.decide(rid, "p1", research.REJECT, base=tmp_path)
     assert research.load(rid, base=tmp_path)["status"] == research.REVIEWED
@@ -312,8 +309,8 @@ def test_supervisor_decides_each_point(tmp_path, fake_ai):
                                            "If there is no reply in 7 days, complain to the CGRF."]
     assert all(p["sources"] and p["approved_on"] == "2026-11-05" for p in points)
     events = [e["event"] for e in audit.read_record(case_id, base=tmp_path)["events"]]
-    assert events[-3:] == ["research point approved", "research point approved after editing", "research point rejected"]
-    assert "->" in audit.read_record(case_id, base=tmp_path)["events"][-2]["details"]  # old -> new
+    assert events[-2:] == ["research point approved", "research point approved after editing"]
+    assert "->" in audit.read_record(case_id, base=tmp_path)["events"][-1]["details"]  # old -> new (the edit)
 
 
 def test_approved_points_go_into_the_summary_and_draft_with_sources(tmp_path, fake_ai):
@@ -329,14 +326,14 @@ def test_approved_points_go_into_the_summary_and_draft_with_sources(tmp_path, fa
     assert general.uncovered_issues(g) == []
     body = general.summary_body(g)
     assert "Not covered by our verified files yet" not in body
-    assert "Route (AI research, approved by the supervisor on 2026-11-05):" in body
+    assert "Route (AI research, approved by the supervisor on 5 November 2026):" in body  # name and long date
     assert "Write first to the Assistant Engineer" in body
     assert "Source: energy.bihar.gov.in (https://energy.bihar.gov.in/complaints)" in body
     assert "Consumer Grievance Redressal Forum" not in body  # not approved: not in the case
     draft = general.make_summary_draft(g, "gemini-test")
     assert draft.startswith("DRAFT — to be checked by a lawyer") and "Write first to the Assistant Engineer" in draft
     hi = general.make_summary_draft(g, "gemini-test", "hi")
-    assert "सुपरवाइज़र ने 2026-11-05 को मंज़ूर किया" in hi and "Source: energy.bihar.gov.in" in hi
+    assert "सुपरवाइज़र ने 5 नवंबर 2026 को मंज़ूर किया" in hi and "Source: energy.bihar.gov.in" in hi
     assert general.GeneralFacts.from_dict(g.to_dict()).research == g.research  # saved with the case
 
 
@@ -347,7 +344,7 @@ def test_saved_knowledge_covers_the_next_similar_case(tmp_path, fake_ai):
     research.decide(record["id"], "p1", research.APPROVE, base=tmp_path, today=date(2026, 11, 5), by="SK")
     entry = research.save_knowledge(record["id"], "p1", "Bihar: electricity disconnection, who to write to first",
                                     ["electricity", "disconnection"], base=tmp_path, today=date(2026, 11, 5))
-    assert entry["approved_by"] == "SK" and entry["approved_on"] == "2026-11-05" and "lawyer_checked" not in entry
+    assert entry["approved_by"] == "SK" and entry["approved_on"] == "2026-11-05" and entry["lawyer_checked"] == "no"
     assert research.approval_line(entry) == "Approved by the supervisor (SK, 2026-11-05)"
     assert entry["link"].endswith("/complaints")
     assert audit.read_record(case_id, base=tmp_path)["events"][-1]["event"] == "research saved as knowledge"

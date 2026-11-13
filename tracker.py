@@ -128,9 +128,12 @@ def find_by_code(code: str, base: Path = HERE) -> dict:
     raise TrackerError("No case has this code. Check the slip and type it again.")
 
 
-def _note(record: dict, by: str, what: str) -> None:
+def _note(record: dict, by: str, what: str, volunteer: bool = True) -> None:
+    """A line in the case's history. "Last volunteer" changes only for a volunteer's own work (a supervisor's
+    approval or closing never replaces the volunteer's label)."""
     record.setdefault("history", []).append({"time": now(), "by": by, "what": what})
-    record["last_by"], record["last_at"] = by, now()
+    if volunteer and not str(by).casefold().startswith("supervisor"):
+        record["last_by"], record["last_at"] = by, now()
 
 
 def open_case(case_type: str, by: str, base: Path = HERE, camp: Optional[dict] = None) -> dict:
@@ -263,11 +266,35 @@ def confirm_facts(case_id: str, final: Dict[str, object], by: str, base: Path = 
                 changed.append(f"{fact}: {before['value']} → {value}")
             record["facts"][fact] = {"value": value, "on": now(), "by": by, "source": "checked form"}
     _note(record, by, "draft sent to the supervisor" + (f"; corrected: {', '.join(changed)}" if changed else ""))
+    if not (record.get("next") or {}).get("due"):  # sent: the supervisor reviews next, with a date to follow up
+        record["next"] = {"step": NEXT_REVIEW, "due": (date.today() + timedelta(days=DEFAULT_FOLLOW_UP_DAYS)).isoformat(),
+                          "on": now(), "by": by}
     _save(record, base)
     if changed:
         audit.add_event(case_id, "facts corrected on the form", audit.VOLUNTEER, "; ".join(changed) + f" (by {by})",
                         base=base)
     return changed
+
+
+def replace_summary(case_id: str, what_happened: List[str], issues: List[Tuple[str, str]], documents_held: List[str],
+                    answers: List[Tuple[str, str]], by: str, ai_model: Optional[str] = None, base: Path = HERE) -> None:
+    """The story was edited and read again in the same session: the new reading replaces the AI-read
+    lines, issues and documents (no old and new versions side by side), with near-duplicate lines merged;
+    only the answers that still apply are kept."""
+    by = clean_name(by)
+    record = _must_load(case_id, base)
+    lines = []
+    for line in (clean_text(x) for x in what_happened):
+        if line and not any(same_line(line, h) for h in lines):
+            lines.append(line)
+    record["summary"] = lines
+    record["issues"] = [[clean_text(str(c), 100), clean_text(str(n), 100)] for c, n in issues]
+    record["documents_held"] = list(dict.fromkeys(clean_text(d) for d in documents_held if clean_text(d)))
+    record["answers"] = [[clean_text(q, 200), clean_text(a)] for q, a in answers if (a or "").strip()]
+    if ai_model:
+        record["ai_model"], record["ai_read_at"] = ai_model, now()
+    _note(record, by, "story edited and read again: the new reading replaces the earlier one")
+    _save(record, base)
 
 
 def add_answers(case_id: str, answers: List[Tuple[str, str]], by: str, base: Path = HERE) -> None:
@@ -444,7 +471,7 @@ def close_case(case_id: str, reason: str, note: str, by: str, base: Path = HERE)
     closed = {"reason": reason, "note": note, "by": by, "on": now()}
     record["closed"] = closed
     record.setdefault("closures", []).append({"closed": closed})
-    _note(record, by, f"case closed ({reason})")
+    _note(record, by, f"case closed ({reason})", volunteer=False)
     _save(record, base)
     audit.add_event(case_id, "case closed", by, f"reason: {reason}" + (f"; note: {note}" if note else ""),
                     base=base, role="supervisor")
@@ -462,14 +489,18 @@ def reopen_case(case_id: str, reason: str, by: str, base: Path = HERE) -> None:
         raise TrackerError("This case is not closed.")
     record["closures"][-1]["reopened"] = {"reason": reason, "by": by, "on": now()}
     record["closed"] = None
-    _note(record, by, "case reopened")
+    _note(record, by, "case reopened", volunteer=False)
     _save(record, base)
     audit.add_event(case_id, "case reopened", by, f"reason: {reason}", base=base, role="supervisor")
 
 
-NEXT_REVIEW, NEXT_FIX, NEXT_INTAKE = "Supervisor to review the draft", "Fix the draft and resend it", \
+NEXT_REVIEW, NEXT_FIX, NEXT_INTAKE = "Supervisor to review the draft", "Volunteer to fix and resend", \
     "Finish the intake and send the draft to the supervisor"
 NEXT_RECHECK = "Supervisor to review the changes"
+NEXT_HANDOVER = "Hand over the approved letter and application, then record the submission"
+# Steps the app sets itself before approval: after approval they no longer apply
+REVIEW_STEPS = ("Supervisor to review the draft", "Fix the draft and resend it", "Volunteer to fix and resend",
+                "Send the draft to the supervisor for review", "Finish the intake and send the draft to the supervisor")
 
 
 def next_step(record: Optional[dict], status: str, case_id: str, base: Path = HERE,
@@ -477,22 +508,26 @@ def next_step(record: Optional[dict], status: str, case_id: str, base: Path = HE
     """(next step, due date YYYY-MM-DD or None, the timeline step if it is one)."""
     if status == CLOSED:
         return "", None, None  # nothing more to do (never overdue)
+    chosen = (record or {}).get("next") or {}
     if status == store.WAITING:
-        return NEXT_REVIEW, None, None
+        return NEXT_REVIEW, chosen.get("due"), None  # the due date saved when it was sent
     if status == store.SENT_BACK:
         return NEXT_FIX, None, None
     if status == CHANGED:
         return NEXT_RECHECK, None, None
-    chosen = (record or {}).get("next")  # set with "Edit case"; newer than any visit's next step
+    if status in APPROVED_STATUSES and chosen.get("step") in REVIEW_STEPS:
+        chosen = {}  # a step from before the approval
+    # set with "Edit case"; newer than any visit's next step
     if chosen and chosen.get("step") and not any(v.get("next_step") and v.get("added", "") > chosen["on"]
                                                  for v in (record or {}).get("visits", [])):
         return chosen["step"], chosen.get("due"), None
     if status in APPROVED_STATUSES:
         tl = _here(timeline.load, case_id, base=base)
-        if tl:
-            step = timeline.next_due(timeline.steps_of(tl), today or date.today())
-            if step:
-                return step.title, step.due, step
+        step = timeline.next_due(timeline.steps_of(tl), today or date.today()) if tl else None
+        if status == store.APPROVED:  # approved, not yet handed over
+            return NEXT_HANDOVER, step.due if step else None, None
+        if step:
+            return step.title, step.due, step
         return "", None, None
     for visit in reversed((record or {}).get("visits", [])):
         if visit.get("next_step"):
@@ -661,7 +696,7 @@ def mark_reviewed(case_id: str, base: Path = HERE) -> None:
         raise TrackerError("This case has no changes waiting for review.")
     record.setdefault("reviews", []).append({"version": pending["version"], "on": now(), "by": audit.SUPERVISOR})
     record["review_needed"] = None
-    _note(record, "supervisor", f"changes after approval reviewed (version {pending['version']})")
+    _note(record, "supervisor", f"changes after approval reviewed (version {pending['version']})", volunteer=False)
     _save(record, base)
     audit.add_event(case_id, "changes after approval reviewed", audit.SUPERVISOR,
                     f"version {pending['version']}", base=base)

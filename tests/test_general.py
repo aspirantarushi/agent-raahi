@@ -277,7 +277,7 @@ def test_summary_draft_has_header_and_disclosure():
     assert text.startswith(DRAFT_HEADER)
     tail = text.rstrip().split("\n")[-1]
     assert tail.startswith("How this draft was prepared: facts were read from case notes with AI assistance "
-                           f"({MODEL}) and checked by a volunteer; {general.RULES_USED};")
+                           f"(Google Gemini) and checked by a volunteer; {general.RULES_USED};")  # the plain name
     assert "dates were calculated" not in text
     assert "does not predict the outcome" in text
 
@@ -357,7 +357,7 @@ def test_screen_wages_questions_one_at_a_time_then_send(pretend_ai):
     assert "Question 3 of 3" in " ".join(m.value for m in at.markdown)
     assert any("What does the person want to happen?" in m.value for m in at.markdown)
     at.text_input(key="gq-2").set_value("His three months' wages")
-    button(at, "Next").click().run()
+    button(at, "See the summary").click().run()   # the last question says so
     # Eligible on income, so no eligibility questions: straight to the summary.
     draft = make_drafts(at).session_state["shown_drafts"][0]
     assert "— His three months' wages" in draft
@@ -387,22 +387,22 @@ def test_screen_eligibility_questions_when_needed(pretend_ai, monkeypatch):
     monkeypatch.setattr(llm, "read_general_notes", lambda notes, output_lang="en": llm.NotesReading(raw, notes, {}, MODEL))
     at = read_story(WAGES)
     button(at, "Don't know").click().run()  # what the person wants: not known yet
-    assert any("Is the person needing help in jail or police custody now?" in m.value for m in at.markdown)
-    at.radio(key="ge-in_custody").set_value("No")
-    button(at, "Next").click().run()
-    assert any("Is the person needing help a woman?" in m.value for m in at.markdown)
+    # The free legal aid questions: ONE screen, one question in the count
+    assert any("Free legal aid: which of these apply to the person?" in m.value for m in at.markdown)
     counter = next(m.value for m in at.markdown if 'class="q-count"' in m.value)
-    assert "Question 3 of 8" in counter  # 1 AI question + 7 planned legal aid questions, fixed from the start
-    at.radio(key="ge-woman").set_value("Yes")
+    assert "Question 2 of 3" in counter  # 1 AI question + the legal aid screen + the state
+    labels = [r.label for r in at.radio if str(r.key).startswith("la-")]
+    assert "Is the person needing help in jail or police custody now?" in labels and "Is the person needing help a woman?" in labels
+    assert any(n.key == "la-income" for n in at.number_input)   # no group is Yes yet: the income box shows
+    at.radio(key="la-in_custody").set_value("No")
+    at.radio(key="la-woman").set_value("Yes").run()
+    assert not any(n.key == "la-income" for n in at.number_input)  # a group applies: income doesn't matter
     button(at, "Next").click().run()
     ok(at)  # a woman qualifies whatever the income, but research needs the state: it is asked next
     assert any("Which state or union territory does the person live in?" in m.value for m in at.markdown)
     at.selectbox(key="ge-state").set_value("Punjab")
-    button(at, "Next").click().run()
-    ok(at)  # then the app says the rest is not needed and waits
-    assert not at.session_state["shown_drafts"]
-    assert "these 4 planned questions are not needed" in at.info[0].value
-    at.button(key="q-not-needed-go").click().run()
+    button(at, "See the summary").click().run()
+    ok(at)
     assert "Qualifies for free legal aid whatever the income, as a woman." in make_drafts(at).session_state["shown_drafts"][0]
 
 
@@ -425,7 +425,7 @@ def test_screen_without_ai(monkeypatch, tmp_path):
     at.text_area(key="g_manual").set_value("The landlord locked the tenant out last week.")
     button(at, "Start without AI").click().run()
     ok(at)
-    assert any("jail or police custody" in m.value for m in at.markdown)  # eligibility, one at a time
+    assert any("Free legal aid: which of these apply to the person?" in m.value for m in at.markdown)  # one screen
     button(at, "Skip the rest and see the summary").click().run()
     draft = make_drafts(at).session_state["shown_drafts"][0]
     assert "facts were entered by a volunteer" in draft and "The landlord locked the tenant out" in draft
@@ -590,4 +590,5 @@ def test_word_check_uses_whole_words():
 def test_outcome_question_not_added_twice_in_hindi_or_hinglish():
     for asked in ["आपको किस परिणाम की उम्मीद है?", "आप इस मामले में क्या नतीजा चाहती हैं?", "Aap kya chahte hain?"]:
         r = general.check_general_answer(answer(questions_to_ask=[asked]), WAGES, "hi")
-        assert r.questions[0] == asked and not any(q.startswith("व्यक्ति क्या चाहता") for q in r.questions), asked
+        assert r.questions[0] == general.person_not_you(asked)  # "the person", never "you"
+        assert not any(q.startswith("व्यक्ति क्या चाहता") for q in r.questions), asked

@@ -57,7 +57,7 @@ def test_hindi_draft_with_dlsa_application():
 
 def test_hindi_disclosure_and_approval(tmp_path):
     facts, _, text = hindi_draft()
-    assert text.rstrip().splitlines()[-1].startswith("यह ड्राफ़्ट कैसे बना: तथ्य केस नोट्स से AI की मदद (gemini-3.5-flash-lite)")
+    assert text.rstrip().splitlines()[-1].startswith("यह ड्राफ़्ट कैसे बना: तथ्य केस नोट्स से AI की मदद (Google Gemini)")
     assert "सुपरवाइज़र ने ड्राफ़्ट को [तारीख़] को जाँच कर मंज़ूरी दी।" in text
     case_id = store.submit(text, facts, base=tmp_path, draft_lang="hi")
     store.approve(case_id, base=tmp_path, approved_on=date(2026, 11, 5))

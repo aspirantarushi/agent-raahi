@@ -7,6 +7,7 @@ the code checks (for example "Yes", "Undertrial", "None") stay in English; only 
 is translated.
 """
 
+import contextlib
 import hashlib
 import hmac
 import html
@@ -198,6 +199,40 @@ def new_case_screen():
     msg = st.session_state.pop("case-msg", None)
     if msg:
         st.error(msg[1])
+    done_id = intake_done_here()
+    if done_id:  # intake finished: a clean done card; the case itself folds away below it
+        intake_done_card(done_id)
+    with (st.expander(t("intake.show_case"), expanded=False) if done_id else contextlib.nullcontext()):
+        case_flow()
+
+
+def intake_done_here() -> str:
+    """The case whose intake was finished in this session (after sending), or ""."""
+    sent = st.session_state.get("sent")
+    case_id = (sent or {}).get("id") or st.session_state.get("gen_sent") or ""
+    if not case_id:
+        return ""
+    try:
+        return case_id if (tracker.load(case_id) or {}).get("intake_finished") else ""
+    except (tracker.TrackerError, storage.StorageError):
+        return ""
+
+
+def intake_done_card(case_id: str):
+    record = tracker.load(case_id) or {}
+    with st.container(border=True, key="done-card"):
+        st.success(t("intake.done_card", case_id=case_id), icon=":material/task_alt:")
+        n = record.get("next") or {}
+        if n:
+            st.caption(t("intake.done", step=next_step_words(n["step"], None),
+                         due=show_date(date.fromisoformat(n["due"])) if n.get("due") else "-"))
+        with st.container(horizontal=True, gap="small"):
+            next_action(t("intake.next_case"), key="done-next", icon=":material/note_add:", on_click=start_case)
+            st.button(t("intake.open_tracker"), key="done-tracker", icon=":material/list_alt:",
+                      on_click=go, args=("My cases",))
+
+
+def case_flow():
     current_case_panel()
 
     with st.container(key="nc-kind"):
@@ -215,7 +250,7 @@ def new_case_screen():
                 undertrial_form()
     sent = st.session_state.get("sent") if case_type != ANY_CASE else None
     case_id = sent["id"] if sent else st.session_state.get("gen_sent")
-    if case_id:
+    if case_id and not intake_done_here():
         finish_intake_box(case_id)  # the end of the flow: after the draft was sent
     report_problem_box("new-case", "New case", case_id)
 
@@ -418,6 +453,16 @@ def sent_status_line(case_id: str) -> str:
     return t("send.status", on=show_date(date.fromisoformat(sent_on)), status=status_text(status))
 
 
+def update_letter_and_drafts(facts_sig: str, letter_sig, points: int):
+    """"Update the letter and drafts": the letter first (when one is wanted), then the drafts."""
+    if letter_sig:
+        st.session_state["g_letter_sig"] = letter_sig
+        log_agent("letter drafted", f"from {points} ticked research points" if points
+                  else "facts only (no research point ticked)")
+    st.session_state["g_drafts_sig"] = facts_sig
+    log_agent("drafts made", "case summary; free legal aid application if needed")
+
+
 def next_action(label: str, key: str, form: bool = False, **kw):
     """The step's next action: its one filled button (the others are outlined). On phones it is pinned to
     the bottom of the screen as "Next: <action>". Never two on one screen: a second one is outlined."""
@@ -516,8 +561,14 @@ def read_general():
         case_id = ensure_case(general.CASE_TYPE)
         # Read again after an edit in this session: a newer value (a corrected date) replaces the older one
         tracker.merge_facts(case_id, reading.facts, who(), "story read by AI, checked by code", replace=reread)
-        tracker.add_summary(case_id, reading.what_happened, reading.issues, reading.documents_held, who(),
-                            ai_model=notes_reading.model)
+        if reread:  # edited and read again: the new reading replaces the earlier one (no old and new side by side)
+            before = tracker.load(case_id) or {}
+            tracker.replace_summary(case_id, reading.what_happened, reading.issues, reading.documents_held,
+                                    general.answers_still_apply([tuple(a) for a in before.get("answers", [])], reading),
+                                    who(), ai_model=notes_reading.model)
+        else:
+            tracker.add_summary(case_id, reading.what_happened, reading.issues, reading.documents_held, who(),
+                                ai_model=notes_reading.model)
         record = tracker.load(case_id)
         # The case so far plus the new story; known facts (earlier values while a contradiction is open)
         reading.what_happened = list(record["summary"])
@@ -531,7 +582,11 @@ def read_general():
     except (tracker.TrackerError, storage.StorageError) as err:
         tracker_error(err)
         known_values = {}
+    fixes = (st.session_state.get("gen") or {}).get("fixes") if reread else None  # typed by hand: kept
     _start_general(reading, notes_reading.model, removed)
+    if fixes:
+        st.session_state["gen"]["fixes"] = fixes
+    st.session_state["g_notes_read"] = st.session_state.get("g_notes", "")  # what was last read
     log_agent("story read", f"model {notes_reading.model}; removed before sending: "
               + (", ".join(f"{n} × {k}" for k, n in removed.items()) or "nothing")
               + f"; {len(reading.questions)} questions planned")
@@ -582,10 +637,15 @@ def general_question(gen):
     plan = elig_plan(gen)
     if gen["q_index"] < len(questions):
         return ("ai", gen["q_index"], questions[gen["q_index"]])
-    missing = [m for m in general.check_eligibility(gen["facts"]).missing if m not in gen["skipped"]]
+    if legal_aid_still_open(gen) and "legal_aid" not in gen.get("elig_asked", []):
+        if "legal_aid" not in plan:
+            plan.insert(0, "legal_aid")  # needed after all (the count grows, and says so by its new total)
+        return ("legal_aid", "legal_aid", t("elig.q.legal_aid"))
+    missing = [m for m in general.check_eligibility(gen["facts"]).missing
+               if m not in gen["skipped"] and m not in LEGAL_AID_ONE_SCREEN]
     if missing:
         if missing[0] not in plan:
-            plan.append(missing[0])  # needed after all (the count grows, and says so by its new total)
+            plan.append(missing[0])
         return ("eligibility", missing[0], t(f"elig.q.{missing[0]}"))
     if state_still_needed(gen):  # research and free legal aid both depend on the state: always asked
         if "state" not in plan:
@@ -606,9 +666,22 @@ def elig_plan(gen) -> list:
     """The free legal aid questions planned when the questions start (and the state, if the story did not
     give it): fixed, so the count stays right."""
     if gen.get("elig_plan") is None:
-        plan = [m for m in general.check_eligibility(gen["facts"]).missing if m not in gen["skipped"]]
-        gen["elig_plan"] = plan + (["state"] if state_still_needed(gen) and "state" not in plan else [])
+        missing = [m for m in general.check_eligibility(gen["facts"]).missing if m not in gen["skipped"]]
+        plan = (["legal_aid"] if any(m in LEGAL_AID_ONE_SCREEN for m in missing) else []) + \
+               [m for m in missing if m not in LEGAL_AID_ONE_SCREEN and m != "state"]
+        gen["elig_plan"] = plan + (["state"] if state_still_needed(gen) else [])
     return gen["elig_plan"]
+
+
+# The free legal aid questions, on one screen ("which of these apply?"): it counts as one question
+LEGAL_AID_GROUPS = ["in_custody", "woman", "under_18", "sc_st", "disability"]
+LEGAL_AID_ONE_SCREEN = LEGAL_AID_GROUPS + ["annual_income"]
+
+
+def legal_aid_still_open(gen) -> list:
+    """The groups (and the income) the free legal aid check still needs, not yet answered or skipped."""
+    return [m for m in general.check_eligibility(gen["facts"]).missing
+            if m in LEGAL_AID_ONE_SCREEN and m not in gen["skipped"]]
 
 
 def not_needed(gen) -> list:
@@ -620,8 +693,10 @@ def question_position(gen, kind: str, ref) -> tuple:
     """(n, total) for "Question n of total": the AI's questions, then the planned free legal aid questions.
     The total is fixed when the questions start."""
     ai_total = len(gen["reading"].questions)
-    total = ai_total + len(elig_plan(gen))
-    n = ref + 1 if kind == "ai" else ai_total + len(set(gen.get("elig_asked", [])) | set(gen["skipped"])) + 1
+    plan = elig_plan(gen)
+    total = ai_total + len(plan)
+    done = set(gen.get("elig_asked", [])) | set(gen["skipped"])
+    n = ref + 1 if kind == "ai" else ai_total + len([m for m in plan if m in done]) + 1
     return n, max(total, n)
 
 
@@ -647,6 +722,52 @@ def why_asked(gen, kind: str, ref, text: str) -> str:
 def why_asked_line(reason: str):
     st.markdown(f'<p class="why-asked"><b>{html.escape(t("whyq.label"))}</b> {html.escape(reason)}</p>',
                 unsafe_allow_html=True)
+
+
+def legal_aid_screen(gen, last: bool):
+    """"Free legal aid: which of these apply to the person?": Yes / No / Don't know for each group the story
+    doesn't already answer; the income box only while none is Yes. One screen, one question in the count."""
+    open_items = legal_aid_still_open(gen)
+    groups = [m for m in LEGAL_AID_GROUPS if m in open_items]
+    with st.container(border=True, key="legal-aid-screen"):
+        st.markdown(f"**{t('elig.q.legal_aid')}**")
+        why_asked_line(t("whyq.legal_aid"))
+        for m in groups:
+            st.radio(t(f"elig.q.{m}"), ["Yes", "No", "Don't know"], index=None, key=f"la-{m}", horizontal=True,
+                     format_func=option_text("opt."), help=t(f"whyq.elig.{m}"))
+        any_yes = any(st.session_state.get(f"la-{m}") == "Yes" for m in groups)
+        if "annual_income" in open_items and not any_yes:  # income matters only when no group applies
+            st.markdown(f"**{t('elig.q.annual_income')}**")
+            col1, col2 = st.columns(2)
+            col1.number_input(t("ui.general.amount"), min_value=0, step=500, value=None, key="la-income")
+            col2.radio(t("ui.general.per"), ["per month", "per year"], index=None, key="la-income-per",
+                       horizontal=True, format_func=option_text("opt."))
+        with st.container(horizontal=True, gap="small", key="la-actions"):
+            next_action(t("ui.see_summary") if last else t("ui.next"), key="la-next", icon=":material/arrow_forward:",
+                        on_click=answer_legal_aid, args=(groups, "annual_income" in open_items))
+            st.button(t("ui.general.skip_rest"), key="gskip-all", type="tertiary", on_click=skip_general_questions)
+
+
+def answer_legal_aid(groups: list, income_asked: bool):
+    gen = st.session_state["gen"]
+    get = st.session_state.get
+    answered = {}
+    for m in groups:
+        choice = get(f"la-{m}")
+        if choice in ("Yes", "No"):
+            gen["facts"][m] = answered[m] = choice == "Yes"
+        else:
+            gen["skipped"].add(m)  # "Don't know" (or left blank): not guessed
+    if income_asked and not any(answered.values()):
+        amount, per = get("la-income"), get("la-income-per")
+        if amount is not None and per:
+            gen["facts"]["annual_income"] = answered["annual_income"] = int(amount) * (12 if per == "per month" else 1)
+        else:
+            gen["skipped"].add("annual_income")
+    gen.setdefault("elig_asked", []).append("legal_aid")
+    log_agent("question asked", f"{lang.t('elig.q.legal_aid', 'en')} ({len(answered)} answered)")
+    if answered and st.session_state.get("case_id"):
+        merge_into_case(st.session_state["case_id"], answered, "answer to a question")
 
 
 def answer_general(kind: str, ref, skip: bool = False):
@@ -788,8 +909,13 @@ def general_screen():
             col1, col2 = st.columns(2)
             busy = bool(st.session_state.get("g_reading"))
             empty = not (st.session_state.get("g_notes") or "").strip()
+            read_before = st.session_state.get("g_notes_read")
+            changed = bool(gen) and read_before is not None and \
+                " ".join((st.session_state.get("g_notes") or "").split()) != " ".join(read_before.split())
+            if changed:  # the story box differs from what was last read
+                st.warning(t("ui.general.story_changed"), icon=":material/edit_note:")
             with col1:
-                (next_action if not gen else lambda label, **kw: st.button(label, type="secondary", **kw))(
+                (next_action if not gen or changed else lambda label, **kw: st.button(label, type="secondary", **kw))(
                     t("ui.general.read"), key="g-read", disabled=busy or empty,
                     on_click=lambda: (ensure_notes_language("g_notes"), st.session_state.update(g_reading=True)))
             if empty and not busy:
@@ -833,6 +959,14 @@ def general_screen():
         st.button(t("ui.back_story"), key="g-back-story", type="tertiary", icon=":material/arrow_back:",
                   on_click=back_to_story)
         return
+    if question and question[0] == "legal_aid":
+        flow_title(2)
+        n, total = question_position(gen, "legal_aid", "legal_aid")
+        st.markdown(f'<p class="q-count">{html.escape(t("ui.q_of", n=n, total=total))}</p>', unsafe_allow_html=True)
+        legal_aid_screen(gen, last=n >= total)
+        st.button(t("ui.back_story"), key="g-back-story", type="tertiary", icon=":material/arrow_back:",
+                  on_click=back_to_story)
+        return
     if question:
         kind, ref, text = question
         flow_title(2)
@@ -855,7 +989,7 @@ def general_screen():
                          format_func=option_text("opt."))
             with st.container(horizontal=True, gap="small", key="q-actions"):
                 # the first button is the one Enter presses
-                next_action(t("ui.next"), key=f"gnext-{kind}-{ref}", form=True,
+                next_action(t("ui.see_summary") if n >= total else t("ui.next"), key=f"gnext-{kind}-{ref}", form=True,
                             icon=":material/arrow_forward:", on_click=answer_general, args=(kind, ref))
                 st.form_submit_button(t("ui.dont_know"), key=f"gskip-{kind}-{ref}", on_click=answer_general,
                                       args=(kind, ref, True))
@@ -1054,6 +1188,7 @@ def general_summary(gen):
     issue = (uncovered[0] if uncovered else "; ".join(n for _, n in facts.issues)) or t("ui.general.problem_described")
 
     waiting_rs = research.waiting_for_case(case_id) if not approved else None
+    facts.research_pending = len([p for p in (waiting_rs or {}).get("points", []) if p.get("kind") != "letter"])
     rs_ticks, rs_reasons = research_ticks(waiting_rs)
     letter_points = approved or research.points_for_letter(waiting_rs, rs_ticks)
     # Nothing is drafted by itself: "Make the drafts" (summary and DLSA application) and "Draft the letter"
@@ -1085,8 +1220,11 @@ def general_summary(gen):
                     "points": sum(1 for p in letter_points if p.get("kind") != "letter")}
     can_search = llm.gemini_available() or llm.tavily_key()
     sent_already = bool(st.session_state.get("gen_sent") or sent_status_line(case_id))
+    drafts_changed = bool(st.session_state.get("g_drafts_sig")) and not drafts_made or \
+        bool(st.session_state.get("g_letter_sig")) and letter_wanted and research_done and not letter_made
     st.session_state["_next_key"] = (
         None if sent_already else  # then "Finish intake" is the next action
+        "update-drafts" if drafts_changed else
         "rs-run-go" if uncovered and status == "not started" and state and can_search and not research_now else
         "letter-go" if letter_wanted and research_done and not letter_made else
         "drafts-go" if not drafts_made else "send-g")
@@ -1111,10 +1249,11 @@ def general_summary(gen):
     packet = casework.bundle(documents) if documents else ""
     if documents:
         reading_copy_box("summary", documents[0][1])
-    names = general.possible_names(packet, st.session_state.get("g_notes", ""))
+    names = general.possible_names(packet, st.session_state.get("g_notes", ""), facts.facts.get("state") or "")
     if names:
         st.warning(t("ui.general.possible_names", names=", ".join(names)))
-    in_story = [n for n in general.names_in_story(st.session_state.get("g_notes", "")) if n not in names]
+    in_story = [n for n in general.names_in_story(st.session_state.get("g_notes", ""), facts.facts.get("state") or "")
+                if n not in names]
     if in_story:  # a name in the story that did not reach the drafts: the volunteer still checks
         st.warning(t("ui.names_in_story", names=", ".join(in_story)), icon=":material/person_off:")
 
@@ -1140,8 +1279,14 @@ def general_summary(gen):
                                                           else t("ready.button_ready"))
         not_made = not drafts_made or (letter_wanted and research_done and not letter_made)
         # Exactly why it can't be sent yet, one line each, in red under the button
-        reasons = ([t("why.send.drafts")] if not drafts_made else []) + \
-            ([t("why.send.letter")] if letter_wanted and research_done and not letter_made else []) + \
+        if drafts_changed:  # made once, then something changed: one line and one button that redoes both
+            why_disabled(t("why.send.changed"), red=True)
+            step_button(t("cw.update_drafts"), key="update-drafts", icon=":material/refresh:",
+                        on_click=update_letter_and_drafts, args=(facts_sig, letter_sig if letter_wanted and research_done
+                                                                 else None, letter_state.get("points", 0)))
+        reasons = ([t("why.send.drafts")] if not drafts_made and not drafts_changed else []) + \
+            ([t("why.send.letter")] if letter_wanted and research_done and not letter_made and not drafts_changed
+             else []) + \
             ([t("why.send.research")] if research_now else []) + \
             ([t("why.send.left_out")] if no_reason else []) + \
             ([t("why.send.reason")] if unticked and not send_reason else []) + \
@@ -1176,7 +1321,7 @@ def general_summary(gen):
         st.rerun()
 
 
-def case_cards(g, eligibility, approved, kind, code_):
+def case_cards(g, eligibility, approved, kind, code_, case_for=None):
     """At a glance, Facts, Timeline, Documents, Free legal aid, For the lawyer, Next steps (with dates).
     Labels in a narrow grey column; lists as bullets; dates, amounts and urgency in bold."""
     e = html.escape
@@ -1216,10 +1361,18 @@ def case_cards(g, eligibility, approved, kind, code_):
     if flags:
         st.markdown(ui.info_card(t("cw.for_lawyer"), [bullets([rich(f) for f in flags])], "lawyer", "gavel"),
                     unsafe_allow_html=True)
-    steps = casework.next_steps(g, eligibility, general._approved_points(g), g.research_state, today, code_)
+    case_id = st.session_state.get("case_id") if case_for is None else case_for
+    try:
+        approved_case = bool(case_id) and tracker.status_of(case_id) in tracker.APPROVED_STATUSES
+    except (tracker.TrackerError, storage.StorageError):
+        approved_case = False
+    steps = casework.next_steps(g, eligibility, general._approved_points(g), g.research_state, today, code_,
+                                case_approved=approved_case)
     srows = []
     for s in steps:
         text = rich(s.text)
+        if s.done:
+            text = f'<span class="step-done">{ui.icon("check_circle")}</span> {text}'
         if s.due:  # "Collect the documents (by 13 November 2026, suggested follow-up)."
             when = t("cw.by_date_suggested" if s.suggested else "cw.by_date", date=show_date(s.due))
             body = s.text.rstrip()
@@ -1275,6 +1428,8 @@ def tick_why(item, g, eligibility) -> str:
     if item.key == "case_documents":  # done when nothing is "still to get"
         return t("ready.why.docs_count", has=len(g.documents_held), get=len(g.documents_to_get or []),
                  cannot=len(g.documents_cannot))
+    if item.key == "case_questions" and item.status not in (readiness.PRESENT, readiness.CANNOT) and g.still_to_ask:
+        return t("ready.why.case_questions_open", n=len(g.still_to_ask))  # "Don't know" answers: ask next visit
     if item.status != readiness.PRESENT:
         return t("ready.why.missing") if item.status != readiness.CANNOT else item.note
     if item.key == "case_legal_aid":
@@ -1447,8 +1602,7 @@ def nyaya_setu_button():
 def drafts_panel(documents, status, uncovered, facts_sig="", drafts_made=True):
     """Each draft as a readable letter, with Edit and Download; the plain text to copy below it. The
     summary and the DLSA application are made only when "Make the drafts" is pressed."""
-    st.markdown(f'<div class="step-title" style="text-align:left;font-size:1.3rem">{html.escape(t("cw.drafts"))}</div>',
-                unsafe_allow_html=True)
+    st.markdown(ui.step_heading("description", t("cw.drafts")), unsafe_allow_html=True)  # like Research and Send
     st.caption(t("cw.drafts_caption"))
     if not drafts_made:
         if st.session_state.get("g_drafts_sig"):
@@ -2039,7 +2193,8 @@ def checklist_box(items, prefix: str):
 
 LEDGER_ICONS = {ledger.TOLD: ":material/record_voice_over:", ledger.AI_CHECKED: ":material/fact_check:",
                 ledger.CALCULATED: ":material/calculate:", ledger.VERIFIED: ":material/menu_book:",
-                ledger.UNRESOLVED: ":material/help:", ledger.PRECAUTION: ":material/warning:"}
+                ledger.UNRESOLVED: ":material/help:", ledger.PRECAUTION: ":material/warning:",
+                ledger.RESEARCH: ":material/travel_explore:", ledger.RESEARCH_APPROVED: ":material/verified:"}
 
 
 def ledger_box(entries, expanded=False):
@@ -2223,9 +2378,17 @@ def step_due_text(s: timeline.Step) -> str:
 
 def due_this_week_box():
     st.subheader(t("ui.cases.due_this_week"))
-    items = timeline.due_this_week(date.today())
-    if not items:
+    today = date.today()
+    items = timeline.due_this_week(today)
+    # cases with a due date but no timeline yet (sent or intake finished): due within 7 days, inclusive
+    with_steps = {c for c, _, _ in items}
+    pending = [r for r in tracker.rows(today=today) if r["due"] and not r["step"] and r["id"] not in with_steps
+               and r["status"] != tracker.CLOSED and date.fromisoformat(r["due"]) <= today + timedelta(days=7)]
+    if not items and not pending:
         st.caption(t("ui.cases.nothing_due"))
+    for r in sorted(pending, key=lambda r: r["due"]):
+        line = f"**{show_date(date.fromisoformat(r['due']))}** · {t('ui.case')} {r['id']} · {next_step_text(r)}"
+        (st.error(t("tl.overdue") + " · " + line) if r["overdue"] else st.info(line))
     for case_id, s, state in items:
         line = f"**{show_date(s.due_date())}** · {t('ui.case')} {case_id} · {step_title(s)} ({step_label(s)})"
         if state == timeline.OVERDUE:
@@ -3033,8 +3196,13 @@ def audit_rows(records: dict = None) -> list:
 def shown_table(rows: list, columns: list):
     """A table of rows with translated headings; the status column as coloured chips."""
     import pandas as pd
-    frame = pd.DataFrame([{t(h): (r["status_label"] if k == "status" else r.get(k, "")) for k, h in columns}
-                          for r in rows], columns=[t(h) for _, h in columns])
+    def cell(r, k):
+        if k == "status":
+            return r["status_label"]
+        if k == "ai_used":  # the plain name on screen; the CSV keeps the raw id
+            return llm.display_model(r.get(k, "")) or r.get(k, "")
+        return r.get(k, "")
+    frame = pd.DataFrame([{t(h): cell(r, k) for k, h in columns} for r in rows], columns=[t(h) for _, h in columns])
     if any(k == "status" for k, _ in columns) and rows:
         colours = {t(f"aud.st.{s}"): c for s, c in STATUS_COLOURS.items()}
         frame = frame.style.map(lambda v: (f"background-color: {colours[v][0]}; color: {colours[v][1]}; "
@@ -3157,11 +3325,67 @@ def close_or_reopen_box(case_id: str, status: str):
             st.error(msg[1])
 
 
-def audit_ai_summary(record: dict):
-    """What the AI read and what the volunteer changed (kept with the history, as before)."""
-    lines = [line for line in audit.describe(record).splitlines()
-             if not re.match(r"- \d{4}-\d{2}-\d{2} ", line)]  # the events are in the table below
-    st.caption("  \n".join(line.lstrip("- ") for line in lines))
+# Fields that fit only some problems (the rest fit every general case)
+FIELDS_FOR = {"money_lost_online": "fraud", "money_lost_in_last_few_days": "fraud", "called_1930": "fraud",
+              "essential_service_cut": ("electricity", "water"), "has_reference_number": ("electricity", "water", "ration")}
+UNDERTRIAL_ONLY = {"custody_began", "offence_date", "offence_month", "section", "law", "more_than_one_section",
+                   "never_convicted", "other_cases_pending", "delay_days_by_accused", "lawyer", "answer", "today"}
+
+
+def audit_fact_label(key: str) -> str:
+    for k in (f"ledger.f.{key}", f"fact.{key}", f"tfact.{key}"):
+        if k in lang.strings("en"):
+            return t(k)
+    return key.replace("_", " ")
+
+
+def show_stamp(text: str) -> str:
+    """"2026-11-12T22:27:05" -> "12 November 2026, 22:27"."""
+    try:
+        return f"{show_date(date.fromisoformat(text[:10]))}, {text[11:16]}" if len(text) >= 16 else \
+            show_date(date.fromisoformat(text[:10]))
+    except ValueError:
+        return text
+
+
+def audit_ai_summary(record: dict, case_facts: "dict | None" = None):
+    """What the AI read and what the volunteer changed, in the case form's plain labels ("A woman: yes"),
+    only the fields that fit the case type, dates written out."""
+    case_type = record.get("case_type") or ""
+    kind = None
+    if case_type == general.CASE_TYPE and case_facts:
+        try:
+            kind = casework.problem_type(general.GeneralFacts.from_dict(case_facts))
+        except Exception:
+            kind = None
+
+    def fits(key):
+        if case_type == general.CASE_TYPE and key in UNDERTRIAL_ONLY:
+            return False
+        if case_type == "Undertrial" and key not in UNDERTRIAL_ONLY and key not in ("in_custody", "woman", "under_18"):
+            return False
+        need = FIELDS_FOR.get(key)
+        return need is None or kind is None or kind in (need if isinstance(need, tuple) else (need,))
+
+    def value(v):
+        return t("yes") if v is True else t("no") if v is False else str(v)
+    lines = [t("aud.ai_model", model=llm.display_model(record.get("model")) or record.get("model", ""))]
+    if record.get("ai_read_at"):
+        lines.append(t("aud.ai_read_at", when=show_stamp(record["ai_read_at"])))
+    found = [f"{audit_fact_label(k)}: {value(v)}" for k, v in (record.get("ai_extracted") or {}).items() if fits(k)]
+    if found:
+        lines.append(t("aud.ai_found", facts="; ".join(found)))
+    blank = [audit_fact_label(k) for k in record.get("ai_answers_not_accepted") or [] if fits(k)]
+    if blank:
+        lines.append(t("aud.ai_blank", facts=", ".join(blank)))
+    changed = [f"{audit_fact_label(c['field'])} ({c['ai_value']} → {c['final_value']})" for c in record.get("volunteer_changed") or []
+               if fits(c["field"])]
+    if record.get("model") not in (audit.NO_AI, None):
+        lines.append(t("aud.changed", fields="; ".join(changed) if changed else t("aud.none")))
+        typed = [audit_fact_label(k) for k in record.get("entered_by_volunteer") or [] if fits(k)]
+        if typed:
+            lines.append(t("aud.typed", fields=", ".join(typed)))
+    st.caption("  \n".join(lines))
 
 
 def history_table(record: dict, key: str):
@@ -3199,6 +3423,9 @@ def decide_research_point(research_id: str, point_id: str):
     key = f"rsd-{research_id}-{point_id}"
     choice = st.session_state.get(key)
     decision = {"Approve": research.APPROVE, "Edit then approve": research.EDIT, "Reject": research.REJECT}.get(choice)
+    if own_work(research_id.rsplit(".r", 1)[0]):  # checked again on saving, not only on screen
+        st.session_state["supervisor_flash"] = t("ui.sup.own_draft")
+        return
     try:
         point = research.decide(research_id, point_id, decision, st.session_state.get(f"rse-{research_id}-{point_id}"),
                                 by=supervisor_name())
@@ -3208,7 +3435,7 @@ def decide_research_point(research_id: str, point_id: str):
     st.session_state["supervisor_flash"] = t("rs.decided", point=point_id, status=point["status"])
 
 
-def letter_rebuild_needed(record: dict) -> bool:
+def letter_rebuild_needed(record: dict, locked: bool = False) -> bool:
     """Every research point is decided: the supervisor rebuilds the letter from the approved points (a
     button, not by itself) before the draft can be approved. True while that is still to do."""
     reviewed = [r for r in research.for_case(record["id"]) if r["status"] == research.REVIEWED]
@@ -3216,7 +3443,9 @@ def letter_rebuild_needed(record: dict) -> bool:
         return False
     st.info(t("rs.rebuild_first"), icon=":material/edit_document:")
     st.button(t("rs.rebuild"), key=f"rebuild-{record['id']}", type="primary", icon=":material/edit_document:",
-              on_click=add_letter_to_pending, args=(record["id"], reviewed[-1]["issue"]))
+              on_click=add_letter_to_pending, args=(record["id"], reviewed[-1]["issue"]), disabled=locked)
+    if locked:
+        why_disabled(t("ui.sup.own_draft"))
     return True
 
 
@@ -3284,7 +3513,7 @@ def warning_text(w: dict) -> str:
     return w["text"]
 
 
-def research_decision(r: dict, p: dict):
+def research_decision(r: dict, p: dict, locked: bool = False):
     """Approve / Edit then approve / Reject for one point. A point naming a replaced law cannot be
     approved as it is: only edited (to the current law) or rejected."""
     options = ["Approve", "Edit then approve", "Reject"]
@@ -3293,12 +3522,14 @@ def research_decision(r: dict, p: dict):
         st.caption(t("rs.edit_needed"))
     choice = st.radio(t("rs.decision"), options, index=None, horizontal=True, key=f"rsd-{r['id']}-{p['id']}",
                       format_func=lambda c: t({"Approve": "rs.approve", "Edit then approve": "rs.edit",
-                                               "Reject": "rs.reject"}[c]))
+                                               "Reject": "rs.reject"}[c]), disabled=locked)
     if choice == "Edit then approve":
         st.text_area(t("rs.edit_label"), value=p["text"], key=f"rse-{r['id']}-{p['id']}", height=120)
-    st.button(t("rs.save"), key=f"rss-{r['id']}-{p['id']}", type="primary", disabled=choice is None,
+    st.button(t("rs.save"), key=f"rss-{r['id']}-{p['id']}", type="primary", disabled=locked or choice is None,
               on_click=decide_research_point, args=(r["id"], p["id"]))
-    if choice is None:
+    if locked:
+        why_disabled(t("ui.sup.own_draft"))
+    elif choice is None:
         why_disabled(t("why.rs_choice"))
 
 
@@ -3312,9 +3543,9 @@ def research_review_box():
     reviewed together with that draft, in one review)."""
     with_draft = {r["id"] for r in store.list_pending()}
     records = [r for r in research.waiting() if r["case_id"] not in with_draft]
-    savable = [(r, p) for r in research.all_records() for p in r["points"]
-               if p["status"].startswith("approved") and not p.get("knowledge_id")]
-    if not records and not savable:
+    decided = [r for r in research.all_records()  # decided research whose approved points can still be saved
+               if r["status"] != research.WAITING and r["case_id"] not in with_draft and savable_points(r)]
+    if not records and not decided:
         return
     if records:
         st.subheader(t("rs.sup_title", n=len(records)))
@@ -3324,25 +3555,42 @@ def research_review_box():
             st.warning(research.LABEL, icon=":material/pending:")
             st.caption(t("rs.sup_caption", by=r["asked_by"], on=r["asked_at"][:10], found=r["sources_found"],
                          official=r["sources_official"], dropped=len(r["dropped"])))
-            for p in r["points"]:
+            for p in [p for p in r["points"] if p.get("kind") != "letter"]:  # never the AI's own letter
                 with st.container(border=True):
                     research_point_view(r, p)
                     if p["status"] == research.WAITING:
-                        research_decision(r, p)
+                        research_decision(r, p, own_work(r["case_id"]))
+                    elif p in savable_points(r):
+                        knowledge_save_control(r, p)
             if r["dropped"]:
                 with st.expander(f"{t('rs.dropped')} ({len(r['dropped'])})"):
                     for d in r["dropped"]:
                         st.markdown(f"- {html.escape(d['text'][:200])} _({d['reason']})_")
-    for r, p in savable:
-        with st.expander(t("rs.as_knowledge_point", state=r["state"], point=short(p["text"], 70)),
-                         icon=":material/bookmark_add:"):
-            research_point_view(r, p)
-            st.text_input(t("rs.k_heading"), key=f"rsk-h-{r['id']}-{p['id']}",
-                          value=f"{r['state']}: {research.KINDS[p['kind']].lower()} for {r['issue'][:60]}")
-            st.text_input(t("rs.k_words"), key=f"rsk-w-{r['id']}-{p['id']}", value=", ".join(research.keywords(r["issue"])))
-            st.button(t("rs.as_knowledge_point", state=r["state"], point=short(p["text"], 40)),
-                      key=f"rsk-{r['id']}-{p['id']}", type="primary",
-                      on_click=save_research_knowledge, args=(r["id"], p["id"]))
+    for r in decided:
+        with st.expander(t("rs.sup_row", case_id=r["case_id"], state=r["state"], issue=r["issue"]),
+                         icon=":material/travel_explore:"):
+            for p in savable_points(r):
+                with st.container(border=True):
+                    research_point_view(r, p)
+                    knowledge_save_control(r, p)
+
+
+def savable_points(r: dict) -> list:
+    """Approved points not yet saved to our verified files."""
+    return [p for p in r["points"] if p.get("kind") != "letter" and p["status"].startswith("approved")
+            and not p.get("knowledge_id")]
+
+
+def knowledge_save_control(r: dict, p: dict):
+    """Inside the approved point's own card: "Save to our verified files", only after a lawyer has checked
+    it (saved with lawyer_checked = no)."""
+    with st.expander(t("rs.k_save"), icon=":material/bookmark_add:"):
+        st.caption(t("rs.k_lawyer_first"))
+        st.text_input(t("rs.k_heading"), key=f"rsk-h-{r['id']}-{p['id']}",
+                      value=f"{r['state']}: {research.KINDS[p['kind']].lower()} for {r['issue'][:60]}")
+        st.text_input(t("rs.k_words"), key=f"rsk-w-{r['id']}-{p['id']}", value=", ".join(research.keywords(r["issue"])))
+        st.button(t("rs.k_save"), key=f"rsk-{r['id']}-{p['id']}", type="primary",
+                  on_click=save_research_knowledge, args=(r["id"], p["id"]))
 
 
 def knowledge_added_box():
@@ -3418,18 +3666,22 @@ def delete_case_box():
             (st.success if msg[0] == "ok" else st.error)(msg[1])
 
 
-def review_research_inside(case_id: str) -> bool:
+def review_research_inside(case_id: str, locked: bool = False) -> bool:
     """Research points for this case, decided in the same review. True while any is still undecided."""
-    waiting = [r for r in research.for_case(case_id) if r["status"] == research.WAITING]
-    for r in waiting:
-        st.warning(research.LABEL, icon=":material/pending:")
+    briefs = research.for_case(case_id)
+    waiting = [r for r in briefs if r["status"] == research.WAITING]
+    for r in [r for r in briefs if r["status"] == research.WAITING or savable_points(r)]:
+        if r["status"] == research.WAITING:
+            st.warning(research.LABEL, icon=":material/pending:")
         st.caption(t("rs.sup_caption", by=r["asked_by"], on=r["asked_at"][:10], found=r["sources_found"],
                      official=r["sources_official"], dropped=len(r["dropped"])))
-        for p in r["points"]:
+        for p in [p for p in r["points"] if p.get("kind") != "letter"]:  # never the AI's own letter
             with st.container(border=True):
                 research_point_view(r, p)
                 if p["status"] == research.WAITING:
-                    research_decision(r, p)
+                    research_decision(r, p, locked)
+                elif p in savable_points(r):
+                    knowledge_save_control(r, p)
     if waiting:
         st.info(t("rs.decide_first"), icon=":material/lock:")
     return bool(waiting)
@@ -3445,9 +3697,28 @@ def supervisor_case_cards(record: dict):
         approved = research.approved_points(record["id"])
         g.research = research.items_for_summary(record["id"], g.facts.get("state"),
                                                 [n for _, n in g.issues]) if g.issues else []
-        case_cards(g, general.check_eligibility(g.facts), approved, casework.problem_type(g), code())
+        case_cards(g, general.check_eligibility(g.facts), approved, casework.problem_type(g), code(), case_for=record["id"])
     except (KeyError, TypeError, ValueError, storage.StorageError):
         st.caption(t("sup.cards_unavailable"))
+
+
+def own_work(case_id: str, record: "dict | None" = None) -> bool:
+    """True when the signed-in supervisor sent this case's draft or asked for its research (names compared
+    without case, spaces or dots): someone else must decide it, points included."""
+    name = supervisor_name()
+    if not name:
+        return False
+    if record is None:
+        try:
+            record = store.get_pending(case_id)
+        except Exception:  # no waiting draft
+            record = {}
+    if record and store.sent_this(record, name):
+        return True
+    try:
+        return any(store.same_person(name, r.get("asked_by", "")) for r in research.for_case(case_id))
+    except storage.StorageError:
+        return False
 
 
 def review_one(record: dict):
@@ -3457,15 +3728,18 @@ def review_one(record: dict):
 
 def review_case(record: dict):
     case_id = record["id"]
+    own = own_work(case_id, record)
     with st.expander(t("ui.sup.case_row", case_id=case_id, kind=case_type_label(record["case_type"]),
                        sent=record["submitted"].replace("T", " ")), expanded=True):
+        if own:  # first, before anything can be decided: every decision below is locked
+            st.error(t("ui.sup.own_draft"), icon=":material/block:")
         for h in record.get("history", []):
             st.caption(t("ui.sup.resent", when=h["resent"].replace("T", " "), reason=h["sent_back_reason"]))
         supervisor_case_cards(record)
         for n, part in enumerate(casework.split_bundle(record["draft"])):  # the same page previews as the volunteer's
             with st.container(border=True, key=f"sup-draft-{case_id}-{n}"):
                 document_view(part.strip(), f"sup-{case_id}-{n}", f"{case_id} draft {n + 1}")
-        blocked = review_research_inside(case_id) or letter_rebuild_needed(record)
+        blocked = review_research_inside(case_id, locked=own) or letter_rebuild_needed(record, locked=own)
         if record.get("readiness"):
             rows = [r for r in record["readiness"] if r["key"] != "send_reason"]
             unticked = [r for r in rows if r.get("note") == readiness.NOT_TICKED]
@@ -3483,17 +3757,15 @@ def review_case(record: dict):
         agent_did_card(audit_record, f"sup-{case_id}")
         with st.expander(t("ui.sup.audit_one")):
             if audit_record:
-                audit_ai_summary(audit_record)
+                audit_ai_summary(audit_record, record.get("facts"))
                 history_table(audit_record, f"hist-{case_id}")
             else:
                 st.caption(t("ui.sup.no_audit_one"))
         if blocked:
             return
-        own = store.sent_this(record, supervisor_name())
-        if own:  # the supervisor sent (or last resent) this draft: someone else approves it
-            st.warning(t("ui.sup.own_draft"), icon=":material/block:")
         action = st.radio(t("ui.sup.decision"), ["Approve", "Edit then Approve", "Reject with a reason"],
-                          index=None, horizontal=True, key=f"action-{case_id}", format_func=option_text("sup."))
+                          index=None, horizontal=True, key=f"action-{case_id}", format_func=option_text("sup."),
+                          disabled=own)
         busy = bool(st.session_state.get(f"deciding-{case_id}"))  # one click only
         if action == "Approve":
             st.button(t("ui.sup.approve_save"), type="primary", key=f"approve-{case_id}", disabled=busy or own,
@@ -3509,10 +3781,10 @@ def review_case(record: dict):
                 why_disabled(t("ui.sup.own_draft") if own else t("why.busy"))
         elif action == "Reject with a reason":
             st.text_area(t("ui.sup.reason"), key=f"reason-{case_id}")
-            st.button(t("ui.sup.send_back"), key=f"reject-{case_id}", disabled=busy,
+            st.button(t("ui.sup.send_back"), key=f"reject-{case_id}", disabled=busy or own,
                       on_click=decide, args=(case_id, "send back"))
-            if busy:
-                why_disabled(t("why.busy"))
+            if busy or own:
+                why_disabled(t("ui.sup.own_draft") if own else t("why.busy"))
         err = st.session_state.pop(f"decide-err-{case_id}", None)
         if err:
             st.error(err)
@@ -3522,6 +3794,9 @@ def decide(case_id: str, kind: str):
     """Approve, edit-then-approve or send back, on the first click; the button is disabled from then on.
     A case decided in the meantime (a double click, or another supervisor) shows a calm notice."""
     get = st.session_state.get
+    if own_work(case_id):  # checked again on saving, not only on screen
+        st.session_state[f"decide-err-{case_id}"] = t("ui.sup.own_draft")
+        return
     st.session_state[f"deciding-{case_id}"] = True
     try:
         if kind == "approve":
@@ -3691,7 +3966,33 @@ def todays_camp():
 # "What the agent did": these audit events, in the order they happened
 AGENT_EVENTS = {"story read": "story", "question asked": "question", "research asked": "research",
                 "research failed": "research_failed", "research looked at by the volunteer": "points",
-                "letter drafted": "letter", "drafts made": "drafts"}
+                "letter drafted": "letter", "drafts made": "drafts", audit.SENT: "sent", audit.RESENT: "sent",
+                audit.APPROVED: "approved"}
+
+
+def agent_line(e: dict, events: list) -> str:
+    """One line of "What the agent did", in plain words: no "Tavily search" twice, no raw model id."""
+    kind = AGENT_EVENTS[e["event"]]
+    details = re.sub(r"\s*\(by .*\)\s*$", "", e.get("details", ""))  # who did it is in the audit table
+    if kind == "research":
+        num = lambda pattern: int((re.search(pattern, details) or [0, 0])[1])  # noqa: E731
+        found, official = num(r"(\d+) search results"), num(r"(\d+) official")
+        kept, dropped = num(r"(\d+) points? kept"), num(r"(\d+) dropped")
+        sites = (re.search(r"sites searched: ([^(]+?)\s*$", details) or [None, ""])[1].strip()
+        line = t("agent.research_line", sites=sites or "-", found=found, kept=kept,
+                 official=t("agent.all_official") if found and found == official else t("agent.n_official", n=official))
+        return line + ("; " + t("agent.left_out", n=dropped) if dropped else "")
+    if kind == "sent":
+        after = next((x for x in events[events.index(e) + 1:] if x.get("event") == "readiness when sent"), {})
+        note = after.get("details", "")
+        n = int((re.search(r"(\d+) items missing", note) or [0, 0])[1])
+        if not n:
+            return t("agent.sent_ready")
+        return t("agent.sent_unticked", n=n) + ("; " + t("agent.reason_given") if "reason given" in note else "")
+    if kind == "approved":
+        return t("agent.approved_by", name=audit.who_did(e))
+    details = re.sub(r"model ([^;]+)", lambda m: "model " + (llm.display_model(m.group(1)) or m.group(1)), details)
+    return agent_details(details)
 
 
 def agent_did_card(record, key: str):
@@ -3710,10 +4011,10 @@ def agent_did_card(record, key: str):
                 stamp = f"{show_date(date.fromisoformat(when[:10]))} {when[11:16]}"
             except ValueError:
                 stamp = when[:16]
-            details = agent_details(re.sub(r"\s*\(by .*\)\s*$", "", e.get("details", "")))  # who: audit table
+            details = agent_line(e, events)
+            label = t("agent.ev." + AGENT_EVENTS[e["event"]])
             lines.append(f'<li><span class="agent-time">{html.escape(stamp)}</span> '
-                         f'<b>{html.escape(t("agent.ev." + AGENT_EVENTS[e["event"]]))}</b>'
-                         + (f" · {html.escape(details)}" if details else "") + "</li>")
+                         f'<b>{html.escape(label)}</b>' + (f" · {html.escape(details)}" if details else "") + "</li>")
         st.markdown(f'<ul class="agent-did">{"".join(lines)}</ul>', unsafe_allow_html=True)
 
 

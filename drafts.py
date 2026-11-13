@@ -227,7 +227,14 @@ def dlsa_replacements(facts: UndertrialFacts, result: Result) -> List[Tuple[str,
         ("   [Two to five sentences: what happened, when, which court or police station, case or FIR "
          "number, what the applicant needs now.]",
          statement),
+        # the papers someone in custody has (never "bank letters")
+        ("[FIR copy / court order / chargesheet / bank letters / complaint acknowledgement / identity proof]",
+         CUSTODY_DOCUMENTS["en"]),
     ]
+
+
+CUSTODY_DOCUMENTS = {"en": "[FIR copy / custody warrant / last court order / chargesheet / identity proof]",
+                     "hi": "[FIR की कॉपी / हिरासत वारंट / अदालत का पिछला आदेश / चार्जशीट / पहचान पत्र]"}
 
 
 # ---------- AI disclosure (draft SC "Regulations for Use of AI in Courts, 2026", Reg. 43(3), 43(6)) ----------
@@ -245,7 +252,10 @@ DISCLOSURE_STARTS = [DISCLOSURE_START, "\u092f\u0939 \u0921\u094d\u0930\u093e\u0
 
 def disclosure_block(ai_model: Optional[str], approved_on: Optional[date] = None,
                      rules: str = RULES_DATES, code: str = "en") -> str:
-    """The block added at the end of every draft. Names the AI model only if AI was used."""
+    """The block added at the end of every draft. Names the AI model only if AI was used, by its plain name
+    ("Google Gemini", "Groq (gpt-oss-120b)")."""
+    import llm
+    ai_model = llm.display_model(ai_model) or None
     if code != "en":
         how = (lang.t("disclosure.ai", code, model=ai_model) if ai_model else lang.t("disclosure.no_ai", code))
         approved = lang.show_date(approved_on, code) if approved_on else lang.t("disclosure.date_blank", code)
@@ -381,7 +391,9 @@ def hindi_dlsa(facts: "UndertrialFacts", result: Result) -> Tuple[str, bool]:
                   sections=describe_sections_in(o, law_date(facts), code), offence=o.offence.lower())
     return fill(template, [(t("draft.dlsa_groups_blank"), t("draft.dlsa_custody")),
                            (t("draft.dlsa_need_blank"), t("draft.dlsa_need")),
-                           (t("draft.dlsa_statement_blank"), statement)]), checked
+                           (t("draft.dlsa_statement_blank"), statement),
+                           ("[FIR की कॉपी / अदालत का आदेश / चार्जशीट / बैंक के पत्र / शिकायत की पावती / पहचान पत्र]",
+                            CUSTODY_DOCUMENTS["hi"])]), checked
 
 
 def translation_label(checked: bool) -> str:

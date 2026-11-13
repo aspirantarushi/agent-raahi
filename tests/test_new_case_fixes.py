@@ -38,7 +38,7 @@ def test_the_volunteer_decides_with_ticks():
     assert status["case_documents"] == (readiness.PRESENT, "ticked by the volunteer")  # the volunteer knows best
     assert status["case_state"] == (readiness.UNCERTAIN, readiness.NOT_TICKED)          # unticked: a gap
     block = readiness.gaps_block(final, "en", reason="the state is confirmed at the next visit")
-    assert "- State: uncertain (not ticked by the volunteer)" in block
+    assert "Sent with 1 item not ticked:" in block and "- State" in block  # sent on purpose, with a reason
     assert "Sent anyway because: the state is confirmed at the next visit" in block
     cannot = readiness.with_ticks([readiness.Item("case_documents", readiness.CANNOT, "office refused")],
                                   {"case_documents": False})

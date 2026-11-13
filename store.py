@@ -125,9 +125,10 @@ def submit(draft_text: str, facts: UndertrialFacts, base: Path = HERE, ai: Optio
     audit.start_record(case_id, facts.to_dict(), ai, base=base, by=by, case_type=record["case_type"])  # one event
     if readiness is not None:
         open_items = [r for r in readiness if r["status"] in ("missing", "uncertain")]
+        reason = any(r.get("key") == "send_reason" and (r.get("note") or "").strip() for r in readiness)
         audit.add_event(case_id, "readiness when sent", audit.VOLUNTEER,
-                        "ready for review" if not open_items else f"not ready: {len(open_items)} items missing",
-                        base=base)
+                        "ready for review" if not open_items else f"not ready: {len(open_items)} items missing"
+                        + ("; reason given" if reason else ""), base=base)
     return case_id
 
 

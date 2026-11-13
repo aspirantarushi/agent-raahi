@@ -292,7 +292,7 @@ def due_this_week(today: date, base: Path = HERE) -> List[Tuple[str, Step, str]]
         for record in load_all(base):
             for s in steps_of(record):
                 d = s.due_date()
-                if s.status != TO_DO or d is None or d > today + timedelta(days=6):
+                if s.status != TO_DO or d is None or d > today + timedelta(days=7):  # 7 days, inclusive
                     continue
                 if s.eligibility_date:
                     if d >= today:

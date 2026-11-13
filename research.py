@@ -122,14 +122,10 @@ def check_points(raw: "llm.ResearchRaw", points: List[dict], resolve: Optional[C
         text = privacy.redact(_norm(str(p.get("text", ""))))[0][:2000 if kind == "letter" else 600]
         if not text:
             continue
-        if kind != "letter" and PREDICTION.search(text):
-            dropped.append({"kind": kind, "text": text, "reason": "predicts an outcome"})
+        if kind == "letter":  # the app builds the letter itself: the AI's own letter is never shown to anyone
             continue
-        if kind == "letter":
-            if only_blanks(text):
-                dropped.append({"kind": kind, "text": text, "reason": "a letter with nothing but blanks"})
-            else:
-                kept.append({"kind": kind, "text": text, "sources": []})  # sources given below
+        if PREDICTION.search(text):
+            dropped.append({"kind": kind, "text": text, "reason": "predicts an outcome"})
             continue
         span = _span(brief, p.get("quote", ""))
         if span is None:
@@ -151,21 +147,26 @@ def check_points(raw: "llm.ResearchRaw", points: List[dict], resolve: Optional[C
             dropped.append({"kind": kind, "text": text, "reason": "no official source among its search results"})
         else:
             kept.append({"kind": kind, "text": text, "sources": official})
-    # The draft letter rests on the routes and filing points kept above: it cites their sources.
-    basis = []
-    for p in kept:
-        if p["kind"] in ("route", "how_to_file"):
-            basis += [s for s in p["sources"] if s not in basis]
-    for p in [p for p in kept if p["kind"] == "letter"]:
-        if basis:
-            p["sources"] = basis
-        else:
-            kept.remove(p)
-            dropped.append({"kind": "letter", "text": p["text"], "reason": "no official route kept to base it on"})
+    kept = merge_duplicates(kept)
     for n, p in enumerate(kept, 1):
         p.update(id=f"p{n}", status=WAITING, decided_on=None, decided_by=None, original=p["text"],
                  warnings=point_warnings(p, state))
     return kept, dropped, sources
+
+
+def merge_duplicates(points: List[dict]) -> List[dict]:
+    """Points of the same kind with the same sources say the same thing: keep one, with the more specific
+    (longer) text, so the supervisor decides it once and the counts match what is shown."""
+    out = []
+    for p in points:
+        links = frozenset(same_link(s["url"]) for s in p["sources"])
+        twin = next((q for q in out if q["kind"] == p["kind"]
+                     and frozenset(same_link(s["url"]) for s in q["sources"]) == links), None)
+        if twin is None:
+            out.append(p)
+        elif len(p["text"]) > len(twin["text"]):
+            twin["text"] = p["text"]
+    return out
 
 
 # ---------- checks shown to the supervisor ----------
@@ -395,10 +396,10 @@ def decide(research_id: str, point_id: str, decision: str, text: Optional[str] =
             case.setdefault("research_points", []).append({
                 "research_id": research_id, "point_id": point_id, "issue": record["issue"], "state": record["state"],
                 "kind": point["kind"], "text": point["text"], "sources": point["sources"],
-                "approved_on": today.isoformat()})
-            tracker._note(case, "supervisor", f"research point approved ({research_id} {point_id})")
+                "approved_on": today.isoformat(), "approved_by": point["decided_by"]})
+            tracker._note(case, "supervisor", f"research point approved ({research_id} {point_id})", volunteer=False)
             tracker._save(case, base)
-    if all(p["status"] != WAITING for p in record["points"]):
+    if all(p["status"] != WAITING for p in record["points"] if p.get("kind") != "letter"):
         record["status"] = REVIEWED
     storage.write_json("research", research_id, record, base)
     details = f"{research_id} {point_id} ({KINDS[point['kind']]})"
@@ -495,7 +496,7 @@ def save_knowledge(research_id: str, point_id: str, heading: str, words: Optiona
              "state": record["state"], "heading": heading, "body": point["text"],
              "source": "; ".join(s["title"] for s in point["sources"]), "link": first["url"],
              "links": [s["url"] for s in point["sources"]], "checked": today.isoformat(),
-             "approved_by": point.get("decided_by") or audit.SUPERVISOR,
+             "approved_by": point.get("decided_by") or audit.SUPERVISOR, "lawyer_checked": "no",
              "approved_on": point.get("decided_on") or today.isoformat(), "keywords": words,
              "from_case": record["case_id"], "from_research": research_id, "point_id": point_id}
     storage.write_json("knowledge_added", entry["id"], entry, base)
@@ -550,7 +551,7 @@ def items_for_summary(case_id: Optional[str], state: Optional[str], issues: List
             continue
         items.append({"issue": target, "origin": "research", "kind": p["kind"], "heading": KINDS[p["kind"]],
                       "text": p["text"], "source_line": source_line(p["sources"]), "approved_on": p["approved_on"],
-                      "approved_by": ""})
+                      "approved_by": p.get("approved_by", "")})
     return items
 
 

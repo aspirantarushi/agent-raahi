@@ -27,6 +27,9 @@ def to_summary(at):
         if any(b.key == "q-not-needed-go" for b in at.button):
             at.button(key="q-not-needed-go").click().run()
             continue
+        if any(b.key == "la-next" for b in at.button):  # the free legal aid screen: all "Don't know"
+            at.button(key="la-next").click().run()
+            continue
         skip = [b for b in at.button if b.key and b.key.startswith("gskip-") and b.key != "gskip-all"]
         if not skip:
             return at
@@ -332,7 +335,7 @@ def test_what_the_agent_did_card_from_the_audit_record(monkeypatch):
     events = [e["event"] for e in audit.read_record(at.session_state["case_id"])["events"]]
     assert "story read" in events and "question asked" in events and "drafts made" in events
     [text] = [m.value for m in at.markdown if 'class="agent-did"' in m.value]
-    assert "Story read" in text and f"model {MODEL}" in text and "Question asked" in text and "Drafts made" in text
+    assert "Story read" in text and "model Google Gemini" in text and MODEL not in text and "Question asked" in text and "Drafts made" in text
     assert "(by " not in text  # who is in the audit table; the card says what was done
 
 

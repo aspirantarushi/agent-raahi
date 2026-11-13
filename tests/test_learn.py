@@ -149,7 +149,7 @@ def test_the_check_gives_instant_feedback():
     ok(at)
     assert at.error[0].value.startswith("**Not quite: the answer is b) Yes, women qualify whatever their income.**")
     at.radio(key="learn-legal_aid-1").set_value("b").run()            # right
-    assert at.success[0].value.startswith("**Right.** Women, children and people in custody qualify")
+    assert at.success[0].value.startswith("**Right.** Women, children, people in custody, SC/ST members")
     assert any("Section 12</a>" in m.value for m in at.markdown if 'class="learn-src"' in m.value)
 
 

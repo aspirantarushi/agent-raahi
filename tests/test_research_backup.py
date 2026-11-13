@@ -78,8 +78,7 @@ def test_tavily_is_used_when_google_search_fails_with_every_check(tmp_path, back
     # The writer saw only official results (the blog was filtered out before it), and Groq may help
     assert "lawrato" not in backup["prompts"][0] and backup["groq"] == [True, True]
     kept = [p["text"] for p in record["points"]]
-    assert kept == ["Write first to the Assistant Engineer.", "If no reply, complain to the CGRF.",
-                    POINTS[4]["text"]]
+    assert kept == ["Write first to the Assistant Engineer.", "If no reply, complain to the CGRF."]  # no AI letter
     assert {s["url"] for p in record["points"] for s in p["sources"]} <= {r["url"] for r in FAKE_RESULTS[:2]}
     reasons = {d["text"]: d["reason"] for d in record["dropped"]}
     assert reasons["Keep the latest bill and receipts."] == "no search result backs it"  # its only result was a blog

@@ -116,10 +116,10 @@ def test_supervisor_is_asked_for_a_name_after_the_password(monkeypatch):
 
 def test_own_draft_on_screen_cannot_be_approved(monkeypatch):
     case_id, _ = waiting_case(by="Practice Volunteer Z")
-    at = supervisor_screen(monkeypatch, name="practice volunteer z")
-    at.radio(key=f"action-{case_id}").set_value("Approve").run()
-    assert any("You sent this draft, so another supervisor must approve it." in w.value for w in at.warning)
-    assert at.button(key=f"approve-{case_id}").disabled
+    at = supervisor_screen(monkeypatch, name="  practice volunteer z ")   # case and spaces don't matter
+    # shown first, at the top of the case card, and every decision is locked
+    assert at.error[0].value == "You sent this draft, so another supervisor must approve it."
+    assert at.radio(key=f"action-{case_id}").disabled
     assert store.get_pending(case_id)["status"] == store.WAITING
 
 

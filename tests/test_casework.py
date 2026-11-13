@@ -148,7 +148,7 @@ def test_a_point_not_approved_never_reaches_the_letter():
 def test_hindi_letter_is_in_hindi_with_the_draft_line():
     letter = casework.complaint_letter(ELECTRICITY, BIHAR_POINTS, "बिजली का कनेक्शन कटा", None, "hi")
     assert letter.startswith("DRAFT — to be checked by a lawyer\nड्राफ़्ट — वकील से जाँच करवाना ज़रूरी है")
-    assert "सेवा में" in letter and "मेरा अनुरोध है" in letter and "यह ड्राफ़्ट कैसे बना" in letter
+    assert "सेवा में" in letter and "व्यक्ति का अनुरोध है" in letter and "यह ड्राफ़्ट कैसे बना" in letter
 
 
 def test_dlsa_application_filled_from_the_case_in_both_languages():

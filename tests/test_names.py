@@ -67,7 +67,10 @@ def test_case9_story_name_warning_on_screen(monkeypatch):
     at.text_area(key="g_notes").set_value(CASE9)
     choose_language(at, "g_notes", language_of(CASE9))
     next(b for b in at.button if b.label == "Read the story").click().run()
-    for _ in range(10):  # the questions: "Don't know"
+    for _ in range(10):  # the questions: "Don't know" (and the free legal aid screen: Next)
+        if any(b.key == "la-next" for b in at.button):
+            at.button(key="la-next").click().run()
+            continue
         skip = [b for b in at.button if b.key and b.key.startswith("gskip-") and b.key != "gskip-all"]
         if not skip:
             break

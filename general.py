@@ -133,6 +133,7 @@ class GeneralReading:
     documents_held: List[str] = field(default_factory=list)
     questions: List[str] = field(default_factory=list)
     question_reasons: Dict[str, str] = field(default_factory=dict)  # the AI's "why this is asked", name-checked
+    question_fills: Dict[str, str] = field(default_factory=dict)  # what each question's answer fills (fills())
     outcome: str = ""                                            # what the person wants, from the notes
     dropped: List[str] = field(default_factory=list)
     unconfirmed_yes: List[str] = field(default_factory=list)  # "yes" answers whose words weren't found
@@ -253,16 +254,23 @@ def check_general_answer(raw: dict, notes: str, code: str = "en") -> GeneralRead
         r.issues.append(("online_or_financial_fraud", "money lost online"))
 
     r.documents_held = [c for c in (clean(d, 100) for d in (raw.get("documents_held") or [])[:10]) if c]
-    r.questions = [c for c in (clean(q, 200) for q in (raw.get("questions_to_ask") or [])[:5])
+    r.questions = [person_not_you(c) for c in (clean(q, 200) for q in (raw.get("questions_to_ask") or [])[:5])
                    if c and not privacy.personal_details_found(c)]
     for q, why in zip((raw.get("questions_to_ask") or [])[:5], raw.get("why_asked") or []):
-        q, why = clean(q, 200), clean(why, 200)
-        if q in r.questions and why and reason_is_clean(why, notes):
-            r.question_reasons[q] = why
+        q, why = person_not_you(clean(q, 200)), clean(why, 200)
+        if q in r.questions and why and reason_is_clean(why, notes) and not BAD_REASON.search(why):
+            r.question_reasons[q] = person_not_you(why)
     value, quote = _quoted(raw.get("outcome_wanted"), notes)
     if value and quote:
-        r.outcome = clean(value, 200)
-    r.questions = follow_up_questions(r, code)
+        r.evidence["outcome"] = clean(quote, 200)  # the exact words: shown only in "Where each fact comes from"
+        if not untranslated(value, quote, code):  # the notes' own words never become the plain-words version
+            r.outcome = clean(value, 200)
+    meaning = clean(raw.get("payment_demand_meaning"), 200)
+    if meaning and r.evidence.get("unofficial_payment_demand") and reason_is_clean(meaning, notes) \
+            and not untranslated(meaning, "", "en"):
+        r.evidence["unofficial_payment_demand_en"] = meaning
+    r.questions = follow_up_questions(r, code, notes)
+    r.question_fills = {q: fills(q) for q in r.questions}  # recorded when the questions are made
     return r
 
 
@@ -288,7 +296,45 @@ RELATIVE_WHEN = re.compile(r"today|yesterday|ago|last (week|month|night)|this (w
                            re.I)
 
 
-def follow_up_questions(r: GeneralReading, code: str = "en") -> List[str]:
+YOU_TO_PERSON = [(r"\bdo you have\b", "does the person have"), (r"\bdid you\b", "did the person"),
+                 (r"\bdo you\b", "does the person"), (r"\bare you\b", "is the person"), (r"\bwere you\b", "was the person"),
+                 (r"\bhave you\b", "has the person"), (r"\bcan you\b", "can the person"), (r"\bwill you\b", "will the person"),
+                 (r"\byours\b", "the person's"), (r"\byour\b", "the person's"), (r"\byou\b", "the person"),
+                 (r"आपके", "व्यक्ति के"), (r"आपकी", "व्यक्ति की"), (r"आपका", "व्यक्ति का"), (r"आपको", "व्यक्ति को"),
+                 (r"आपने", "व्यक्ति ने"), (r"आप", "व्यक्ति")]
+# A demand for an unofficial payment is never something to negotiate, waive or pay
+NEGOTIABLE = re.compile(r"waive|waiver|reduce|reduction|negotiat|agree to pay|pay (the|this|that|it)\b|settle|maaf|माफ़|माफ|कम कर",
+                        re.I)
+DEMAND_WORDS = re.compile(r"lineman|bribe|unofficial|kharcha|demand|asked for (money|rs|₹)|rishwat|रिश्वत|ख़र्चा|खर्चा|माँग|मांग",
+                          re.I)
+DOC_NOUNS = ["written contract", "contract", "agreement", "receipt", "bill", "notice", "message", "messages", "letter",
+             "slip", "pay slip", "payslip", "photo", "photos", "fir", "certificate", "appointment letter", "id card"]
+# "why this is asked" never weighs the case: no strength of evidence, chances or the other side
+BAD_REASON = re.compile(r"strength|strong|weak|chance|likel|\bwin\b|\blose\b|credib|believ|other side|opponent|"
+                        r"the other party|defen[cs]e|prove the claim|assess the claim", re.I)
+
+
+def person_not_you(question: str) -> str:
+    """The volunteer fills the answers in: questions are about "the person", never "you"."""
+    out = question
+    for pattern, repl in YOU_TO_PERSON:
+        out = re.sub(pattern, repl, out, flags=re.I)
+    return out[:1].upper() + out[1:] if out else out
+
+
+def answered_by_notes(question: str, notes: str) -> bool:
+    """The notes already say the person has no such paper ("no written contract", "receipt nahi"): don't ask."""
+    q, n = question.casefold(), " ".join((notes or "").casefold().split())
+    for noun in sorted(DOC_NOUNS, key=len, reverse=True):
+        if re.search(rf"(?<!\w){re.escape(noun)}s?(?!\w)", q):  # whole words: "contract", not "contractor"
+            word = re.escape(noun.split()[-1])
+            if re.search(rf"\b(no|not any|not a|without|never (got|had|received|given))\s+(written\s+|any\s+|a\s+|proper\s+)?"
+                         rf"(\w+\s+)?{word}", n) or re.search(rf"{word}\w*\s+(bhi\s+)?(nahi+n?|nahin|नहीं)", n):
+                return True
+    return False
+
+
+def follow_up_questions(r: GeneralReading, code: str = "en", notes: str = "") -> List[str]:
     """The AI's questions, checked by plain code: nothing the story already answers; then what the
     person wants (if the story doesn't say) and the year of any date written without one."""
     def t(key, **params):
@@ -301,7 +347,9 @@ def follow_up_questions(r: GeneralReading, code: str = "en") -> List[str]:
     # only when they matter: the AI's own versions of them are left out, so nothing is asked twice.
     questions = [q for q in r.questions
                  if not any(fact in r.facts and has(q, words) for fact, words in FACT_WORDS.items())
-                 and not any(has(q, words) for words in ELIGIBILITY_WORDS.values())]
+                 and not any(has(q, words) for words in ELIGIBILITY_WORDS.values())
+                 and not (NEGOTIABLE.search(q) and DEMAND_WORDS.search(q))   # never "should the demand be waived?"
+                 and not answered_by_notes(q, notes)][:5]                       # at most 5 of the AI's questions
     if not r.person and not any(has(q, ["who needs", "who is the person", "किसे मदद"]) for q in questions):
         questions.append(t("q.person"))
     if not r.outcome and not any(has(q, OUTCOME_WORDS) for q in questions):
@@ -541,10 +589,11 @@ _NOT_NAMES = {
 }
 
 
-def possible_names(summary: str, notes: str) -> List[str]:
+def possible_names(summary: str, notes: str, state: str = "") -> List[str]:
     """Capitalised words from the middle of sentences in the notes that also appear in the summary.
-    A rough check: names can't be detected reliably, so the volunteer must also confirm."""
-    states = {w.casefold() for s in state_names() for w in s.split()}
+    A rough check: names can't be detected reliably, so the volunteer must also confirm. Never a state or
+    UT name, the case's state, or a word next to district / zila / zile / जिला / जिले / city / village / gaon."""
+    states = {w.casefold() for s in state_names() for w in s.split()} | {w.casefold() for w in (state or "").split()}
     places = place_words(notes, states)
     found = []
     for sentence in re.split(r"(?<=[.!?:])\s+|\n", notes):
@@ -561,6 +610,27 @@ def possible_names(summary: str, notes: str) -> List[str]:
     return found
 
 
+HINGLISH = {"aur", "hai", "hain", "ho", "ki", "ka", "ke", "ko", "se", "mein", "me", "nahi", "nahin", "wapas", "turant",
+            "rupaye", "rupaiye", "rupay", "kharcha", "pani", "dena", "dijiye", "lena", "wala", "wali", "abhi",
+            "jode", "jod", "theek", "thik", "chahiye", "chahte", "chahti", "chahta", "karo", "kare", "kar", "diya",
+            "mila", "mile", "paisa", "paise", "bijli", "galat", "sahi", "kaam", "ghar", "unka", "uska", "unki", "uski"}
+
+
+def untranslated(value: str, quote: str, code: str) -> bool:
+    """For an English screen or draft: True when the text is still in the notes' own words (Hindi script, or
+    romanised Hindi such as "bijli turant wapas jode"), or mostly the same words as the quote."""
+    if code != "en" or not value:
+        return False
+    if re.search(r"[\u0900-\u097F]", value):
+        return True
+    words = re.findall(r"[a-z]+", value.casefold())
+    if words and sum(w in HINGLISH for w in words) >= max(2, len(words) // 4):
+        return True
+    q = set(re.findall(r"[a-z\u0900-\u097F]+", (quote or "").casefold()))
+    return bool(q) and len(words) >= 3 and sum(w in q for w in words) / len(words) >= 0.6 and \
+        (bool(re.search(r"[\u0900-\u097F]", quote)) or sum(w in HINGLISH for w in q) >= 2)
+
+
 def reason_is_clean(text: str, notes: str) -> bool:
     """The AI's reason for a question, shown under it, only if plain code finds no name, phone, Aadhaar or
     other personal number in it."""
@@ -568,14 +638,19 @@ def reason_is_clean(text: str, notes: str) -> bool:
     return not (privacy.personal_details_found(text) or possible_names(text, notes) or names.found_in(text, states))
 
 
-def names_in_story(notes: str) -> List[str]:
+def names_in_story(notes: str, state: str = "") -> List[str]:
     """Words in the story that look like people's names (common Indian first names and surnames), even
-    when none reached the summary: the volunteer is told, so they check before ticking "no names"."""
-    return names.found_in(notes, {w.casefold() for s in state_names() for w in s.split()})
+    when none reached the summary: the volunteer is told, so they check before ticking "no names". Never a
+    state or UT name, the case's state, or a place ("Gaya district", "zile Gaya", "village Rampur")."""
+    states = {w.casefold() for s in state_names() for w in s.split()} | {w.casefold() for w in (state or "").split()}
+    places = place_words(notes, states)
+    return [w for w in names.found_in(notes, states) if w.casefold() not in states and w.casefold() not in places]
 
 
-PLACE_BEFORE = re.compile(r"\b(?:in|at|near|lives in|works in|district|city of|town of|village of)\s+$", re.I)
-PLACE_AFTER = re.compile(r"^\s*(?:mein|me|main|district|distt|city|zila|jila|town|village|gaon|nagar|tehsil|block|"
+PLACE_BEFORE = re.compile(r"(?:\b(?:in|at|near|lives in|works in|district|distt|city|city of|town of|village|village of|"
+                          r"zila|zile|jila|jile|gaon)|जिला|जिले|ज़िला|ज़िले)\s+$", re.I)
+PLACE_AFTER = re.compile(r"^\s*(?:mein|me|main|district|distt|city|zila|zile|jila|jile|town|village|gaon|nagar|tehsil|block|"
+                         r"जिला|जिले|ज़िला|ज़िले|गाँव|गांव|"
                          r"police station|thana|,\s*(?:\w+\s+)?(?:%s))\b", re.I)
 
 
@@ -619,6 +694,7 @@ class GeneralFacts:
     research_state: str = "none"  # "none" (our files cover it), "waiting", "failed", "approved"
     documents_cannot: Dict[str, str] = field(default_factory=dict)  # document -> why it can't be got
     documents_to_get: Optional[List[str]] = None  # as the volunteer marked them (None: work it out)
+    research_pending: int = 0  # research points from official websites waiting for the supervisor
 
     def to_dict(self) -> dict:
         d = {k: v for k, v in self.__dict__.items()}
@@ -632,7 +708,7 @@ class GeneralFacts:
         return cls(**{k: d[k] for k in keys}, precautions=d.get("precautions", []), research=d.get("research", []),
                    outcome=d.get("outcome", ""), evidence=d.get("evidence", {}),
                    research_state=d.get("research_state", "none"), documents_cannot=d.get("documents_cannot", {}),
-                   documents_to_get=d.get("documents_to_get"))
+                   documents_to_get=d.get("documents_to_get"), research_pending=d.get("research_pending", 0))
 
 
 OWED = re.compile(r"unpaid|not (been )?paid|n[o']t paid|owed|owes|due to (him|her|them)|pending|arrears|withheld|"
@@ -648,6 +724,31 @@ def owed_money(quote: str) -> bool:
 YEAR = re.compile(r"\b(19|20)\d{2}\b")
 DOC_QUESTION = re.compile(r"document|paper|proof|receipt|slip|record|card|pass|copy|letter|evidence|दस्तावेज़|"
                           r"दस्तावेज|कागज़|काग़ज़|कागज|kagaz|kaagaz|saboot|सबूत|रसीद", re.I)
+REFERENCE_QUESTION = re.compile(r"consumer\s*(number|no\b)|account\s*(number|no\b)|application\s*(number|no\b)|"
+                                r"connection\s*(number|no\b)|\bk\s*number|\bca\s*number|card\s*number|agreement|"
+                                r"उपभोक्ता\s*(संख्या|नंबर)|खाता\s*(संख्या|नंबर)|आवेदन\s*(संख्या|नंबर)", re.I)
+YES_ANSWER = re.compile(r"^\s*(yes|y|haan|han|ha|ji|ji haan|हाँ|हां|जी)\b", re.I)
+PERSON_WORDS = ["who needs", "who is the person", "किसे मदद"]
+
+
+def fills(question: str) -> str:
+    """What a question's answer fills in the case (plain code): "outcome", "person", "reference" (has the
+    consumer or application number: yes or no; the number itself is never kept), "documents", "date",
+    or "other"."""
+    q = question.casefold()
+    if any(w in q for w in PERSON_WORDS):
+        return "person"
+    if REFERENCE_QUESTION.search(question):
+        return "reference"
+    if any(re.search(rf"(?<!\w){re.escape(w)}", q) for w in OUTCOME_WORDS):
+        return "outcome"
+    if DOC_QUESTION.search(question):
+        return "documents"
+    if WHEN_QUESTION.search(question):
+        return "date"
+    return "other"
+
+
 NO_ANSWER = re.compile(r"^\s*(no|none|nothing|not|nahi+n?|nahin|kuch nahi|नहीं|कुछ नहीं|don'?t know|pata nahi)\b", re.I)
 
 
@@ -716,10 +817,18 @@ def apply_answers(g: "GeneralFacts", code: str = "en") -> "GeneralFacts":
             when = found[0].strip(" ,")
             if not any(when.casefold() in w.casefold() for w, _ in g.timeline + g.coming_dates):
                 g.timeline.append((when, question.strip()))  # the question as asked reads clearly
-        if question in (lang.t("q.person", "en"), lang.t("q.person", "hi")) and not g.person:
-            g.person = clean(answer, 120)
-        elif question in (lang.t("q.outcome", "en"), lang.t("q.outcome", "hi")) and not g.outcome:
-            g.outcome = clean(answer, 200)
+        kind = fills(question)  # what this question's answer fills
+        if (kind == "person" or question in (lang.t("q.person", "en"), lang.t("q.person", "hi"))) and not g.person:
+            if not NO_ANSWER.search(answer):
+                g.person = clean(answer, 120)
+        elif kind == "outcome" or question in (lang.t("q.outcome", "en"), lang.t("q.outcome", "hi")):
+            if not g.outcome and not NO_ANSWER.search(answer):
+                g.outcome = clean(answer, 200)
+        elif kind == "reference":  # "Do you have the consumer number?" "Yes": has it (never the number itself)
+            if YES_ANSWER.search(answer):
+                g.facts["has_reference_number"] = True
+            elif re.match(r"^\s*(no|nahi+n?|nahin|नहीं)\b", answer, re.I):
+                g.facts["has_reference_number"] = False
         elif DOC_QUESTION.search(question) and not NO_ANSWER.search(answer):
             parts = re.split(r",|;|\band\b|\baur\b|\bor\b|और|तथा", re.sub(r"^\s*(yes|haan|han|ha|हाँ|हां)[,.\s-]*", "",
                                                                        answer, flags=re.I))
@@ -730,18 +839,54 @@ def apply_answers(g: "GeneralFacts", code: str = "en") -> "GeneralFacts":
     return g
 
 
+def answers_still_apply(answers: List[Tuple[str, str]], reading: GeneralReading) -> List[Tuple[str, str]]:
+    """After an edited story is read again: keep the volunteer's answers only where they still apply. An
+    answer is dropped when the new reading already gives that fact (who needs help, what they want, the
+    consumer number), or when it fixed the year of a date the new story no longer has."""
+    kept = []
+    for q, a in answers:
+        kind = fills(q)
+        if kind == "outcome" and reading.outcome or kind == "person" and reading.person:
+            continue
+        if kind == "reference" and reading.facts.get("has_reference_number") is not None:
+            continue
+        if q.startswith((lang.t("q.year_start", "en"), lang.t("q.year_start", "hi"))) and not any(
+                q in (lang.t("q.year", c, when=w, what=x) for c in ("en", "hi")) for w, x in reading.timeline + reading.coming_dates):
+            continue
+        kept.append((q, a))
+    return kept
+
+
+def dedupe_timeline(entries: List[Tuple[str, str]]) -> List[Tuple[str, str]]:
+    """The same date and the same event once (the later, fuller wording)."""
+    import tracker
+    out = []
+    for when, what in entries:
+        def same_event(a, b):
+            pa, pb = tracker._plain_line(a), tracker._plain_line(b)
+            return tracker.same_line(a, b) or bool(pa and pb) and (pa in pb or pb in pa)
+        twin = next((i for i, (w, x) in enumerate(out)
+                     if w.casefold().strip() == when.casefold().strip() and same_event(x, what)), None)
+        if twin is None:
+            out.append((when, what))
+        elif len(what) > len(out[twin][1]):
+            out[twin] = (when, what)
+    return out
+
+
 def build_facts(reading: GeneralReading, answers: List[Tuple[str, str]], still_to_ask: List[str],
                 facts: Dict[str, object], today: date) -> GeneralFacts:
     sections = [f"IPC {o.ipc_section} = BNS {o.bns_section}: {o.offence}" for o in reading.sections]
     return apply_answers(GeneralFacts(
-        person=reading.person, what_happened=reading.what_happened, timeline=list(reading.timeline),
-        coming_dates=list(reading.coming_dates), issues=reading.issues, sections=sections,
+        person=reading.person, what_happened=reading.what_happened, timeline=dedupe_timeline(list(reading.timeline)),
+        coming_dates=dedupe_timeline(list(reading.coming_dates)), issues=reading.issues, sections=sections,
         documents_held=list(reading.documents_held),
         answers=[(clean(q, 200), clean(a, 300)) for q, a in answers],
         still_to_ask=still_to_ask, facts=dict(facts), today=today.isoformat(),
         precautions=[k for k in reading.unconfirmed_yes if k in PRECAUTION_FACTS],
         outcome=reading.outcome,
-        evidence={k: v for k, v in reading.evidence.items() if k == "unofficial_payment_demand"},
+        evidence={k: v for k, v in reading.evidence.items()
+                  if k in ("unofficial_payment_demand", "unofficial_payment_demand_en", "outcome")},
     ))
 
 
@@ -778,8 +923,10 @@ def _research_lines(items: List[dict], hi: bool = False) -> List[str]:
                     f"From approved research saved in our files, “{i['heading']}” (approved by the supervisor "
                     f"({who}, {i['approved_on']})):")
         else:
-            head = (_hi("sum.research_case", heading=i["heading"], date=i["approved_on"]) if hi else
-                    f"{i['heading']} (AI research, approved by the supervisor on {i['approved_on']}):")
+            import casework  # "approved by Supervisor on 12 November 2026": the name and the long date
+            who_when = casework.approved_text(i, "hi" if hi else "en")
+            head = (_hi("sum.research_case", heading=i["heading"], approved=who_when) if hi else
+                    f"{i['heading']} (AI research, {who_when}):")
         out.append(f"   {head}")
         out += [f"   {line}" for line in i["text"].splitlines() if line.strip()]
         out.append(f"   {i['source_line']}")
@@ -909,7 +1056,7 @@ def _summary(g: "GeneralFacts", code: str) -> str:
         entries = [knowledge.get(f, h, code) for f, h in ISSUE_KNOWLEDGE.get(category, [])]
         researched = research_for(g, name)
         if not entries and not researched:
-            out.append(f"   {t('sum.not_covered')}")
+            out.append(f"   {t('sum.research_pending', n=g.research_pending) if g.research_pending else t('sum.not_covered')}")
         out += _research_lines(researched, hi=hi)
         for e in entries:
             out.append("   " + t("sum.from_files", heading=e.heading))
@@ -998,7 +1145,7 @@ def _lawyer_lines(g: "GeneralFacts", code: str) -> List[str]:
 def _step_lines(g: "GeneralFacts", eligibility, code: str) -> List[str]:
     import casework
     steps = casework.next_steps(g, eligibility, _approved_points(g), g.research_state, date.fromisoformat(g.today),
-                                code)
+                                code, document=True)
     out = []
     for i, s in enumerate(steps, 1):
         text = s.text

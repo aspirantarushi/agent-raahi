@@ -19,7 +19,7 @@ from volunteer import calculate, choose_language, language_of, make_drafts  # no
 
 ROOT = Path(__file__).resolve().parent.parent
 MODEL = "gemini-3.5-flash-lite"
-AI_SENTENCE = (f"How this draft was prepared: facts were read from case notes with AI assistance ({MODEL}) "
+AI_SENTENCE = (f"How this draft was prepared: facts were read from case notes with AI assistance (Google Gemini) "
                "and checked by a volunteer; dates were calculated by rule-based code from the statute; "
                "the draft was reviewed and approved by the supervisor on [date]. If this is filed in any "
                "court, AI assistance must be declared as the court requires.")
@@ -73,7 +73,7 @@ def test_approval_date_filled_on_approval(tmp_path):
     saved = (tmp_path / "drafts" / f"{case_id}.md").read_text(encoding="utf-8")
     assert "approved by the supervisor on 5 November 2026." in saved
     assert "[date]. If this is filed" not in saved
-    assert f"with AI assistance ({MODEL})" in saved
+    assert "with AI assistance (Google Gemini)" in saved  # the plain name; the raw id stays in the audit record
 
 
 def test_disclosure_put_back_if_supervisor_deleted_it(tmp_path):

@@ -29,7 +29,7 @@ Place: [place]
 ---
 Notes for the volunteer
 - Applications in other formats are also accepted if they explain the facts (Regulation 3).
-- A person in custody, a woman or a child qualifies whatever their income.
+- Women, children, people in custody, SC/ST members, people with disabilities, industrial workers, and victims of trafficking or disasters qualify whatever their income.
 - A decision must be taken immediately, within seven days at most (Regulation 7, as substituted in 2018).
 - A self-certificate with self-attested copies of documents is ordinarily enough proof of eligibility (Regulation 5, as amended in 2018).
 - Source (current amended text): https://nalsa.gov.in/regulations/

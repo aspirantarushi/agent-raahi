@@ -24,6 +24,7 @@ not to type names.
 import base64
 import json
 import os
+import re
 import socket
 import ssl
 import time
@@ -491,6 +492,7 @@ GENERAL_SCHEMA = {
         "documents_held": {"type": "ARRAY", "items": {"type": "STRING"}},
         "questions_to_ask": {"type": "ARRAY", "items": {"type": "STRING"}},
         "why_asked": {"type": "ARRAY", "items": {"type": "STRING"}},
+        "payment_demand_meaning": {"type": "STRING", "nullable": True},
         "outcome_wanted": {"type": "OBJECT",
                            "properties": {"value": {"type": "STRING", "nullable": True},
                                           "quote": {"type": "STRING", "nullable": True}},
@@ -561,11 +563,19 @@ Rules:
   they hope for) if the notes don't say it; for any date without a year, ask for the full date; ask the
   person's age if it is not stated and they might be under 18 (children get free legal aid whatever the
   income). Never ask for names, phone numbers, Aadhaar numbers, addresses or ID numbers.
+  Never ask anything the notes already answer, even with "no" (if the notes say "no written contract",
+  don't ask about a contract). The volunteer fills the answers in: always say "the person" (or their
+  role), never "you". Never ask whether an unofficial payment demand should be paid, reduced, waived or
+  negotiated: such a demand is only recorded for the lawyer.
 - why_asked: for each question in questions_to_ask, in the same order, one short plain sentence saying
-  what the answer is needed for (for example "The letter must say when the wages stopped."). Never
-  include anyone's name, and never judge the person, their chances or their credibility.
-- outcome_wanted: what the person wants to happen, in plain words, only if the notes say it (with the
-  exact words as quote); otherwise null.
+  what the letter or the application needs the answer for (for example "The letter must say when the
+  wages stopped."). Never include anyone's name. Never mention the strength of evidence, chances,
+  winning, the other side, or anyone's credibility.
+- outcome_wanted: what the person wants to happen, only if the notes say it; otherwise null. value: YOUR
+  OWN plain words in {output_language} (translate it: never copy the notes' Hindi or Hinglish words into
+  value). quote: the exact words from the notes.
+- payment_demand_meaning: only if unofficial_payment_demand is "yes": what the demand was, in plain
+  English (for example "Rs 2,000 to reconnect the electricity"); otherwise null. No names.
 - woman, under_18, sc_st, disability, state, income: about the person needing legal help (not the
   person telling the story). income: the amount and whether it is per month or per year, as written;
   do not convert it. income is what the person earns now; wages or money owed to them (unpaid salary)
@@ -855,3 +865,24 @@ def research_issue_tavily(state: str, issue: str) -> "ResearchRaw":
                 for s in sentences]
     return ResearchRaw(brief, [{"uri": r["url"], "title": r["title"]} for r in results], supports, [], 
                        f"{TAVILY_LABEL}; brief by {model}", f"State: {state}. Problem: {issue}")
+
+
+def display_model(raw: Optional[str]) -> str:
+    """The model's name as people read it: "groq:openai/gpt-oss-120b" -> "Groq (gpt-oss-120b)",
+    "gemini-3.5-flash-lite" -> "Google Gemini". The raw id stays in the audit record and the CSV."""
+    if not raw:
+        return ""
+    parts = []
+    for one in re.split(r"\s*(?:\+|,| and )\s*", str(raw)):
+        low = one.casefold()
+        if low.startswith("groq:") or "groq" in low:
+            name = one.split(":", 1)[-1].split("/")[-1] or "Groq"
+            parts.append(f"Groq ({name})")
+        elif "gemini" in low:
+            parts.append("Google Gemini")
+        elif "tavily" in low:
+            parts.append("Tavily search (official sites only)")
+        elif one:
+            parts.append(one)
+    return " + ".join(dict.fromkeys(parts))
+

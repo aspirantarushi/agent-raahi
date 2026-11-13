@@ -11,7 +11,7 @@ Every point, step and answer below names the knowledge/ entry it comes from, as 
 ## Key idea
 1. Free legal aid is for a person who has to file or defend a case and belongs to a group in Section 12: a member of a Scheduled Caste or Scheduled Tribe, a victim of trafficking or begar, a woman or a child, a person with a disability, a person in undeserved want (such as a disaster victim), an industrial workman, a person in custody, or a person whose income is below their state's limit.
    Source: Legal Services Authorities Act, 1987, Section 12 [[Who qualifies for free legal aid]]
-2. Women, children and people in custody qualify whatever their income. Others can qualify on income, below the limit set for their state (or below ₹5 lakh for cases in the Supreme Court).
+2. Women, children, people in custody, SC/ST members, people with disabilities, industrial workers, and victims of trafficking or disasters qualify whatever their income. Others qualify if their income is below their state's limit (or below ₹5 lakh for cases in the Supreme Court).
    Source: Legal Services Authorities Act, 1987, Section 12 [[Who qualifies for free legal aid]]
 3. The authority must also be satisfied that the person has a prima facie case. An accused person, a convict who wants to appeal, and a defendant in a civil case are treated as already having one.
    Source: Legal Services Authorities Act, 1987, Section 13(1) [[The person must also have a case worth pursuing]]
@@ -61,7 +61,7 @@ Model answer:
 1. A woman earning ₹8 lakh a year needs a lawyer to defend a case. Does she qualify for free legal aid?
    a) No, her income is too high  b) Yes, women qualify whatever their income  c) Only in Delhi  d) Only for criminal cases
    Answer: b
-   Why: Women, children and people in custody qualify whatever their income.
+   Why: Women, children, people in custody, SC/ST members, people with disabilities, industrial workers, and victims of trafficking or disasters qualify whatever their income.
    Source: Legal Services Authorities Act, 1987, Section 12 [[Who qualifies for free legal aid]]
 
 2. What is ordinarily enough to show the person's income?
