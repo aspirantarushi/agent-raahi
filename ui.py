@@ -356,6 +356,13 @@ def footer(name: str, parts, privacy: str) -> str:
     return '<footer class="footer">' + " \u00b7 ".join(f'<span class="fi">{i}</span>' for i in items) + "</footer>"
 
 
+def sup_section(letter: str, title: str, note: str = "") -> str:
+    """A section heading inside a supervisor case card: "A  Research points (AI, from official websites)",
+    with one grey line under it saying what deciding there does."""
+    return (f'<div class="sup-section"><span class="sup-letter">{html.escape(letter)}</span>'
+            f'<div><h4>{html.escape(title)}</h4>' + (f'<p>{html.escape(note)}</p>' if note else "") + "</div></div>")
+
+
 def guide_card(name: str, title: str, text: str, tag: str = "") -> str:
     """A Learn card: topic icon above the title and a line about it (like the safety cards); tag: for
     example "Coming soon", for a guide not shown yet."""

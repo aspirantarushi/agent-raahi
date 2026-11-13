@@ -119,7 +119,9 @@ def test_own_draft_on_screen_cannot_be_approved(monkeypatch):
     at = supervisor_screen(monkeypatch, name="  practice volunteer z ")   # case and spaces don't matter
     # shown first, at the top of the case card, and every decision is locked
     assert at.error[0].value == "You sent this draft, so another supervisor must approve it."
-    assert at.radio(key=f"action-{case_id}").disabled
+    assert not any(r.key == f"action-{case_id}" for r in at.radio)          # no decision buttons at all
+    assert not any(str(b.key).endswith(case_id) and str(b.key).startswith(("approve-", "reject-", "edit-approve-"))
+                   for b in at.button)
     assert store.get_pending(case_id)["status"] == store.WAITING
 
 
@@ -236,7 +238,7 @@ def test_audit_table_on_screen_opens_a_history_and_downloads(monkeypatch):
     table = tables(at)[0]  # the audit table comes first on the page
     assert list(table.columns) == ["Case code", "Case type", "Status", "Sent by", "Sent on", "Decision by",
                                    "Decision on", "AI used", "Last step"]
-    assert table.to_dict("records")[0]["Case code"] == code and table.iloc[0]["Status"] == "Sent back"
+    assert table.to_dict("records")[0]["Case code"] == code and table.iloc[0]["Status"] == "Drafts sent back"
     assert table.iloc[0]["Sent by"] == "Volunteer Q" and table.iloc[0]["Decision by"] == "SK (supervisor)"
     at.selectbox(key="aud-status").set_value("approved").run()
     assert len(tables(at)[0]) == 0
@@ -246,7 +248,7 @@ def test_audit_table_on_screen_opens_a_history_and_downloads(monkeypatch):
     ok(at)
     history = tables(at)[1]  # right below the audit table
     assert list(history.columns) == ["Time", "What happened", "By", "Details"]
-    assert history.iloc[-1]["What happened"] == "sent back" and history.iloc[-1]["By"] == "SK (supervisor)"
+    assert history.iloc[-1]["What happened"] == "Drafts sent back" and history.iloc[-1]["By"] == "SK (supervisor)"
     assert any(f"History of case {code}" in m.value for m in at.markdown)
     assert len(at.get("download_button")) >= 2  # the table and the history
 
@@ -355,7 +357,7 @@ def test_never_sent_case_is_intake_in_progress_not_waiting(tmp_path):
 
 def test_stage_labels_and_count_line(monkeypatch):
     import lang
-    assert [lang.t(f"aud.st.{s}") for s in audit.STATUSES] == ["Intake in progress", "Waiting for review", "Sent back",
+    assert [lang.t(f"aud.st.{s}") for s in audit.STATUSES] == ["Intake in progress", "Waiting for review", "Drafts sent back",
                                                                 "Approved", "Closed", "Deleted"]
     intake = tracker.open_case("General", "Volunteer N")  # opened, nothing recorded yet
     sent, sent_code = waiting_case(by="Volunteer M")

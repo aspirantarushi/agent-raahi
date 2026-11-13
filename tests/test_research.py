@@ -272,12 +272,14 @@ def test_research_on_screen(monkeypatch, fake_ai):
     next(b for b in at.button if b.label == "Sign in").click().run()
     at.text_input(key="sup-name").set_value("Supervisor S")  # then the name or initials
     at.button(key="sup-name-go").click().run()
-    assert not any(r.key == f"action-{case_id}" for r in at.radio)  # no approve until the points are decided
+    at.radio(key=f"action-{case_id}").set_value("Approve").run()   # Approve is locked until the points are decided
+    assert at.button(key=f"approve-{case_id}").disabled
+    assert any("Approve after every research point is decided" in m.value for m in at.markdown)
     assert any("The volunteer's reason: the forum is for a later step" in c.value for c in at.caption)
     # one checklist: p1 (kept by the volunteer) ticked, p2 (left out) unticked; the volunteer's reason stands
     assert at.checkbox(key=f"rsx-{rid}-p1").value is True and at.checkbox(key=f"rsx-{rid}-p2").value is False
     save = at.button(key=f"rs-save-{rid}")
-    assert save.label == "Save decisions and rebuild the letter (1 approved, 1 rejected)" and not save.disabled
+    assert save.label == "Save point decisions and rebuild the letter (1 approved, 1 rejected)" and not save.disabled
     save.click().run()                                              # saves both and rebuilds the letter
     assert not at.exception, at.exception[0].stack_trace
     assert not any(b.key == f"rebuild-{case_id}" for b in at.button)

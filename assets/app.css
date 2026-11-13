@@ -788,3 +788,12 @@ div[class*="st-key-rs-save-"] { margin-top: 8px; }
   .rs-meta { flex-direction: column; align-items: flex-start; }
   div[class*="st-key-rs-save-"] button { width: 100% !important; }
 }
+
+/* Supervisor case card: Section A (research points) and Section B (the drafts) */
+.sup-section { display: flex; gap: 12px; align-items: flex-start; margin: 22px 0 6px 0; padding-top: 14px;
+  border-top: 1px solid var(--line); }
+.sup-section .sup-letter { flex: 0 0 auto; width: 28px; height: 28px; border-radius: 50%; background: var(--ink);
+  color: #fff; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; }
+.sup-section h4 { margin: 0 !important; padding: 0 !important; font-size: 18px !important; line-height: 1.35 !important; }
+.sup-section p { margin: 2px 0 0 0 !important; color: var(--muted); font-size: 14px; line-height: 1.45; }
+.case-sub .sent-back { color: var(--amber-ink); font-weight: 600; }

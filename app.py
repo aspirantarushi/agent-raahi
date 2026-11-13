@@ -454,7 +454,12 @@ def sent_status_line(case_id: str) -> str:
     sent_on = audit.summary_row(record)["sent_on"][:10]
     if not sent_on:
         return ""
-    return t("send.status", on=show_date(date.fromisoformat(sent_on)), status=status_text(status))
+    line = t("send.status", on=show_date(date.fromisoformat(sent_on)), status=status_text(status))
+    if status == store.SENT_BACK:  # the volunteer sees why, on the case itself
+        reason = sent_back_reason(case_id)
+        if reason:
+            line += " · " + t("ui.cases.reason", reason=reason)
+    return line
 
 
 def update_letter_and_drafts(facts_sig: str, letter_sig, points: int):
@@ -2631,9 +2636,18 @@ def tracker_filters(rows: list) -> list:
     return tracker.filter_rows(rows, status=status, camp=camp, volunteer=volunteer, hide_intake=hide)
 
 
+def sent_back_reason(case_id: str) -> str:
+    """The supervisor's reason for sending a case's drafts back ("" if none)."""
+    try:
+        return store.get_pending(case_id).get("reason") or ""
+    except (ValueError, storage.StorageError):
+        return ""
+
+
 def tracker_table(rows: list):
     table = [{"case": r["id"], "code": r["code"], "status": status_chip(r["status"]),
-              "next": next_step_text(r),
+              "next": " · ".join(x for x in (next_step_text(r), t("ui.cases.reason", reason=sent_back_reason(r["id"]))
+                                             if r["status"] == store.SENT_BACK and sent_back_reason(r["id"]) else "") if x),
               "due": (show_date(date.fromisoformat(r["due"])) if r["due"] else ""),
               "overdue": r["overdue"], "camp": r["camp"], "who": r["last_by"]} for r in rows]
     headers = {k: t(f"tr.col.{k}") for k in ("case", "code", "status", "next", "due", "camp", "who")}
@@ -2684,6 +2698,10 @@ def tracker_card(row: dict, approved_text: dict):
         if row["code"]:
             head += f" · {e(t('slip.code'))} {e(row['code'])}"
         sub = e(next_step_text(row)) if row["next_step"] else ""
+        if row["status"] == store.SENT_BACK:  # the supervisor's reason, on the card itself
+            reason = sent_back_reason(case_id)
+            if reason:
+                sub = (sub + " · " if sub else "") + f'<span class="sent-back">{e(t("ui.cases.reason", reason=reason))}</span>'
         if row["due"]:
             due = e(show_date(date.fromisoformat(row["due"])))
             sub += (f' · <span class="overdue">{e(t("tr.overdue"))} · {due}</span>' if row["overdue"]
@@ -3468,9 +3486,15 @@ def audit_ai_summary(record: dict, case_facts: "dict | None" = None):
     st.caption("  \n".join(lines))
 
 
+def event_text(event: str) -> str:
+    """An audit event in plain words: "Point rejected" (a research point) and "Drafts sent back" (the drafts),
+    never just "rejected" or "sent back". Other events as saved."""
+    return t(f"aud.ev.{event}") if f"aud.ev.{event}" in lang.strings(lang.DEFAULT) else event
+
+
 def history_table(record: dict, key: str):
     """One case's full history: Time, What happened, By, Details (the same table everywhere)."""
-    rows = audit.history_rows(record)
+    rows = [{**r, "event": event_text(r["event"])} for r in audit.history_rows(record)]
     with st.container(key=f"{key}-box"):
         st.dataframe(shown_table(rows, HISTORY_COLUMNS), key=key, hide_index=True, width="stretch")
     st.download_button(t("aud.csv"), audit.to_csv(rows, [(k, t(h)) for k, h in HISTORY_COLUMNS]),
@@ -3766,7 +3790,7 @@ def save_research_checklist(research_id: str, letter: bool):
 def research_review_box():
     """AI research for cases with no draft sent yet (research for a case whose draft is waiting is
     reviewed together with that draft, in one review)."""
-    with_draft = {r["id"] for r in store.list_pending()}
+    with_draft = {r["id"] for r in store.list_pending() + store.list_pending(status=store.SENT_BACK)}
     records = [r for r in research.waiting() if r["case_id"] not in with_draft]
     decided = [r for r in research.all_records()  # decided research whose approved points can still be saved
                if r["status"] != research.WAITING and r["case_id"] not in with_draft and savable_points(r)]
@@ -3938,10 +3962,15 @@ def review_case(record: dict):
         for h in record.get("history", []):
             st.caption(t("ui.sup.resent", when=show_stamp(h["resent"]), reason=h["sent_back_reason"]))
         supervisor_case_cards(record)
+        # Section A: the research points (deciding one only changes the letter; the case stays here)
+        if research.for_case(case_id):
+            st.markdown(ui.sup_section("A", t("sup.section_points"), t("sup.section_points_note")), unsafe_allow_html=True)
+        blocked = review_research_inside(record, locked=own) or letter_rebuild_needed(record, locked=own)
+        # Section B: the drafts, and the decision on them (approve, or send them back to the volunteer)
+        st.markdown(ui.sup_section("B", t("sup.section_drafts"), t("sup.section_drafts_note")), unsafe_allow_html=True)
         for n, part in enumerate(casework.split_bundle(record["draft"])):  # the same page previews as the volunteer's
             with st.container(border=True, key=f"sup-draft-{case_id}-{n}"):
                 document_view(part.strip(), f"sup-{case_id}-{n}", f"{case_id} draft {n + 1}")
-        blocked = review_research_inside(record, locked=own) or letter_rebuild_needed(record, locked=own)
         if record.get("readiness"):
             rows = [r for r in record["readiness"] if r["key"] != "send_reason"]
             unticked = [r for r in rows if r.get("note") == readiness.NOT_TICKED]
@@ -3963,33 +3992,47 @@ def review_case(record: dict):
                 history_table(audit_record, f"hist-{case_id}")
             else:
                 st.caption(t("ui.sup.no_audit_one"))
-        if blocked:
+        if own:  # the self-approval block: no decision buttons at all (the reason is at the top of the card)
             return
         action = st.radio(t("ui.sup.decision"), ["Approve", "Edit then Approve", "Reject with a reason"],
-                          index=None, horizontal=True, key=f"action-{case_id}", format_func=option_text("sup."),
-                          disabled=own)
+                          index=None, horizontal=True, key=f"action-{case_id}", format_func=option_text("sup."))
         busy = bool(st.session_state.get(f"deciding-{case_id}"))  # one click only
-        if action == "Approve":
-            st.button(t("ui.sup.approve_save"), type="primary", key=f"approve-{case_id}", disabled=busy or own,
+        if action == "Approve":  # locked until every research point is decided and the letter rebuilt
+            st.button(t("ui.sup.approve_save"), type="primary", key=f"approve-{case_id}", disabled=busy or blocked,
                       on_click=decide, args=(case_id, "approve"))
-            if busy or own:
-                why_disabled(t("ui.sup.own_draft") if own else t("why.busy"))
+            if blocked or busy:
+                why_disabled(t("why.approve_after_points") if blocked else t("why.busy"))
         elif action == "Edit then Approve":
             st.text_area(t("ui.sup.edit"), value=record["draft"], height=500, key=f"edit-{case_id}")
             st.caption(t("ui.sup.no_personal"))
-            st.button(t("ui.sup.save_approve"), type="primary", key=f"edit-approve-{case_id}", disabled=busy or own,
+            st.button(t("ui.sup.save_approve"), type="primary", key=f"edit-approve-{case_id}", disabled=busy or blocked,
                       on_click=decide, args=(case_id, "edit"))
-            if busy or own:
-                why_disabled(t("ui.sup.own_draft") if own else t("why.busy"))
-        elif action == "Reject with a reason":
+            if blocked or busy:
+                why_disabled(t("why.approve_after_points") if blocked else t("why.busy"))
+        elif action == "Reject with a reason":  # at any time, even before the points are decided
             st.text_area(t("ui.sup.reason"), key=f"reason-{case_id}")
-            st.button(t("ui.sup.send_back"), key=f"reject-{case_id}", disabled=busy or own,
+            if blocked:
+                st.caption(t("ui.sup.points_go_back"))
+            st.button(t("ui.sup.send_back"), key=f"reject-{case_id}", disabled=busy, icon=":material/undo:",
                       on_click=decide, args=(case_id, "send back"))
-            if busy or own:
-                why_disabled(t("ui.sup.own_draft") if own else t("why.busy"))
+            if busy:
+                why_disabled(t("why.busy"))
         err = st.session_state.pop(f"decide-err-{case_id}", None)
         if err:
             st.error(err)
+
+
+def points_undecided(case_id: str) -> bool:
+    """True while a research point for the case is undecided, or the letter is still to be rebuilt from them."""
+    try:
+        briefs = research.for_case(case_id)
+        record = store.get_pending(case_id)
+    except (ValueError, storage.StorageError):
+        return False
+    if any(r["status"] == research.WAITING for r in briefs):
+        return True
+    return (record.get("case_type") == general.CASE_TYPE and not record.get("letter_rebuilt")
+            and any(r["status"] == research.REVIEWED for r in briefs))
 
 
 def decide(case_id: str, kind: str):
@@ -3998,6 +4041,9 @@ def decide(case_id: str, kind: str):
     get = st.session_state.get
     if own_work(case_id):  # checked again on saving, not only on screen
         st.session_state[f"decide-err-{case_id}"] = t("ui.sup.own_draft")
+        return
+    if kind in ("approve", "edit") and points_undecided(case_id):  # checked again on saving, not only on screen
+        st.session_state[f"decide-err-{case_id}"] = t("why.approve_after_points")
         return
     st.session_state[f"deciding-{case_id}"] = True
     try:
@@ -4172,7 +4218,7 @@ def todays_camp():
 AGENT_EVENTS = {"story read": "story", "question asked": "question", "research asked": "research",
                 "research failed": "research_failed", "research looked at by the volunteer": "points",
                 "letter drafted": "letter", "drafts made": "drafts", audit.SENT: "sent", audit.RESENT: "sent",
-                audit.APPROVED: "approved"}
+                audit.APPROVED: "approved", store.SENT_BACK: "sent_back", "research point rejected": "point_rejected"}
 
 
 def agent_line(e: dict, events: list) -> str:
@@ -4196,6 +4242,9 @@ def agent_line(e: dict, events: list) -> str:
         return t("agent.sent_unticked", n=n) + ("; " + t("agent.reason_given") if "reason given" in note else "")
     if kind == "approved":
         return t("agent.approved_by", name=audit.who_did(e))
+    if kind in ("sent_back", "point_rejected"):  # the reason after "reason: " or after the point's ": "
+        reason = re.sub(r"^reason:\s*", "", details) if kind == "sent_back" else details.split(": ", 1)[-1]
+        return t("agent.by_reason", name=audit.who_did(e), reason=reason)
     details = re.sub(r"model ([^;]+)", lambda m: "model " + (llm.display_model(m.group(1)) or m.group(1)), details)
     return agent_details(details)
 
