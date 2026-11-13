@@ -541,13 +541,15 @@ Rules:
 - Never guess. If something is not clearly stated, use "unknown" (or null, or an empty list).
 - For every yes/no answer and for state and income, "quote" must be the exact words copied from the
   notes that show it (null if unknown).
-- what_happened: 2 to 6 short plain sentences. timeline: dates or times exactly as written in the notes.
+- what_happened: 2 to 6 short plain sentences; no two what_happened sentences may say the same thing.
+  timeline: dates or times exactly as written in the notes.
 - In what_happened, timeline and documents_held keep every amount of money, count, age, place (district,
   village) and date exactly as the notes give them ("Rs 14,000", "twice", "62-year-old", "Gaya district,
   Bihar", "1 October 2026"); never replace them with general words ("an amount", "money", "a place").
 - Refer to the person who needs help as "the person" or by their role ("the widow", "the worker"), never
   as "the person needing help".
-- in_custody: "yes" only if the notes say someone is in jail or police custody now.
+- in_custody: "yes" only if the notes say someone is in jail, police custody, under arrest or in a
+  lock-up now, and the quote must contain those words; otherwise "no" or "unknown".
 - money_lost_in_last_few_days: "yes" only if the notes say the money was lost within about the last
   7 days ("today", "yesterday", "two days ago"...).
 - coming_dates: hearings, deadlines or other dates still to come, as written.
@@ -555,6 +557,8 @@ Rules:
   "online_or_financial_fraud" for money taken by online or payment fraud; "electricity_or_water" for an
   electricity or water connection or bill; "wages_or_work" for unpaid wages or work problems;
   "ration_or_welfare" for a ration card, pension or other government scheme; otherwise "other".
+  name: a short phrase saying what went wrong, at least three words, not just the topic (for example
+  "electricity cut off despite a paid bill; unofficial payment demanded", never "electricity connection").
 - person_needing_help: the role of the person who needs the help, as the notes describe them (for
   example "the speaker's husband, a labourer"); "unknown" if the notes don't say who it is.
 - essential_service_cut: "yes" only if the notes say the person's electricity or water is cut off now.

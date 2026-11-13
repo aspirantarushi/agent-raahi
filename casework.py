@@ -116,9 +116,9 @@ def missing_years(g) -> List[Tuple[str, str]]:
     return out
 
 
-def duration(g, today: date, code: str = "en") -> Optional[str]:
-    """"about 5 weeks" from the first dated past event; None if no event has a year."""
-    starts = [d for d in (parse_when(w, today) for w, _ in g.timeline) if d and d <= today]
+def duration(g, today: date, code: str = "en", since: Optional[date] = None) -> Optional[str]:
+    """"about 5 weeks" from the given start (or the first dated past event); None if no event has a year."""
+    starts = [since] if since else [d for d in (parse_when(w, today) for w, _ in g.timeline) if d and d <= today]
     if not starts:
         return None
     days = (today - min(starts)).days
@@ -179,6 +179,11 @@ def stated_period(g) -> Optional[Tuple[int, str]]:
     return None
 
 
+PROBLEM_EVENT = re.compile(r"\bcut|disconnect|stopp?ed|not (been )?paid|unpaid|refus|reject|arrest|detain|custody|"
+                           r"evict|locked|demand|beat|threat|fraud|lost|cancel|kaat|band|रोक|काट|गिरफ़्तार", re.I)
+ORDINARY_EVENT = re.compile(r"\b(was|were|had been|has been) paid\b|\bpaid (on time|in full)\b|\bbill (was )?paid\b", re.I)
+
+
 def duration_text(g, today: date, code: str = "en") -> Optional[str]:
     """"Going on for", matching the facts: the period the story states (if any) and the first dated
     event, for example "3 months, as the story says; salary stopped on 30 September 2026". Without a
@@ -186,7 +191,10 @@ def duration_text(g, today: date, code: str = "en") -> Optional[str]:
     stated = stated_period(g)
     dated = sorted(((d, w, x) for w, x in g.timeline for d in [parse_when(w, today)] if d and d <= today),
                    key=lambda v: v[0])
-    anchor = dated[0] if dated else None
+    # from when the problem began (a cut, a stop, a refusal, an arrest), not from an earlier ordinary event
+    # such as "the October bill was paid"
+    problem = [v for v in dated if PROBLEM_EVENT.search(v[2]) and not ORDINARY_EVENT.search(v[2])]
+    anchor = (problem or dated or [None])[0]
     parts = []
     if stated:
         n, unit = stated
@@ -197,7 +205,8 @@ def duration_text(g, today: date, code: str = "en") -> Optional[str]:
         if stated:
             parts.append(lang.t("cw.dur_event", code, what=what.rstrip("."), when=when))
         else:
-            parts.append(lang.t("cw.dur_since", code, about=duration(g, today, code), what=what.rstrip("."), when=when))
+            parts.append(lang.t("cw.dur_since", code, about=duration(g, today, code, since=anchor[0]),
+                                what=what.rstrip("."), when=when))
     return "; ".join(parts) or None
 
 
@@ -228,6 +237,13 @@ def urgency(g, today: date, code: str = "en") -> Urgency:
         level = "urgent"
     if not reasons:
         reasons.append(t("cw.not_urgent"))
+    # one "Urgent:" with the reasons joined ("Urgent: someone is in custody now; the electricity is cut off now.")
+    prefix = t("cw.urgent_prefix")
+    urgent = [r for r in reasons if r.startswith(prefix)]
+    if len(urgent) > 1:
+        rest = [r[len(prefix):].strip() for r in urgent]
+        joined = prefix + " " + "; ".join(x.rstrip(".।") if i < len(rest) - 1 else x for i, x in enumerate(rest))
+        reasons = [r for r in reasons if not r.startswith(prefix)] + [joined]
     return Urgency(level, reasons)
 
 
@@ -245,6 +261,59 @@ DOCUMENTS_BY_TYPE = {
 HAS_REFERENCE_NUMBER = ("electricity", "water", "ration")  # the person may have a consumer / application number
 
 
+# Kinds of paper: a paper the story names stands for a list item of the same kind ("October 2026 bill"
+# covers "Latest electricity bill" and "Receipts of bills paid")
+DOC_KINDS = {"bill": "bill", "receipt": "bill", "raseed": "bill", "रसीद": "bill", "बिल": "bill", "passbook": "passbook",
+             "fir": "fir", "notice": "notice", "message": "messages", "whatsapp": "messages", "photo": "photo",
+             "identity": "id", "aadhaar": "id", "chargesheet": "chargesheet", "warrant": "warrant",
+             "payslip": "payslip", "attendance": "attendance", "appointment": "appointment"}
+DOC_HELP: dict = {}  # short name -> the long wording (shown as the row's help)
+
+
+def doc_kinds(name: str) -> set:
+    words = re.findall(r"[a-z\u0900-\u097F]+", (name or "").casefold())
+    return {DOC_KINDS[w.rstrip("s")] if w.rstrip("s") in DOC_KINDS else DOC_KINDS[w] for w in words
+            if w in DOC_KINDS or w.rstrip("s") in DOC_KINDS}
+
+
+def short_doc(name: str, g=None, code: str = "en") -> str:
+    """A short document name, capitalised; the long wording is kept as its help. The knowledge file's
+    self-certificate line becomes the self-declaration line for anyone in a Section 12 group (never an
+    income affidavit for them)."""
+    name = (name or "").strip()
+    low = name.casefold()
+    group = next((key for key, _ in general.GROUPS if g is not None and g.facts.get(key) is True), None)
+    if "self-certificate" in low or "income affidavit" in low or low.startswith("income proof"):
+        if group == "in_custody":
+            short = lang.t("cw.doc.self_declaration_custody", code)
+        elif group:
+            short = lang.t("cw.doc.self_declaration", code, group=lang.t(f"group.{group}", code))
+        else:
+            short = lang.t("cw.doc.self_certificate", code)
+    elif low.startswith("all case papers"):
+        short = lang.t("cw.doc.case_papers", code)
+    elif low in ("any identity proof", "identity proof"):
+        short = lang.t("cw.doc.id", code)
+    elif len(name) > 60:  # the words before ":" or "(" or ","
+        short = re.split(r"[:(,;]", name, 1)[0].strip()
+    else:
+        short = name
+    short = short[:1].upper() + short[1:]
+    if short != name and not (group and "affidavit" in low):  # never an income affidavit for a Section 12 group
+        DOC_HELP[short] = name
+    return short
+
+
+def merge_documents(listed: List[str], held: List[str], standard: List[str] = ()) -> List[str]:
+    """Drop a list item that a paper named in the story already stands for (same kind of paper: "October
+    2026 bill" covers "Latest electricity bill"). Rows the volunteer marks never make other rows vanish:
+    only story papers that are not themselves list items count."""
+    names = {x.casefold() for x in list(listed) + list(standard)}
+    story = [h for h in held if h.casefold() not in names]
+    held_kinds = set().union(*[doc_kinds(h) for h in story]) if story else set()
+    return [d for d in listed if not (doc_kinds(d) and doc_kinds(d) & held_kinds)]
+
+
 def documents_needed(g, approved: List[dict], code: str = "en") -> Tuple[List[str], str]:
     """(documents usually needed, where the list comes from). Approved research points of kind
     "documents" first; otherwise our files (custody, fraud) or the plain list for the problem type."""
@@ -255,7 +324,8 @@ def documents_needed(g, approved: List[dict], code: str = "en") -> Tuple[List[st
     if t in ("custody", "fraud"):
         cat = "arrest_or_custody" if t == "custody" else "online_or_financial_fraud"
         lists = general.document_lists([cat], g.documents_held, g.what_happened)
-        return lists[0][1], "files"
+        items = list(dict.fromkeys(short_doc(d, g, code) for d in lists[0][1]))
+        return merge_documents(items, g.documents_held), "files"
     items = [lang.t(k, code) for k in DOCUMENTS_BY_TYPE.get(t, DOCUMENTS_BY_TYPE["other"])]
     words = set(re.findall(r"[a-z]+", _text(g)))
     if words & set(general.POLICE_OR_COURT_WORDS):  # FIR and court papers only if police or a court are mentioned
@@ -264,7 +334,7 @@ def documents_needed(g, approved: List[dict], code: str = "en") -> Tuple[List[st
     # A Section 12 group qualifies whatever the income: a self-declaration, never income proof
     items += [lang.t("cw.doc.id", code),
               lang.t("cw.doc.self_declaration", code, group=group) if group else lang.t("cw.doc.income", code)]
-    return general._not_held(items, g.documents_held), "plain"
+    return merge_documents(general._not_held(items, g.documents_held), g.documents_held, items), "plain"
 
 
 def facts_from_record(record: dict):
@@ -292,9 +362,11 @@ def document_checklist(g, approved: List[dict], code: str = "en") -> List[str]:
     research_docs = [p["text"] for p in approved if p.get("kind") == "documents"]
     out, seen = [], set()
     for d in list(g.documents_held) + list(getattr(g, "documents_cannot", {}) or {}) + base + research_docs:
-        if d and d.strip().casefold() not in seen:
-            seen.add(d.strip().casefold())
-            out.append(d.strip())
+        d = (d or "").strip()
+        d = d[:1].upper() + d[1:]  # every document name starts with a capital
+        if d and d.casefold() not in seen:
+            seen.add(d.casefold())
+            out.append(d)
     return out
 
 
@@ -535,7 +607,7 @@ def dlsa_application(g, eligibility, issue: str, ai_model: Optional[str], code: 
                               " ".join(x.rstrip() if x.rstrip().endswith((".", "।")) else x.rstrip() + "."
                                        for x in lines))[:900]
     income_text = (lang.t("cw.income_not_needed", code, group=group) if group else
-                   (f"about ₹{int(income) // 12:,}" if code == "en" else f"लगभग ₹{int(income) // 12:,}")
+                   (f"about {lang.inr(int(income) // 12)}" if code == "en" else f"लगभग {lang.inr(int(income) // 12)}")
                    if income is not None else ("[to be confirmed]" if code == "en" else "[पुष्टि होनी है]"))
     if code == "hi":
         rep = [("[हाँ — बताएँ: महिला / बच्चा / अनुसूचित जाति / अनुसूचित जनजाति / दिव्यांग व्यक्ति / हिरासत में व्यक्ति / "

@@ -370,8 +370,9 @@ def test_a_fact_is_dropped_only_when_the_dated_line_says_it_all():
                    timeline=[("1 October 2026", "The electricity connection was cut off.")])
     lines = casework.letter_facts(g)
     # the date goes into the fact that tells the same event; the separate date line is dropped
-    assert "- On 1 October 2026, the electricity department cut off the electricity connection." in lines
-    assert any("despite bills being paid on time" in line for line in lines)                      # nothing lost
+    # the shorter line says nothing the longer one doesn't: once, with its date and nothing lost
+    assert any(line.startswith("- On 1 October 2026, the electricity department cut off") and
+               "despite bills being paid on time" in line for line in lines)
     assert not any(line.startswith("- 1 October 2026:") for line in lines)
 
 
@@ -503,4 +504,4 @@ def test_a2_request_is_the_request_and_case_file_lists_papers():
                                    "sources": [], "approved_on": "2026-11-13"}]}
     docs = casework.case_file_documents(record)
     assert "Self-declaration for free legal aid (no income proof needed: qualifies as a woman)" in docs
-    assert "Latest electricity bill" in docs and "bill receipts" not in docs     # what she has is not "to collect"
+    assert "Latest electricity bill" not in docs and "bill receipts" not in docs  # her bill receipts stand for it

@@ -87,6 +87,8 @@ def test_worked_examples_and_practice_dates_match_the_calculator():
     rows = {o.bns_section: o for o in section479.load_offences()}
     assert rows["305"].max_prison == "84" and rows["318(4)"].max_prison == "84"
     assert rows["103(1)"].death_or_life_possible       # murder: Section 479 does not apply (quiz 4)
+    assert not rows["308(2)"].death_or_life_possible and not rows["305"].death_or_life_possible   # the other options
+    assert not rows["318(4)"].death_or_life_possible
     for start, third, half in [(date(2024, 3, 15), "15 July 2026", "15 September 2027"),
                                (date(2025, 3, 1), "1 July 2027", "1 September 2028")]:
         assert lang.show_date(section479.add_months(start, 28)) == third

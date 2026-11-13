@@ -254,7 +254,9 @@ def test_research_on_screen(monkeypatch, fake_ai):
     assert "Consumer Grievance Redressal Forum" not in letter       # unticked: out of the letter
     at.checkbox(key="g_checked").check().run()
     assert next(b for b in at.button if b.key == "send-g").disabled  # a reason is needed for the left-out point
-    at.text_input(key=f"rsvr-{rid}-p2").set_value("the forum is for a later step").run()
+    assert "Send to supervisor — 1 reason missing" in next(b for b in at.button if b.key == "send-g").label
+    at.radio(key=f"rsvc-{rid}-p2").set_value("other").run()       # a quick choice under the point; "Other": a text
+    at.text_input(key=f"rsvct-{rid}-p2").set_value("the forum is for a later step").run()
     next(b for b in at.button if b.key == "send-g").click().run()
     assert not at.exception, at.exception[0].stack_trace
     assert store.get_pending(case_id)["draft"].count("DRAFT — to be checked by a lawyer") == 3

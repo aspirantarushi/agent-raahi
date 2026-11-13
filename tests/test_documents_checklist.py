@@ -73,7 +73,7 @@ def doc_radios(at):
 def test_documents_are_marked_in_the_checklist_only(monkeypatch):
     at = wages_summary(monkeypatch)
     radios = doc_radios(at)
-    assert radios and {r.label: r.value for r in radios}["photos of the site attendance register"] == "has"
+    assert radios and {r.label: r.value for r in radios}["Photos of the site attendance register"] == "has"
     assert all(r.options == ["Has it", "Still to get", "Can't get"] for r in radios)
     assert at.checkbox(key="tick-case_documents").value is False             # something is still to get
     assert not any("<h4>Documents</h4>" in m.value for m in at.markdown)     # no separate documents card

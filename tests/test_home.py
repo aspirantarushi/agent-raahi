@@ -83,7 +83,7 @@ def test_hero_logo_helplines_and_start_icon(at):
     html = page_html(at)
     assert html.index('<div class="hero-brand"><svg width="72"') < html.index('<span class="badge">')
     lines = html[html.index('<div class="helpline">'):]
-    assert lines.index("Free and open source.") < lines.index('href="tel:112"')
+    assert "Free and open source." not in lines.split("</div>")[0]   # the footer says it
     assert '<a class="danger" href="tel:112"><span class="mi" aria-hidden="true">call</span>' in lines
     assert '<a href="tel:15100"><span class="mi" aria-hidden="true">support_agent</span>' in lines
     assert at.button(key="home-start").icon == ":material/note_add:"

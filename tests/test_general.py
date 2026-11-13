@@ -66,7 +66,7 @@ UPI_ANSWER = answer(
     called_1930=yn("no", "She has not called 1930 yet"),
     woman=yn("yes", "His mother is 68"),
     state={"value": "Bihar", "quote": "lives in Patna, Bihar"},
-    issues=[{"category": "online_or_financial_fraud", "name": "online fraud"}],
+    issues=[{"category": "online_or_financial_fraud", "name": "money lost to online fraud"}],
     documents_held=["bank SMS alerts", "screenshot of the UPI request"],
     questions_to_ask=["What are the transaction IDs?", "Has the card or UPI been blocked?"],
 )
@@ -80,7 +80,7 @@ WAGES_ANSWER = answer(
     sc_st=yn("unknown"), disability=yn("unknown"),
     state={"value": "Maharashtra", "quote": "lives in Pune, Maharashtra"},
     income={"amount": 10000, "per": "month", "quote": "He earns about Rs 10,000 a month"},
-    issues=[{"category": "other", "name": "unpaid wages"}],
+    issues=[{"category": "other", "name": "unpaid wages for three months"}],
     documents_held=["photos of the site attendance register"],
     questions_to_ask=["Does the worker have any messages from the contractor about wages?",
                       "Were other workers also not paid?"],
@@ -113,7 +113,7 @@ def test_undertrial_story():
         assert f"“{heading}”" in text and e.source_line in text
     assert "IPC 380 = BNS 305: Theft in a dwelling house or vehicle or place of worship" in text
     assert "charged under [law reference removed: ask a lawyer]" in text  # the AI's own copy is removed
-    assert "Qualifies for free legal aid whatever the income, as a person in custody." in text
+    assert "Qualifies for free legal aid as a person in custody, whatever the income." in text
     assert refs_not_from_knowledge(text, reading) == []
 
 
@@ -123,9 +123,9 @@ def test_upi_fraud_story():
     reading, facts, text = summarise(UPI_ANSWER, UPI)
     assert general.urgent_actions(reading.facts) == [general.CALL_1930]
     assert "Urgency: Call 1930 now." in text and "URGENT\n" not in text  # said once, at a glance
-    assert "Online fraud — to discuss with a lawyer." in text
+    assert "Money lost to online fraud — to discuss with a lawyer." in text
     assert knowledge.get("cyber_fraud.md", "Call 1930 at once: report immediately").source_line in text
-    assert "Qualifies for free legal aid whatever the income, as a woman." in text
+    assert "Qualifies for free legal aid as a woman, whatever the income." in text
     assert "Bihar: Bihar residents only" in text      # the state note from income_limits.csv ...
     assert "Confirmed on BSLSA" not in text            # ... without our own working notes
     assert "- Has: bank SMS alerts; screenshot of the UPI request" in text
@@ -138,11 +138,11 @@ def test_upi_fraud_story():
 def test_unpaid_wages_story():
     reading, facts, text = summarise(WAGES_ANSWER, WAGES)
     assert general.urgent_actions(reading.facts) == []
-    assert "Unpaid wages — to discuss with a lawyer." in text
+    assert "Unpaid wages for three months — to discuss with a lawyer." in text
     assert "Not covered by our verified files yet; ask NALSA's free helpline 15100." in text
     assert "15100" in text.split("Next steps")[1]
     assert reading.facts["annual_income"] == 120000
-    assert ("Qualifies on income: about ₹120,000 a year is below Maharashtra's limit of ₹300,000."
+    assert ("Qualifies on income: about ₹1,20,000 a year is below Maharashtra's limit of ₹3,00,000."
             in text)
     assert ("- Still needed: Appointment letter or work ID card; Pay slips; "
             "Bank statements showing earlier payments; Messages with the employer or contractor; ID proof; "
@@ -403,7 +403,7 @@ def test_screen_eligibility_questions_when_needed(pretend_ai, monkeypatch):
     at.selectbox(key="ge-state").set_value("Punjab")
     button(at, "See the summary").click().run()
     ok(at)
-    assert "Qualifies for free legal aid whatever the income, as a woman." in make_drafts(at).session_state["shown_drafts"][0]
+    assert "Qualifies for free legal aid as a woman, whatever the income." in make_drafts(at).session_state["shown_drafts"][0]
 
 
 def test_screen_custody_offers_section_479_check(pretend_ai, monkeypatch):
@@ -435,7 +435,7 @@ def test_screen_without_ai(monkeypatch, tmp_path):
 
 @pytest.mark.skipif(not llm.available(), reason="No GEMINI_API_KEY: live AI test skipped")
 @pytest.mark.parametrize("notes, urgent, words", [
-    (UNDERTRIAL, [], "someone is in custody now."),
+    (UNDERTRIAL, [], "someone is in custody now"),
     (UPI, [general.CALL_1930], "Call 1930 now."),
     (WAGES, [], "Not covered by our verified files yet; ask NALSA's free helpline 15100."),
 ])

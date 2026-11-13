@@ -177,6 +177,12 @@ def page_title(text: str, helplines: bool = True):
             st.markdown(ui.page_helplines(t("safety.bar112"), t("safety.bar15100")), unsafe_allow_html=True)
 
 
+def practice_hint():
+    """Only for a Practice Clinic (CLINIC_NAME contains "Practice"): where the practice passcodes are."""
+    if "practice" in (storage.setting("CLINIC_NAME") or "").casefold():
+        st.caption(t("signin.practice_hint"))
+
+
 def signin_columns(who: str):
     """A sign-in page's wide card (laptop): the form on the left (returned), and on the right what the page
     is for and the helplines. On a phone the two stack, full width."""
@@ -842,8 +848,11 @@ FLOW_ICONS = ["edit_note", "quiz", "description", "send"]
 
 
 def flow_title(n: int):
-    """The step's heading with its icon above, centred, without its number (the progress steps show it)."""
-    st.markdown(ui.step_heading(FLOW_ICONS[n - 1], t(GENERAL_FLOW[n - 1])), unsafe_allow_html=True)
+    """The step's header band: its number in a circle, its name and its state (Now / Done with a tick / Not yet), the
+    one title per step (the phone progress line does not repeat it)."""
+    current = st.session_state.get("_flow_step", n)
+    state = "done" if n < current else "now" if n == current else "next"
+    st.markdown(ui.step_band(n, t(GENERAL_FLOW[n - 1]), state, t(f"flow.state.{state}")), unsafe_allow_html=True)
 
 
 def back_to_story():
@@ -884,6 +893,7 @@ def general_screen():
     restore_held_story()
     gen = st.session_state.get("gen")
     step = general_step(gen)
+    st.session_state["_flow_step"] = step
     st.markdown(ui.stepper([t(k) for k in GENERAL_FLOW], step, t("ui.step_of")), unsafe_allow_html=True)
     if gen:  # urgent actions always at the top
         for action in general.urgent_actions(gen["facts"], gen["reading"].unconfirmed_yes):
@@ -892,7 +902,7 @@ def general_screen():
 
     if gen is None or st.session_state.get("g_story_open"):
         flow_title(1)
-    story_label = t("ui.general.story_box") if gen is None else t("ui.general.story_done")
+    story_label = t("ui.general.story_box") if gen is None else ":material/check_circle: " + t("ui.general.story_done")
     with st.expander(story_label, expanded=gen is None or bool(st.session_state.get("g_story_open"))):
         with st.container(key="names-warning-long"):
             st.warning(t("ui.general.names_warning"))
@@ -1083,7 +1093,7 @@ def documents_rows(g, approved):
                 st.session_state[f"doc-st-{k}"] = ("has" if doc.casefold() in held else
                                                    "cannot" if doc in g.documents_cannot else "to_get")
             st.radio(doc, DOC_CHOICES, key=f"doc-st-{k}", horizontal=True, on_change=save_doc_status, args=(doc,),
-                     format_func=option_text("docs."))
+                     format_func=option_text("docs."), help=casework.DOC_HELP.get(doc))  # the long wording: ⓘ
             if st.session_state.get(f"doc-st-{k}") == "cannot":
                 st.session_state.setdefault(f"doc-why-{k}", g.documents_cannot.get(doc, ""))
                 st.text_input(t("docs.why"), key=f"doc-why-{k}", max_chars=120, on_change=save_doc_status, args=(doc,))
@@ -1230,13 +1240,14 @@ def general_summary(gen):
     col_cards, col_check = st.columns([3, 2], gap="medium")
     with col_cards:
         case_cards(facts, eligibility, approved, kind, draft_lang)
-    with col_check:
+    with col_check, st.container(key="check-col", border=True):  # its own box; laptop: a line between the columns
         fix_checklist(app_items, facts, eligibility, kind, missing_years, approved, gen)
     research_slot = st.container(key="research-slot")
     with research_slot:
         research_panel(facts, uncovered, "loading" if research_now else status, case_id, state, waiting_rs,
                        letter_state)
-    drafts_panel(documents, "loading" if research_now else status, uncovered, facts_sig, drafts_made)
+    with st.container(border=True, key="drafts-box"):  # its own box, heading in the same style
+        drafts_panel(documents, "loading" if research_now else status, uncovered, facts_sig, drafts_made)
     entries = ledger.general(facts, reading.facts, eligibility, ai_checked=bool(gen["model"]))
     ledger_box(entries)
     if case_id:
@@ -1269,12 +1280,19 @@ def general_summary(gen):
             st.text_input(t("ready.send_reason"), key="g_send_reason", max_chars=200)
         left_out = [pid for pid, keep in rs_ticks.items() if not keep]
         no_reason = [pid for pid in left_out if not rs_reasons.get(pid)]
-        if no_reason:
-            st.caption(t("rs.left_out_needs_reason", points=", ".join(no_reason)))
-        checked = st.checkbox(t("ui.general.checked_no_names") + " *", key="g_checked")
-        st.markdown(f'<p class="tick-why">{html.escape(t("ready.needed_note"))}</p>', unsafe_allow_html=True)
-        label = f"{t('ui.send_to_supervisor')} \u2014 " + (t("ready.button_unticked", n=len(unticked)) if unticked
-                                                          else t("ready.button_ready"))
+        if left_out and waiting_rs:  # a box to type in, always: per point (its own words), or one for all
+            points = {p["id"]: p for p in waiting_rs["points"]}
+            for pid in no_reason:
+                st.markdown(f'<p class="left-out-point">{html.escape(t("rs.left_out_point", text=short(points[pid]["text"], 120)))}</p>',
+                            unsafe_allow_html=True)
+                left_out_reason_choice(waiting_rs, points[pid], "rsvs")
+            if no_reason or st.session_state.get("g_rs_all_reason"):
+                st.text_input(t("rs.left_out_all"), key="g_rs_all_reason", max_chars=200)
+        checked = st.checkbox(t("ui.general.checked_no_names") + REQUIRED, key="g_checked")
+        required_legend()
+        label = f"{t('ui.send_to_supervisor')} \u2014 " + (
+            t("rs.button_reasons_missing", n=len(no_reason)) if no_reason else
+            t("ready.button_unticked", n=len(unticked)) if unticked else t("ready.button_ready"))
         not_made = not drafts_made or (letter_wanted and research_done and not letter_made)
         # Exactly why it can't be sent yet, one line each, in red under the button
         if drafts_changed:  # made once, then something changed: one line and one button that redoes both
@@ -1367,17 +1385,16 @@ def case_cards(g, eligibility, approved, kind, code_, case_for=None):
     steps = casework.next_steps(g, eligibility, general._approved_points(g), g.research_state, today, code_,
                                 case_approved=approved_case)
     srows = []
-    for s in steps:
-        text = rich(s.text)
+    for s in steps:  # plain text; only the date in bold ("... or call 15100 — by 20 November 2026")
+        body = s.text.rstrip()
+        text = html.escape(body)
+        if s.due:
+            text = f'{html.escape(body.rstrip(".।"))} — {t("cw.by_bold", date="<b>" + html.escape(show_date(s.due)) + "</b>")}'
         if s.done:
             text = f'<span class="step-done">{ui.icon("check_circle")}</span> {text}'
-        if s.due:  # "Collect the documents (by 13 November 2026, suggested follow-up)."
-            when = t("cw.by_date_suggested" if s.suggested else "cw.by_date", date=show_date(s.due))
-            body = s.text.rstrip()
-            end = body[-1] if body and body[-1] in ".।" else "."
-            text = f'{rich(body.rstrip(".।"))} <span class="when">({rich(when)}){end}</span>'
         srows.append(text + (f'<span class="src">{document.linked_html(s.source)}</span>' if s.source else ""))
-    st.markdown(ui.info_card(t("cw.next_steps"), [bullets(srows, ordered=True)], icon_name="checklist"),
+    note = f'<p class="card-note">{html.escape(t("cw.dates_note"))}</p>' if any(s.due for s in steps) else ""
+    st.markdown(ui.info_card(t("cw.next_steps"), [note + bullets(srows, ordered=True)], icon_name="checklist"),
                 unsafe_allow_html=True)
 
 
@@ -1440,14 +1457,18 @@ def fix_checklist(items, g, eligibility, kind, missing_years, approved, gen):
     """A real checklist: a tick box per item, pre-ticked by the app with the reason; the volunteer can
     tick or untick anything. Items not done yet can be fixed right here."""
     st.markdown(f"**{t('ready.title')}**")
-    st.caption(t("ready.ticks_caption") + " " + t("ready.needed_note"))
+    required_legend()
+    st.caption(t("ready.ticks_caption"))
     for item in items:
         key = f"tick-{item.key}"
-        st.checkbox(item.label(code()) + " *", key=key,
+        if item.key == "case_documents":  # the documents part: its own block, a line above and below
+            st.markdown(f'<div class="doc-block-top">{html.escape(t("cw.documents"))}</div>', unsafe_allow_html=True)
+        st.checkbox(item.label(code()) + REQUIRED, key=key,
                     on_change=lambda k=key: st.session_state.update({f"{k}-touched": True}))
         st.markdown(f'<p class="tick-why">{html.escape(tick_why(item, g, eligibility))}</p>', unsafe_allow_html=True)
         if item.key == "case_documents":  # the documents themselves, here and nowhere else
             documents_rows(g, approved)
+            st.markdown('<div class="doc-block-end"></div>', unsafe_allow_html=True)
             continue
         done = item.status == readiness.PRESENT
         if done or item.status == readiness.CANNOT or st.session_state.get(key):
@@ -1500,6 +1521,37 @@ def fix_checklist(items, g, eligibility, kind, missing_years, approved, gen):
                     st.text_input(t("ready.reason"), max_chars=120, key=f"cantr-g-{item.key}")
 
 
+LEFT_OUT_CHOICES = ["not_about", "looks_wrong", "repeats", "other"]
+
+
+def left_out_reason_choice(record: dict, p: dict, prefix: str):
+    """Why a research point was left out: a quick choice; "Other" opens a short text box."""
+    rid, pid = record["id"], p["id"]
+    if st.session_state.get(f"rsvr-{rid}-{pid}"):  # a reason already given (a point naming a replaced law)
+        st.caption(t("rs.left_out_given", reason=st.session_state[f"rsvr-{rid}-{pid}"]))
+        return
+    st.radio(t("rs.left_out_reason"), LEFT_OUT_CHOICES, index=None, horizontal=True, key=f"{prefix}-{rid}-{pid}",
+             format_func=lambda c: t(f"rs.why_left.{c}"))
+    if st.session_state.get(f"{prefix}-{rid}-{pid}") == "other":
+        st.text_input(t("rs.why_left.other_text"), key=f"{prefix}t-{rid}-{pid}", max_chars=200)
+
+
+def left_out_reason(rid: str, pid: str) -> str:
+    """The reason for leaving a point out, from whichever box the volunteer used (research card or Send box)."""
+    get = st.session_state.get
+    if (get(f"rsvr-{rid}-{pid}") or "").strip():
+        return get(f"rsvr-{rid}-{pid}").strip()
+    for prefix in ("rsvc", "rsvs"):
+        choice = get(f"{prefix}-{rid}-{pid}")
+        if choice == "other":
+            text = (get(f"{prefix}t-{rid}-{pid}") or "").strip()
+            if text:
+                return text
+        elif choice:
+            return t(f"rs.why_left.{choice}")
+    return ""
+
+
 def research_ticks(record) -> tuple:
     """({point id: ticked}, {point id: reason}) from the volunteer's tick boxes (pre-ticked except points
     naming a replaced law)."""
@@ -1514,7 +1566,12 @@ def research_ticks(record) -> tuple:
         if not research.default_keep(p):
             st.session_state.setdefault(f"rsvr-{record['id']}-{p['id']}", t("rs.left_replaced"))
         ticks[p["id"]] = bool(st.session_state[key])
-        reasons[p["id"]] = (st.session_state.get(f"rsvr-{record['id']}-{p['id']}") or "").strip()
+        reasons[p["id"]] = left_out_reason(record["id"], p["id"])
+    all_reason = (st.session_state.get("g_rs_all_reason") or "").strip()  # "Send anyway: one reason for all"
+    if all_reason:
+        for pid, keep in ticks.items():
+            if not keep and not reasons.get(pid):
+                reasons[pid] = all_reason
     return ticks, reasons
 
 
@@ -1533,8 +1590,8 @@ def research_points_for_volunteer(record: dict):
             for w in p.get("warnings", []):
                 (st.error if w["kind"] == "replaced" else st.warning)(
                     warning_text(w), icon=":material/gavel:" if w["kind"] == "replaced" else ":material/rule:")
-            if not st.session_state.get(key):
-                st.text_input(t("rs.left_out_reason"), key=f"rsvr-{record['id']}-{p['id']}", max_chars=200)
+            if not st.session_state.get(key):  # left out: why, right under the point (a quick choice)
+                left_out_reason_choice(record, p, "rsvc")
 
 
 def research_panel(g, uncovered, status, case_id, state, waiting_rs=None, letter=None):
@@ -2177,12 +2234,21 @@ def cannot_marks(prefix: str) -> dict:
     return marks
 
 
+REQUIRED = " :red[\\*]"  # the small red asterisk after every label needed before sending (one rule, every case type)
+
+
+def required_legend():
+    """"* needed before sending", in red: at the top of every checklist and in the Send box."""
+    st.markdown(f'<p class="req-legend">* {html.escape(t("ready.needed_legend"))}</p>', unsafe_allow_html=True)
+
+
 def checklist_box(items, prefix: str):
     st.markdown(f"**{t('ready.title')}**")
+    required_legend()
     icons = {readiness.PRESENT: ":material/check_circle:", readiness.MISSING: ":material/cancel:",
              readiness.UNCERTAIN: ":material/help:", readiness.CANNOT: ":material/block:"}
     for item in items:
-        st.markdown(f"{icons[item.status]} {item.label(code())}: {t('ready.status.' + item.status)}"
+        st.markdown(f"{icons[item.status]} {item.label(code())}{REQUIRED}: {t('ready.status.' + item.status)}"
                     + (f" \u2014 {item.note}" if item.note else ""))
         if item.status in (readiness.MISSING, readiness.UNCERTAIN, readiness.CANNOT):
             if st.checkbox(t("ready.cannot_box"), key=f"cant-{prefix}-{item.key}"):
@@ -2855,6 +2921,16 @@ def learn_screen():
     current = st.session_state.get("learn_guide")
     st.caption(t("learn.intro"))
     st.info(t("learn.not_reviewed"), icon=":material/info:")
+    guide = guides.by_key(current or "")
+    if guide and guides.content(guide.key).ready:  # the open guide first, so it is seen at once
+        if st.query_params.get("guide") != guide.key:
+            st.query_params["guide"] = guide.key
+        st.button(t("learn.back"), key="learn-back-top", icon=":material/arrow_back:", type="tertiary",
+                  on_click=close_guide)
+        show_guide(guide)
+        st.button(t("learn.back"), key="learn-back-end", icon=":material/arrow_back:", type="tertiary",
+                  on_click=close_guide)
+        return
     with st.container(key="learnlinks"):
         cols = st.columns(len(guides.GUIDES) + 1, gap="medium")
         for col, g in zip(cols, guides.GUIDES):
@@ -2870,11 +2946,12 @@ def learn_screen():
                                       t("learn.more_topics", topics=", ".join(t(f"learn.topic.{i}") for i in range(1, 5))),
                                       t("learn.coming_soon")), unsafe_allow_html=True)
     st.button(t("practice.go"), key="learn-practice", icon=":material/quiz:", on_click=go, args=("Practice",))
-    guide = guides.by_key(current or "")
-    if guide and guides.content(guide.key).ready:
-        if st.query_params.get("guide") != guide.key:
-            st.query_params["guide"] = guide.key
-        show_guide(guide)
+
+
+def close_guide():
+    st.session_state.pop("learn_guide", None)
+    if "guide" in st.query_params:
+        del st.query_params["guide"]
 
 
 def source_html(source) -> str:
@@ -2888,8 +2965,9 @@ def source_html(source) -> str:
     name = e(source.text)
     if links:
         name = f'<a href="{e(links[0])}" target="_blank" rel="noopener noreferrer">{name}</a>'
-    extra = "".join(f' · <a href="{e(l)}" target="_blank" rel="noopener noreferrer">{e(t("learn.also"))}</a>'
-                    for l in links[1:])
+    others = ", ".join(f'<a href="{e(l)}" target="_blank" rel="noopener noreferrer">{e(research.host(l) or l)}</a>'
+                       for l in links[1:])
+    extra = f" · {e(t('learn.also'))}: {others}" if others else ""  # "also" only when something follows
     return f'<p class="learn-src">{e(t("learn.source"))} {name}{extra}</p>'
 
 
@@ -3091,6 +3169,7 @@ def supervisor_screen():
         if info:
             st.info(info, icon=":material/timer:")
         with signin_columns("s"), st.container(key="signin-card"):
+            practice_hint()
             with st.form("sup-form", enter_to_submit=True, border=False):  # Enter signs in
                 st.text_input(t("ui.sup.password"), type="password", key="sup-pass")
                 st.form_submit_button(t("ui.sup.sign_in"), type="primary", key="sup-go", on_click=supervisor_sign_in)
@@ -3868,6 +3947,7 @@ def clinic_gate(screen: str = "New case"):
     own (signin.t1-t3); Current case and the rest use signin.v1-v3."""
     page_title(t("gate.title"), helplines=False)
     with signin_columns("t" if screen == "My cases" else "v"), st.container(key="signin-card"):
+        practice_hint()
         st.caption(t("gate.caption"))
         with st.form("gate-form", enter_to_submit=True, border=False):  # Enter signs in
             st.text_input(t("gate.passcode"), type="password", key="gate-pass")
@@ -4172,7 +4252,7 @@ def show_fact_value(fact: str, value) -> str:
         except ValueError:
             return value
     if fact == "annual_income" and isinstance(value, int):
-        return f"₹{value:,} " + t("tfact.per_year")
+        return f"{lang.inr(value)} " + t("tfact.per_year")
     return show_value(value)
 
 
@@ -4677,7 +4757,7 @@ def scan_box(where: str):
 
 
 def home_screen():
-    st.markdown(ui.hero(t("home.badge"), t("home.kicker"), t("home.lead"), t("app.description") + ". " + t("home.sub"),
+    st.markdown(ui.hero(t("home.badge"), t("home.kicker"), t("home.lead"), t("home.sub"),  # the badge says the rest
                         name=t("app.name")), unsafe_allow_html=True)
     with st.container(key="storybox", horizontal=True, vertical_alignment="center", gap="small"):
         st.text_area(t("home.story_label"), key="home_story", height=68, placeholder=t("home.story_placeholder"),
@@ -4697,7 +4777,7 @@ def home_screen():
     if st.session_state.get("scan-open-home"):
         with st.container(key="scanbox", border=True):
             scan_box("home")
-    st.markdown(ui.helpline(t("home.free"), t("home.helpline_danger"), t("home.helpline_aid")), unsafe_allow_html=True)
+    st.markdown(ui.helpline("", t("home.helpline_danger"), t("home.helpline_aid")), unsafe_allow_html=True)  # the footer says "open source"
 
     st.markdown(ui.section("how-it-works", t("home.how_title"), t("home.how_h2"),
                            ui.how_cards([(t(f"home.how{i}_t"), t(f"home.how{i}_p")) for i in range(1, 6)])),
@@ -4748,8 +4828,9 @@ def top_bar(current: str):
         with st.container(key="topmenu"):  # phones: the menu folded behind one button
             st.button(t("nav.menu"), key="topmenu-btn", icon=":material/close:" if st.session_state.get("menu_open")
                       else ":material/menu:", on_click=toggle, args=("menu_open",))
-        with st.container(key="topactions", horizontal=True, vertical_alignment="center", gap="small"):
+        with st.container(key="toplang"):  # phones: logo, Start a case, menu, language (order set in app.css)
             language_switch()
+        with st.container(key="topactions", horizontal=True, vertical_alignment="center", gap="small"):
             st.button(t("nav.start"), type="primary", key="nav-start", on_click=ask_start_case)
     if st.session_state.get("menu_open"):
         with st.container(key="phonemenu"):

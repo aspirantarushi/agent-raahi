@@ -75,7 +75,26 @@ def t(key: str, code: str = DEFAULT, **params) -> str:
     text = strings(code).get(key) if code in LANGUAGES else None
     if text is None:
         text = strings(DEFAULT)[key]  # a key missing from English is a bug: fail loudly
+    if params:  # a quote inside “ ” never ends with its own full stop: “Asked for Rs 2,000”, not “... 2,000.”.
+        params = {k: (str(v).rstrip(" .।") if isinstance(v, str) and f"“{{{k}}}”" in text else v)
+                  for k, v in params.items()}
     return text.format(**params) if params else text
+
+
+def inr(n) -> str:
+    """Rupees in Indian grouping: 150000 -> "₹1,50,000", 12000000 -> "₹1,20,00,000"."""
+    n = int(n)
+    sign, digits = ("-" if n < 0 else ""), str(abs(n))
+    if len(digits) > 3:
+        head, tail = digits[:-3], digits[-3:]
+        groups = []
+        while len(head) > 2:
+            groups.insert(0, head[-2:])
+            head = head[:-2]
+        if head:
+            groups.insert(0, head)
+        digits = ",".join(groups + [tail])
+    return f"{sign}\u20b9{digits}"
 
 
 def show_date(d: date, code: str = DEFAULT) -> str:

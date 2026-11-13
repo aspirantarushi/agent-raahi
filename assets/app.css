@@ -636,3 +636,107 @@ div[class*="_audio-actions"] button p { white-space: normal !important; line-hei
 /* Case tracker card: the next step (and its due date) never runs into the buttons below, on any width */
 div[class*="st-key-case-card-"] [data-testid="stMarkdownContainer"]:has(.case-sub) { padding-bottom: 18px; overflow: visible; }
 .case-sub { display: block; line-height: 1.45; }
+
+/* ===================== Final fixes C: clearer boxes and steps, phone layout ===================== */
+/* Colours only through the variables: a slightly darker page, visible borders, white cards */
+:root { --bg: #F3F0E9; --line: #D8D1C3; --line2: #CFC7B8; --sand: #E9E3D6; --panel: #EEE9DF; }
+.stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] { background: var(--bg) !important; }
+[data-testid="stMainBlockContainer"], .block-container { padding-bottom: 96px !important; }  /* clear of the host badge */
+
+/* Content cards: white, a 1 px border, a soft shadow, 14 px corners */
+.infocard, .card, .st-key-check-col, .st-key-drafts-box, .st-key-research-panel, .st-key-send-card,
+.st-key-legal-aid-screen, .st-key-done-card, [data-testid="stForm"], [data-testid="stExpander"] details,
+div[class*="st-key-case-card-"], div[class*="st-key-review-"] > div, .st-key-signin-wide {
+  background: var(--card) !important; border: 1px solid var(--line) !important; border-radius: 14px !important;
+  box-shadow: 0 1px 2px rgba(19, 33, 59, .06), 0 4px 14px rgba(19, 33, 59, .05) !important; }
+.st-key-check-col, .st-key-drafts-box, .st-key-research-panel, .st-key-send-card { padding: 14px 16px !important; }
+
+/* Each step: a header band (number in a circle, its name, its state), 24 px between steps */
+.step-band { display: flex; align-items: center; gap: 10px; background: var(--panel); border: 1.5px solid var(--line2);
+  border-radius: 14px; padding: 10px 14px; margin: 24px 0 12px 0; }
+.step-band .step-num { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%; display: inline-flex;
+  align-items: center; justify-content: center; font-weight: 700; font-size: 15px; color: #fff; background: var(--ink); }
+.step-band.done .step-num { background: var(--teal); }
+.step-band.next .step-num { background: var(--muted2); }
+.step-band .step-name { font-weight: 700; font-size: 17px; color: var(--ink); }
+.step-band .step-state { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--muted); }
+.step-band.now .step-state { color: var(--teal-dark); }
+.stepper { margin-bottom: 12px !important; }
+.st-key-page-head { margin-bottom: 16px !important; }
+
+/* Required marks: red asterisk after the label; the legend in red */
+.req-legend { color: var(--red); font-weight: 600; font-size: 13px; margin: 2px 0 8px 0 !important; }
+.left-out-point { font-size: 14px; color: var(--ink); margin: 8px 0 2px 0 !important; }
+
+/* The documents part of the checklist: its own block, a thin line above and below */
+.doc-block-top { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 8px; font-weight: 700; font-size: 14px;
+  color: var(--ink); }
+.doc-block-end { border-bottom: 1px solid var(--line); margin: 6px 0 10px 0; }
+.card-note { font-size: 13px; color: var(--muted2); margin: 0 0 6px 0 !important; }
+.why-off { margin-bottom: 8px !important; }
+.why-off + div [data-testid="stCaptionContainer"], [class*="_audio-box"] .why-off { margin-bottom: 10px !important; }
+
+/* Laptop: a thin vertical line between the summary column and the checklist column */
+@media (min-width: 641px) {
+  [data-testid="stHorizontalBlock"]:has(.st-key-check-col) > [data-testid="stColumn"]:last-child {
+    border-left: 1px solid var(--line); padding-left: 16px; }
+}
+
+/* The two case-type cards: the full description, the same height */
+.st-key-case_type [data-testid="stCaptionContainer"], .st-key-case_type [data-testid="stCaptionContainer"] p {
+  white-space: normal !important; overflow: visible !important; text-overflow: clip !important; }
+.st-key-case_type label[data-baseweb="radio"] { height: 100% !important; }
+
+/* ---------- phones (and narrow tablets) ---------- */
+@media (max-width: 640px) {
+  html, body, .stMarkdown p, .stMarkdown li, input, textarea { font-size: 15px !important; }
+  [data-testid="stWidgetLabel"] p, [data-testid="stWidgetLabel"] label { font-size: 14px !important; }
+  [data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p, .why-asked, .tick-why, .card-note,
+  .learn-src { font-size: 13px !important; }
+  .stepper-phone { display: none !important; }            /* the step band says it: one title per step */
+  [data-testid="InputInstructions"] { display: none !important; }  /* "Press Enter... · 8/40" never covers the text */
+  [data-testid="stNumberInputStepUp"], [data-testid="stNumberInputStepDown"] { display: none !important; }
+  div[class*="_audio-actions"] { flex-direction: column !important; flex-wrap: wrap !important; }
+  div[class*="_audio-actions"] > div { width: 100% !important; flex: 1 1 auto !important; }
+  /* the sticky "Next:" bar: the button on the left, 72 px free on the right (the host's badge) */
+  .st-key-next-action { justify-content: flex-start !important; padding-right: 88px !important; }
+  .st-key-next-action > div:has(button), .st-key-next-action .stButton,
+  .st-key-next-action [data-testid="stFormSubmitButton"] { flex: 0 1 auto !important; }
+  .step-band { margin-top: 20px; }
+}
+/* Top bar below 480 px: logo mark · Start a case · ☰ · EN हिंदी (the words "Agent Raahi" hidden) */
+@media (max-width: 480px) {
+  .brand .word { display: none !important; }
+  .st-key-topbar > div:has(> .st-key-topactions) { order: 1; }
+  .st-key-topbar > div:has(> .st-key-topmenu) { order: 2; }
+  .st-key-topbar > div:has(> .st-key-toplang) { order: 3; }
+  .st-key-nav-start { display: block !important; }
+  .st-key-nav-start button { min-height: 36px !important; padding: 0 10px !important; font-size: 13px !important; width: auto !important; }
+  .st-key-nav-start button p { font-size: 13px !important; }
+  .st-key-topbar { gap: 6px !important; }
+}
+.step-band .step-num .mi { font-size: 18px; color: #fff; }
+.step-band .step-state .mi { font-size: 16px; vertical-align: -3px; color: var(--teal); }
+/* Page titles never touch the helplines or cards below them */
+.st-key-page-head h1 { margin-bottom: 0 !important; padding-bottom: 4px !important; line-height: 1.2 !important; }
+.st-key-page-head [data-testid="stElementContainer"]:has(h1) { margin-bottom: 14px !important; }
+.st-key-page-head .helpline-page { margin-top: 0 !important; }
+/* Top bar on tablets (641–1000 px): logo mark only, tighter menu buttons, so nothing overlaps */
+@media (min-width: 641px) and (max-width: 1000px) {
+  .st-key-topbar .brand .word { display: none !important; }
+  .st-key-topbar { gap: 6px !important; }
+  .st-key-topnav { gap: 0 !important; }
+  .st-key-topnav button { padding: 0 8px !important; }
+  .st-key-topnav button p { font-size: 14px !important; }
+  .st-key-ui_lang [role="radiogroup"] { padding: 0 10px; }
+  .st-key-nav-start button { padding: 0 14px !important; }
+}
+/* Narrow tablets (641–720 px): the ☰ menu instead of five menu buttons */
+@media (min-width: 641px) and (max-width: 720px) {
+  .st-key-topbar > div:has(> .st-key-topnav), .st-key-topnav { display: none !important; }
+  .st-key-topmenu { display: block !important; }
+  .st-key-topmenu button { min-height: 40px !important; padding: 0 12px !important; width: auto !important; }
+  .st-key-phonemenu { display: flex !important; background: var(--card); border: 1px solid var(--line);
+    border-radius: 16px; padding: 6px; margin-bottom: 8px; }
+  .st-key-phonemenu button { justify-content: flex-start !important; min-height: 44px; }
+}

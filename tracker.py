@@ -287,7 +287,7 @@ def replace_summary(case_id: str, what_happened: List[str], issues: List[Tuple[s
     for line in (clean_text(x) for x in what_happened):
         if line and not any(same_line(line, h) for h in lines):
             lines.append(line)
-    record["summary"] = lines
+    record["summary"] = dedupe_facts(lines)
     record["issues"] = [[clean_text(str(c), 100), clean_text(str(n), 100)] for c, n in issues]
     record["documents_held"] = list(dict.fromkeys(clean_text(d) for d in documents_held if clean_text(d)))
     record["answers"] = [[clean_text(q, 200), clean_text(a)] for q, a in answers if (a or "").strip()]
@@ -331,6 +331,62 @@ def same_line(a: str, b: str) -> bool:
     return bool(x) and (x == y or difflib.SequenceMatcher(None, x, y).ratio() >= 0.88)
 
 
+_STOP = {"a", "an", "the", "for", "was", "were", "is", "are", "made", "to", "of", "on", "in", "with", "by", "and", "at",
+         "person", "help", "seeking", "needing", "has", "had", "been", "this", "that", "her", "his", "their", "it", "who",
+         "she", "he", "they", "from", "be", "off", "out", "up", "also", "said", "says"}
+_SAME_STEM = {"paid": "pay", "payment": "pay", "payments": "pay", "timely": "time", "reconnect": "restor",
+              "reconnection": "restor", "reconnected": "restor", "restore": "restor", "restored": "restor",
+              "restoration": "restor", "kharcha": "unoffic", "kharcha-pani": "unoffic", "bribe": "unoffic",
+              "unofficial": "unoffic", "disconnected": "cut", "disconnection": "cut", "disconnect": "cut",
+              "demanded": "demand", "demanding": "demand", "asked": "demand", "home": "house"}
+
+
+def _stems(text: str) -> set:
+    out = set()
+    for w in re.findall(r"[a-z\u0900-\u097F][a-z\u0900-\u097F'-]*|\d[\d,]*", (text or "").casefold()):
+        w = w.strip("'-")
+        if not w or w in _STOP or w == "pani":
+            continue
+        if w in _SAME_STEM:
+            out.add(_SAME_STEM[w])
+            continue
+        if w[0].isdigit():
+            out.add(w.replace(",", ""))
+            continue
+        for suffix in ("ments", "ment", "ings", "ing", "edly", "ed", "ly", "es", "s"):
+            if len(w) > len(suffix) + 3 and w.endswith(suffix):
+                w = w[: -len(suffix)]
+                break
+        out.add(w[:6])
+    return out
+
+
+def _detail(text: str) -> int:
+    """How many numbers and dates a line gives (the more specific line is kept)."""
+    return len(re.findall(r"\d[\d,]*", text or ""))
+
+
+def dedupe_facts(lines: List[str]) -> List[str]:
+    """Drop a fact whose words are mostly inside another fact (compared by word stems: paid / payment,
+    time / timely), keeping the one with more numbers and dates; the order is kept."""
+    keep = [x for x in lines if x and x.strip()]
+    changed = True
+    while changed:
+        changed = False
+        for i, a in enumerate(keep):
+            sa = _stems(a)
+            for j, b in enumerate(keep):
+                if i == j or not sa:
+                    continue
+                if len(sa & _stems(b)) / len(sa) >= 0.75 and (_detail(b) >= _detail(a) or len(_stems(b)) > len(sa)):
+                    keep.pop(i)
+                    changed = True
+                    break
+            if changed:
+                break
+    return keep
+
+
 def add_summary(case_id: str, what_happened: List[str], issues: List[Tuple[str, str]], documents_held: List[str],
                 by: str, ai_model: Optional[str] = None, base: Path = HERE) -> None:
     """Lines from the checked summary (never the notes). New lines are added after the earlier ones."""
@@ -355,6 +411,7 @@ def add_summary(case_id: str, what_happened: List[str], issues: List[Tuple[str, 
         record[key] = [x if isinstance(x, str) else list(x) for x in have]
 
     add("summary", what_happened)
+    record["summary"] = dedupe_facts(record["summary"])  # the same fact in other words: once
     add("issues", issues)
     add("documents_held", documents_held)
     if ai_model:

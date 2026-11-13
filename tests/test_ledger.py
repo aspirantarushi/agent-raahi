@@ -58,7 +58,7 @@ def test_general_uncovered_issue_is_unresolved_covered_is_verified():
     reading, wages, _ = summarise(WAGES_ANSWER, WAGES)
     e = ledger.general(wages, reading.facts, general.check_eligibility(wages.facts))
     issue = [x for x in e if x.fact == "ledger.issue"][0]
-    assert (issue.value, issue.source) == ("unpaid wages", ledger.UNRESOLVED)
+    assert (issue.value, issue.source) == ("unpaid wages for three months", ledger.UNRESOLVED)
     reading, upi, _ = summarise(UPI_ANSWER, UPI)
     issue = [x for x in ledger.general(upi, reading.facts, general.check_eligibility(upi.facts))
              if x.fact == "ledger.issue"][0]

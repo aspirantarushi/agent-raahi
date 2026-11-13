@@ -99,6 +99,16 @@ def stepper(steps: List[str], current: int, step_word: str = "") -> str:
     return f'<ol class="stepper" aria-label="Progress">{"".join(items)}</ol>{phone}'
 
 
+def step_band(n: int, text: str, state: str, state_text: str) -> str:
+    """A step's header band: a numbered circle (a tick once done), the step's name and its state (Now / Done /
+    Not yet). state: "now", "done" or "next"."""
+    num = icon("check") if state == "done" else str(n)
+    tick = (" " + icon("check")) if state == "done" else ""
+    return (f'<div class="step-band {html.escape(state)}"><span class="step-num">{num}</span>'
+            f'<span class="step-name">{html.escape(text)}</span>'
+            f'<span class="step-state">{html.escape(state_text)}{tick}</span></div>')
+
+
 def step_heading(icon_name: str, text: str) -> str:
     """A centred section heading with its outlined icon above it ("Tell the story", "What kind of case is it?")."""
     return (f'<div class="step-title center"><span class="mi step-icon" aria-hidden="true">{html.escape(icon_name)}</span>'
@@ -132,7 +142,7 @@ def hero(badge: str, kicker: str, lead: str, sub: str, name: str = "") -> str:
 
 def helpline(free: str, danger: str, aid: str) -> str:
     """"Free and open source.", then the two tap-to-call helplines below it, each with its own icon."""
-    return f'<div class="helpline"><p>{html.escape(free)}</p>{helpline_links(danger, aid)}</div>'
+    return f'<div class="helpline">' + (f'<p>{html.escape(free)}</p>' if free else "") + f'{helpline_links(danger, aid)}</div>'
 
 
 def eyebrow(text: str) -> str:

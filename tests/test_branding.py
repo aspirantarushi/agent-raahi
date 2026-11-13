@@ -56,7 +56,8 @@ def test_header_on_screen_in_both_languages():
     at.button(key="nav-home").click().run()  # the tagline is on Home (the footer is one short line now)
     html = " ".join(m.value for m in at.markdown)
     assert EN_MARK in html and "Lighting the way to legal aid" in html
-    assert "An AI casework agent for legal aid clinics and NGOs" in html
+    assert "An AI casework agent for legal aid clinics and NGOs" not in html  # the badge says it
+    assert '<p class="sub">Agent Raahi turns a person' in html
     at.radio(key="ui_lang").set_value("hi").run()
     html = " ".join(m.value for m in at.markdown)
     assert HI_MARK in html and "क़ानूनी मदद तक, रोशन राह" in html

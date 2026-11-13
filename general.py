@@ -54,6 +54,10 @@ PROBLEM_DOCUMENTS = [
 POLICE_OR_COURT_WORDS = ["police", "fir", "arrest", "arrested", "court", "hearing", "chargesheet", "jail", "summons"]
 POLICE_OR_COURT_DOCUMENTS = ["FIR copy", "Court orders", "Notices received"]
 ALWAYS_DOCUMENTS = ["ID proof", "Income proof (for free legal aid)"]
+# The notes' words that can make "in custody" yes (jail, police custody, arrest, lock-up), in English,
+# Hinglish and Hindi; anything else (a story about electricity) never does
+CUSTODY_WORDS = re.compile(r"\bjail|\bjel\b|custody|\barrest|lock-?up|hawalat|havalat|hirasat|giraft?ar|"
+                           r"pakad\s*(liya|le gaye|kar le)|thane mein band|जेल|हिरासत|गिरफ़्तार|गिरफ्तार|हवालात|पकड़", re.I)
 YES_NO_FACTS = ["danger_now", "in_custody", "money_lost_online", "money_lost_in_last_few_days", "called_1930",
                 "woman", "under_18", "sc_st", "disability", "essential_service_cut", "unofficial_payment_demand"]
 ISSUE_CATEGORIES = {"arrest_or_custody", "online_or_financial_fraud", "electricity_or_water", "wages_or_work",
@@ -187,6 +191,16 @@ def state_names() -> List[str]:
         return [r["state_or_ut"] for r in csv.DictReader(f) if not r["state_or_ut"].startswith("Supreme Court")]
 
 
+def problem_phrase(name: str, what_happened: List[str]) -> str:
+    """The Problem line says what went wrong, not just the topic: a one- or two-word name ("electricity
+    connection") is not accepted; the first fact, shortened, is used instead."""
+    if len(re.findall(r"[\w\u0900-\u097F]+", name or "")) > 2 or not what_happened:
+        return name
+    first = what_happened[0].rstrip(" .।")
+    first = first[:1].lower() + first[1:] if first[:2] != first[:2].upper() else first
+    return (first[:77].rsplit(" ", 1)[0] + "…") if len(first) > 80 else first
+
+
 def check_general_answer(raw: dict, notes: str, code: str = "en") -> GeneralReading:
     r = GeneralReading()
     if not isinstance(raw, dict):
@@ -203,6 +217,9 @@ def check_general_answer(raw: dict, notes: str, code: str = "en") -> GeneralRead
 
     for key in YES_NO_FACTS:
         value, quote = _quoted(raw.get(key), notes)
+        if key == "in_custody" and value == "yes" and quote and not CUSTODY_WORDS.search(notes or ""):
+            r.dropped.append(key)  # "in custody" only when the notes mention jail, police custody, arrest or lock-up
+            continue
         if value in ("yes", "no") and quote:
             r.facts[key] = value == "yes"
             r.evidence[key] = quote
@@ -247,7 +264,7 @@ def check_general_answer(raw: dict, notes: str, code: str = "en") -> GeneralRead
     for i in (raw.get("issues") or [])[:5]:
         if isinstance(i, dict) and clean(i.get("name"), 80):
             category = i.get("category") if i.get("category") in ISSUE_CATEGORIES else "other"
-            r.issues.append((category, clean(i.get("name"), 80)))
+            r.issues.append((category, problem_phrase(clean(i.get("name"), 80), r.what_happened)))
     if r.facts.get("in_custody") and not any(c == "arrest_or_custody" for c, _ in r.issues):
         r.issues.insert(0, ("arrest_or_custody", "someone is in custody"))
     if r.facts.get("money_lost_online") and not any(c == "online_or_financial_fraud" for c, _ in r.issues):
@@ -519,7 +536,7 @@ def check_eligibility(facts: Dict[str, object]) -> Eligibility:
     groups = [label for key, label in GROUPS if facts.get(key) is True]
     if groups:
         group_key = next(key for key, _ in GROUPS if facts.get(key) is True)
-        return Eligibility("eligible", f"Qualifies for free legal aid whatever the income, as {groups[0]}.",
+        return Eligibility("eligible", f"Qualifies for free legal aid as {groups[0]}, whatever the income.",
                            [], notes, sources, "elig.group", {"group": group_key})
 
     unknown_groups = [key for key, _ in GROUPS if facts.get(key) is None]
@@ -528,13 +545,13 @@ def check_eligibility(facts: Dict[str, object]) -> Eligibility:
             sources.append(f"Source: NALSA state income limits ({url})")
         if limit is not None and income is not None:
             if int(income) < limit:
-                return Eligibility("eligible", f"Qualifies on income: about ₹{int(income):,} a year is below "
-                                   f"{state}'s limit of ₹{limit:,}.", [], notes, sources, "elig.income_below",
+                return Eligibility("eligible", f"Qualifies on income: about {lang.inr(income)} a year is below "
+                                   f"{state}'s limit of {lang.inr(limit)}.", [], notes, sources, "elig.income_below",
                                    {"income": int(income), "limit": limit, "state": state})
             if not unknown_groups:
                 return Eligibility("not eligible on income alone",
-                                   f"About ₹{int(income):,} a year is not below {state}'s limit of "
-                                   f"₹{limit:,}, and none of the groups above applies. Some states add "
+                                   f"About {lang.inr(income)} a year is not below {state}'s limit of "
+                                   f"{lang.inr(limit)}, and none of the groups above applies. Some states add "
                                    "more groups: ask the DLSA or NALSA's free helpline 15100.",
                                    [], notes, sources, "elig.income_above",
                                    {"income": int(income), "limit": limit, "state": state})
@@ -887,10 +904,8 @@ def merged_facts(g: "GeneralFacts", code: str = "en") -> Tuple[List[str], List[T
     date goes into that fact ("On 1 October 2026, the electricity department disconnected...") and the
     timeline line is dropped; a timeline line whose date a fact already gives is dropped too. Used by the
     letter, the summary and the DLSA statement, so none of them says the same event twice."""
-    lines = []
-    for x in g.what_happened:
-        if x and x not in lines:
-            lines.append(x)
+    import tracker
+    lines = tracker.dedupe_facts([x for x in dict.fromkeys(g.what_happened) if x])  # every draft: each fact once
     left, dated = [], set()
     for when, what in g.timeline:
         if when and any(when.casefold() in x.casefold() for x in lines):
@@ -937,8 +952,9 @@ def answer_facts(g: "GeneralFacts", code: str = "en") -> List[str]:
 def build_facts(reading: GeneralReading, answers: List[Tuple[str, str]], still_to_ask: List[str],
                 facts: Dict[str, object], today: date) -> GeneralFacts:
     sections = [f"IPC {o.ipc_section} = BNS {o.bns_section}: {o.offence}" for o in reading.sections]
+    import tracker
     return apply_answers(GeneralFacts(
-        person=reading.person, what_happened=reading.what_happened, timeline=dedupe_timeline(list(reading.timeline)),
+        person=reading.person, what_happened=tracker.dedupe_facts(list(reading.what_happened)), timeline=dedupe_timeline(list(reading.timeline)),
         coming_dates=dedupe_timeline(list(reading.coming_dates)), issues=reading.issues, sections=sections,
         documents_held=list(reading.documents_held),
         answers=[(clean(q, 200), clean(a, 300)) for q, a in answers],
@@ -1012,7 +1028,7 @@ def _hi_known(prefix: str, english: str) -> str:
 
 
 def _money(n: int) -> str:
-    return f"\u20b9{n:,}"
+    return lang.inr(n)
 
 
 def eligibility_text(e: Eligibility, code: str) -> str:
@@ -1211,11 +1227,12 @@ def _step_lines(g: "GeneralFacts", eligibility, code: str) -> List[str]:
     for i, s in enumerate(steps, 1):
         text = ("✓ " + s.text) if s.done else s.text  # done: the supervisor's check, once approved
         if s.due:
-            text = with_date(s.text, lang.t("cw.by_date" if not s.suggested else "cw.by_date_suggested", code,
-                                            date=lang.show_date(s.due, code)))
+            text = f"{s.text.rstrip().rstrip('.।')} — " + lang.t("cw.by_bold", code, date=lang.show_date(s.due, code))
         out.append(f"{i}. {text}")
         if s.source:
             out.append(f"   ({s.source})")
+    if any(s.due for s in steps):  # said once (the steps themselves say only "— by <date>")
+        out.append("   " + lang.t("cw.dates_note", code))
     return out
 
 

@@ -61,7 +61,7 @@ def test_page_preview_highlights_blanks_and_bolds_dates_and_money():
     assert "<b>₹12,000</b>" in page
     assert 'class="doc-sign"' in page and 'class="doc-disclosure"' in page
     s = document.to_html(summary())
-    assert "<b>30 September 2026:</b>" in s and '<h4 class="doc-h">Next steps</h4>' in s
+    assert "30 September 2026" in s and '<h4 class="doc-h">Next steps</h4>' in s  # the date inside its fact
     assert "<script" not in document.to_html("DRAFT — to be checked by a lawyer\n\n<script>alert(1)</script>")
 
 

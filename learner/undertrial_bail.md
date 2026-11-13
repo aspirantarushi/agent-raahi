@@ -80,7 +80,7 @@ Model answer:
    Source: BNSS, 2023, Section 479 [[Section 479: release after a share of the maximum sentence]]
 
 4. Which of these is NOT covered by Section 479?
-   a) Theft in a dwelling house (BNS 305)  b) Cheating (BNS 318(4))  c) Murder (BNS 103(1))  d) Theft, first conviction (BNS 303(2))
+   a) Theft in a dwelling house (BNS 305)  b) Cheating (BNS 318(4))  c) Murder (BNS 103(1))  d) Extortion (BNS 308(2))
    Answer: c
    Why: Murder can be punished with death or life imprisonment, and Section 479 does not apply to such offences.
    Source: BNSS, 2023, Section 479 [[When Section 479 does not apply]]
