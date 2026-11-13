@@ -400,6 +400,11 @@ i18n/hi.json · cw.doc.self_declaration,Self-declaration for free legal aid (no 
 i18n/hi.json · ready.block_sent_unticked,Sent with {n} items not ticked:,{n} चीज़ों पर टिक किए बिना भेजा गया:,draft,,
 i18n/hi.json · ready.block_sent_unticked.one,Sent with 1 item not ticked:,1 चीज़ पर टिक किए बिना भेजा गया:,draft,,
 i18n/hi.json · cw.update_drafts,Update the letter and drafts,पत्र और ड्राफ़्ट अपडेट करें,draft,,
+i18n/hi.json · cw.on_date,"On {date}, {fact}",{date} को: {fact},draft,,
+i18n/hi.json · cw.as_told,(as told by the person),(व्यक्ति के बताए अनुसार),draft,,
+i18n/hi.json · cw.income_not_needed,[not needed: qualifies as {group}],[ज़रूरी नहीं: {group} के रूप में हक़दार],draft,,
+i18n/hi.json · cw.step_check_research,Check the research points and the draft letter.,रिसर्च के बिंदु और पत्र का ड्राफ़्ट जाँचें।,draft,,
+i18n/hi.json · disclosure.rules_research,free legal aid eligibility was checked by rule-based code from our verified files; legal points were found on official websites with AI assistance and approved one by one by the supervisor,मुफ़्त क़ानूनी मदद की पात्रता हमारी जाँची हुई फ़ाइलों के नियमों पर बने कोड से देखी गई; क़ानूनी बिंदु AI की मदद से आधिकारिक वेबसाइटों पर खोजे गए और सुपरवाइज़र ने एक-एक करके मंज़ूर किए,draft,,
 templates_hi/complaint_letter.md · line 2 (Hindi DRAFT line),DRAFT — to be checked by a lawyer,ड्राफ़्ट — वकील से जाँच करवाना ज़रूरी है,draft,,
 templates_hi/complaint_letter.md · line 3,"To,","सेवा में,",draft,,
 templates_hi/complaint_letter.md · line 4,[Name and address of the office],[कार्यालय का नाम और पता],draft,,
@@ -1470,6 +1475,7 @@ i18n/hi.json · ledger.f.has_reference_number,Has a consumer or application numb
 i18n/hi.json · signin.t1,"Volunteers sign in here to see every case in one list: its status, the next step, who acted last, and when it is due.","स्वयंसेवक यहाँ साइन इन करके सभी केस एक सूची में देख सकते हैं: स्थिति, अगला क़दम, आख़िरी बार किसने काम किया, और कब तक करना है।",screen text,,
 i18n/hi.json · signin.t2,"Open a case to log a visit, update a step, or record that an approved draft was handed in.","किसी केस को खोलकर मुलाक़ात दर्ज करें, क़दम अपडेट करें, या दर्ज करें कि मंज़ूर ड्राफ़्ट जमा कर दिया गया।",screen text,,
 i18n/hi.json · signin.t3,Cases are listed by case number and code only. Names of people seeking help are never stored.,यहाँ केस सिर्फ़ केस नंबर और कोड से दिखते हैं। मदद माँगने वालों के नाम कभी सेव नहीं होते।,screen text,,
+i18n/hi.json · intake.done_card_due,Intake finished. Case {case_id} is with the supervisor (due {due}).,इनटेक पूरा हुआ। केस {case_id} सुपरवाइज़र के पास है (तारीख़ {due})।,screen text,,
 case_notes_hi.txt,(fake practice story; check that it reads naturally),"अभ्यास केस (कोई असली व्यक्ति नहीं)।
 बोलने वाली: एक विचाराधीन क़ैदी की बड़ी बहन।
 उसके भाई को 15 मार्च 2024 को गिरफ़्तार किया गया था। अपराध फ़रवरी 2024 में हुआ था।

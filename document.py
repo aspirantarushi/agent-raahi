@@ -142,7 +142,8 @@ def _is_heading(s: str, nxt: str, prev_blank: bool) -> bool:
     n = nxt.strip()
     follows = n.startswith(("- ", "• ")) or bool(re.match(r"^\d{1,2}\.\s", n)) or nxt.startswith("   ") \
         or (s.endswith(":") and bool(n))
-    plain = not re.search(r"[.;,!?।]$", s) and len(s) <= 80 and not s.startswith("[")
+    plain = not re.search(r"[.;,!?।]$", s) and len(s) <= 80 and not s.startswith("[") \
+        and not re.search(r"[.,;।]\s", s)  # a sentence inside ("..., of [Address]. The facts are:") is not a heading
     colon_inside = ":" in s.rstrip(":")
     return prev_blank and follows and plain and not colon_inside
 

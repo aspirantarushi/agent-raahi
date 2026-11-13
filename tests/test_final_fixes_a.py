@@ -369,9 +369,10 @@ def test_a_fact_is_dropped_only_when_the_dated_line_says_it_all():
                                   "paid on time."],
                    timeline=[("1 October 2026", "The electricity connection was cut off.")])
     lines = casework.letter_facts(g)
-    assert "- The electricity department cut off the electricity connection." not in lines      # a repeat
-    assert any("despite bills being paid on time" in line for line in lines)                      # adds a fact
-    assert "- 1 October 2026: The electricity connection was cut off." in lines
+    # the date goes into the fact that tells the same event; the separate date line is dropped
+    assert "- On 1 October 2026, the electricity department cut off the electricity connection." in lines
+    assert any("despite bills being paid on time" in line for line in lines)                      # nothing lost
+    assert not any(line.startswith("- 1 October 2026:") for line in lines)
 
 
 # ---------- Case tracker sign-in: its own side panel ----------
@@ -391,3 +392,115 @@ def test_tracker_sign_in_says_what_the_tracker_is_for(monkeypatch, code):
         for n in (1, 2, 3):
             assert lang.t(f"signin.{mine}{n}", code).replace("'", "&#x27;") in side, (screen, n)
             assert lang.t(f"signin.{other}{n}", code).replace("'", "&#x27;") not in side, (screen, n)
+
+
+# ---------- Final fixes A2 ----------
+
+def a2_case(**kw):
+    base = dict(person="a 62-year-old widow", outcome="the electricity reconnected",
+                what_happened=["The electricity department disconnected the electricity connection in Gaya district, "
+                               "Bihar, over an alleged pending amount of Rs 14,000.",
+                               "A lineman is demanding Rs 2,000 for reconnection."],
+                timeline=[("1 October 2026", "The electricity connection was disconnected by the electricity department.")],
+                issues=[("electricity_or_water", "electricity connection cut")], documents_held=["bill receipts"],
+                answers=[("Did the person receive any official notice before the electricity was disconnected?",
+                          "No written notice was given before the cut"),
+                         ("Did the person pay the bill?", "Yes"), ("Were others cut off too?", "Don't know")],
+                facts={"state": "Bihar", "woman": True})
+    base.update(kw)
+    return make_facts(**base)
+
+
+def test_a2_prompt_keeps_numbers_and_the_app_keeps_them():
+    assert "keep every amount of money, count, age, place" in llm.GENERAL_PROMPT
+    assert "never\n  as \"the person needing help\"" in llm.GENERAL_PROMPT or "never as \"the person needing help\"" in \
+        " ".join(llm.GENERAL_PROMPT.split())
+    raw = {"what_happened": ["The electricity department disconnected the connection over Rs 14,000 in Gaya district, Bihar.",
+                             "A lineman is demanding Rs 2,000 for reconnection."]}
+    reading = general.check_general_answer(raw, "Practice notes.")
+    text = " ".join(reading.what_happened)
+    assert "Rs 14,000" in text and "Rs 2,000" in text and "Gaya district, Bihar" in text
+
+
+def test_a2_answers_reach_the_letter_and_the_dlsa_statement():
+    g = a2_case()
+    facts = casework.letter_facts(g)
+    assert "- No written notice was given before the cut (as told by the person)." in facts
+    assert not any("Yes (as told" in f or "Don't know" in f for f in facts)
+    dlsa = casework.dlsa_application(g, general.check_eligibility(g.facts), "electricity connection cut", None)
+    assert "No written notice was given before the cut (as told by the person)." in dlsa
+    assert "The person needing help" not in dlsa
+    assert "[not needed: qualifies as a woman]" in dlsa
+
+
+def test_a2_the_date_goes_into_the_fact_everywhere():
+    g = a2_case()
+    facts = casework.letter_facts(g)
+    assert facts[0].startswith("- On 1 October 2026, the electricity department disconnected")
+    assert not any(f.startswith("- 1 October 2026:") for f in facts)
+    body = general.summary_body(g)
+    assert "On 1 October 2026, the electricity department disconnected" in body
+    assert "- 1 October 2026: The electricity connection was disconnected" not in body
+    letter = casework.complaint_letter(g, [], "electricity connection cut", None)
+    assert "The facts are:" in letter
+    import document
+    import re as _re
+    assert "The facts are:" in _re.sub(r"<[^>]+>", "", document.to_html(letter))   # the colon stays on the page
+
+
+def test_a2_case_file_documents_match_the_intake():
+    record = {"case_type": "General", "summary": ["The electricity was cut although she paid every bill."],
+              "issues": [["electricity_or_water", "electricity connection cut"]], "documents_held": [],
+              "facts": {"woman": {"value": True}, "state": {"value": "Bihar"}}}
+    docs = casework.case_file_documents(record)
+    assert "Latest electricity bill" in docs
+    assert not any(d in docs for d in ("Pay slips", "Bank statements showing earlier payments"))
+    assert "Self-declaration for free legal aid (no income proof needed: qualifies as a woman)" in docs
+    assert not any(d.startswith("Income proof") for d in docs)
+    assert casework.approved_text({"approved_on": "2026-11-13", "approved_by": "Supervisor"}) == \
+        "approved by Supervisor on 13 November 2026"
+
+
+def test_a2_source_labels():
+    labels = research.source_labels([
+        {"title": "Contact Us", "url": "https://nbpdcl.co.in/frmContactUs.aspx"},
+        {"title": "Online Complaint", "url": "https://www.sbpdcl.co.in/ComplaintFormLatest.aspx"},
+        {"title": "Contact Us", "url": "https://sbpdcl.co.in/contact.aspx"},
+        {"title": "Contact Us", "url": "https://nbpdcl.co.in/frmContactUs.aspx/"}])   # the same page again
+    assert [l for l, _ in labels] == ["Contact Us (nbpdcl.co.in)", "Online Complaint (sbpdcl.co.in)",
+                                      "Contact Us (sbpdcl.co.in)"]
+    assert research.display_title("The Bihar Gazette-CGRF-and-EO-Regulations.pdf)") == \
+        "The Bihar Gazette CGRF and EO Regulations"
+
+
+def test_a2_small_ones(tmp_path):
+    g = a2_case(research_state="waiting", research_pending=7)
+    body = general.summary_body(g)
+    steps = body.split(lang.t("sum.next_steps"))[1]
+    assert "Check the research points and the draft letter." in steps and "Research from official websites" not in steps
+    letter = casework.complaint_letter(g, [dict(POINT, unchecked=True)], "electricity connection cut", None)
+    assert "legal points were found on official websites with AI assistance and approved one by one by the supervisor" \
+        in letter
+    assert lang.t("intake.done_card_due", case_id="U-1", due="20 November 2026") == \
+        "Intake finished. Case U-1 is with the supervisor (due 20 November 2026)."
+    case_id = tracker.open_case("General", "Volunteer A", base=tmp_path)["id"]
+    store.submit("DRAFT — to be checked by a lawyer\n\nx", g, case_id=case_id, by="Volunteer A", base=tmp_path)
+    store.approve(case_id, base=tmp_path, by="Supervisor")
+    row = next(r for r in tracker.rows(base=tmp_path) if r["id"] == case_id)
+    assert row["due"] == (date.today() + timedelta(days=7)).isoformat()   # approved: due in 7 days
+    case_file = general.make_case_file(case_id, g.to_dict(), date.today())
+    assert "✓ " + lang.t("cw.step_supervisor") in case_file
+
+
+def test_a2_request_is_the_request_and_case_file_lists_papers():
+    g = a2_case(outcome="The widow wants the electricity reconnected immediately and the incorrect bill corrected.")
+    letter = casework.complaint_letter(g, [], "electricity connection cut", None)
+    assert "The person requests: the electricity reconnected immediately and the incorrect bill corrected." in letter
+    record = {"case_type": "General", "summary": ["The electricity was cut."], "documents_held": ["bill receipts"],
+              "issues": [["electricity_or_water", "electricity connection cut"]],
+              "facts": {"woman": {"value": True}, "state": {"value": "Bihar"}},
+              "research_points": [{"kind": "documents", "text": "Details needed include name and address.",
+                                   "sources": [], "approved_on": "2026-11-13"}]}
+    docs = casework.case_file_documents(record)
+    assert "Self-declaration for free legal aid (no income proof needed: qualifies as a woman)" in docs
+    assert "Latest electricity bill" in docs and "bill receipts" not in docs     # what she has is not "to collect"

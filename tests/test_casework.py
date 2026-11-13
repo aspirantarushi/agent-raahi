@@ -124,9 +124,9 @@ def test_letters_use_only_case_facts_and_approved_points(g, points, issue, code)
     body, volunteer_part = re.split(r"\n---\n", letter, maxsplit=1)
     # The letter's body: no legal claims, sections or deadlines at all
     assert casework.legal_claims(body) == [], casework.legal_claims(body)
-    # Facts in the body come from the case
+    # Facts in the body come from the case (a fact may carry its date: "On 1 October 2026, the ...")
     for line in g.what_happened:
-        assert line in body
+        assert line[1:].rstrip(".") in body, line
     # Anything legal in the whole letter is in an approved point
     assert {c.casefold() for c in casework.legal_claims(letter)} <= allowed_claims(points) | {
         c.casefold() for c in casework.legal_claims(volunteer_part.split("How this draft was prepared")[-1])}
@@ -154,10 +154,11 @@ def test_hindi_letter_is_in_hindi_with_the_draft_line():
 def test_dlsa_application_filled_from_the_case_in_both_languages():
     e = general.check_eligibility(ELECTRICITY.facts)
     en = casework.dlsa_application(ELECTRICITY, e, "electricity connection cut", None)
-    assert "Yes — a woman" in en and "about ₹6,000" in en and "The applicant wants: the connection restored" in en
+    assert "Yes — a woman" in en and "The applicant wants: the connection restored" in en
+    assert "[not needed: qualifies as a woman]" in en and "about ₹6,000" not in en   # a Section 12 group
     assert "[to be filled by hand at the DLSA — not stored in the app]" in en
     hi = casework.dlsa_application(ELECTRICITY, e, "बिजली का कनेक्शन कटा", None, "hi")
-    assert "हाँ — महिला" in hi and "लगभग ₹6,000" in hi
+    assert "हाँ — महिला" in hi and "[ज़रूरी नहीं: महिला के रूप में हक़दार]" in hi
 
 
 # ---------- 2. ration card, Uttar Pradesh ----------

@@ -21,7 +21,7 @@ import urllib.parse
 import urllib.request
 from datetime import date, datetime
 from pathlib import Path
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
 import audit
 import llm
@@ -530,8 +530,49 @@ def matching(state: Optional[str], issue: str, base: Path = HERE) -> List[dict]:
     return [e for e in learned(base) if e["state"].casefold() == state.casefold() and words & set(e["keywords"])]
 
 
+GENERIC_TITLES = {"contact us", "contact", "online complaint", "complaint", "complaints", "complaint registration",
+                  "home", "home page", "about us", "downloads", "download", "notification", "notifications", "view",
+                  "index", "page", "faq", "faqs", "services", "grievance", "help", "source"}
+
+
+def display_title(title: str, url: str = "") -> str:
+    """A source title people can read: no file name ("...Regulations.pdf)" -> "...Regulations"), no stray
+    bracket, words not joined by hyphens or underscores."""
+    t = re.sub(r"\.(pdf|aspx?|html?|docx?|php)\b", "", str(title or ""), flags=re.I)
+    if " " not in t.strip() or re.search(r"\w-\w+-\w", t):  # a file name: Bihar-Gazette-CGRF-and-EO
+        t = re.sub(r"[-_]+", " ", t)
+    t = t.strip(" -_|:;,")
+    while t.count(")") > t.count("(") and ")" in t:
+        t = t[::-1].replace(")", "", 1)[::-1].strip()
+    while t.count("(") > t.count(")") and "(" in t:
+        t = t.replace("(", "", 1).strip()
+    return " ".join(t.split()) or host(url) or "source"
+
+
+def source_labels(sources: List[dict]) -> List[Tuple[str, str]]:
+    """[(label, url)]: each source once (the same page twice counts once), file names cleaned, and the
+    website added to a generic title ("Contact Us (nbpdcl.co.in)") or to a title two sites share."""
+    seen, items = set(), []
+    for s in sources:
+        url = s.get("url", "")
+        key = same_link(url)
+        if key in seen:
+            continue
+        seen.add(key)
+        items.append((display_title(s.get("title", ""), url), url))
+    titles = [t.casefold() for t, _ in items]
+    out = []
+    for label, url in items:
+        if label.casefold() in GENERIC_TITLES or titles.count(label.casefold()) > 1:
+            site = re.sub(r"^www\.", "", host(url) or "")
+            label = f"{label} ({site})" if site and site not in label else label
+        if (label, url) not in out:
+            out.append((label, url))
+    return out
+
+
 def source_line(sources: List[dict]) -> str:
-    return "Source: " + "; ".join(f"{s['title']} ({s['url']})" for s in sources)
+    return "Source: " + "; ".join(f"{label} ({url})" for label, url in source_labels(sources))
 
 
 def items_for_summary(case_id: Optional[str], state: Optional[str], issues: List[str],

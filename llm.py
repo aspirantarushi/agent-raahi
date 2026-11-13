@@ -527,8 +527,7 @@ Rules:
 - Only extract facts stated in the notes. Never judge or predict bail chances, flight risk, the risk
   of re-offending, guilt, innocence or anyone's credibility, never predict the outcome of a case, and
   never give an opinion or a score.
-- Describe people only by their role ("the employer", "the husband", "the sister", "the person
-  seeking help"). Never write anyone's name, phone number, address or ID number.
+- Describe people only by their role ("the employer", "the husband", "the sister", "the person"). Never write anyone's name, phone number, address or ID number.
 - Never cite any law, Act, section, article, rule or court case. Name problems only in plain words,
   for example "unpaid wages", "domestic violence", "land dispute", "online fraud", "arrest and bail".
   The only exception is "sections_charged": copy any IPC or BNS section written in the notes, with the
@@ -543,6 +542,11 @@ Rules:
 - For every yes/no answer and for state and income, "quote" must be the exact words copied from the
   notes that show it (null if unknown).
 - what_happened: 2 to 6 short plain sentences. timeline: dates or times exactly as written in the notes.
+- In what_happened, timeline and documents_held keep every amount of money, count, age, place (district,
+  village) and date exactly as the notes give them ("Rs 14,000", "twice", "62-year-old", "Gaya district,
+  Bihar", "1 October 2026"); never replace them with general words ("an amount", "money", "a place").
+- Refer to the person who needs help as "the person" or by their role ("the widow", "the worker"), never
+  as "the person needing help".
 - in_custody: "yes" only if the notes say someone is in jail or police custody now.
 - money_lost_in_last_few_days: "yes" only if the notes say the money was lost within about the last
   7 days ("today", "yesterday", "two days ago"...).

@@ -874,6 +874,66 @@ def dedupe_timeline(entries: List[Tuple[str, str]]) -> List[Tuple[str, str]]:
     return out
 
 
+_EVENT_FILLER = {"the", "a", "an", "was", "were", "is", "has", "had", "been", "by", "of", "to", "on", "her", "his",
+                 "their", "she", "he", "they", "person", "off", "due", "it", "this", "that", "and"}
+
+
+def _event_words(text: str) -> set:
+    return {w for w in re.findall(r"[a-z\u0900-\u097F]+", (text or "").casefold()) if w not in _EVENT_FILLER}
+
+
+def merged_facts(g: "GeneralFacts", code: str = "en") -> Tuple[List[str], List[Tuple[str, str]]]:
+    """(fact lines, timeline lines left). When most of a timeline line's words are already in a fact, the
+    date goes into that fact ("On 1 October 2026, the electricity department disconnected...") and the
+    timeline line is dropped; a timeline line whose date a fact already gives is dropped too. Used by the
+    letter, the summary and the DLSA statement, so none of them says the same event twice."""
+    lines = []
+    for x in g.what_happened:
+        if x and x not in lines:
+            lines.append(x)
+    left, dated = [], set()
+    for when, what in g.timeline:
+        if when and any(when.casefold() in x.casefold() for x in lines):
+            continue
+        short = re.sub(r",?\s*(19|20)\d{2}\s*$", "", when or "").strip()  # "30 September 2026" -> "30 September"
+        at = next((i for i, x in enumerate(lines) if short and short != when
+                   and re.search(rf"(?<!\w){re.escape(short)}(?!,?\s*(19|20)\d{{2}})", x, re.I)), None)
+        if at is not None:  # the fact has the date without its year: complete it there, no second line
+            lines[at] = re.sub(rf"(?<!\w){re.escape(short)}(?!,?\s*(19|20)\d{{2}})", when, lines[at], count=1,
+                               flags=re.I)
+            continue
+        ww = _event_words(what)
+        hit = next((i for i, x in enumerate(lines) if i not in dated and ww
+                    and len(ww & _event_words(x)) / len(ww) >= 0.75), None)
+        if hit is None:
+            left.append((when, what))
+            continue
+        fact = lines[hit].rstrip()
+        fact = fact[:1].lower() + fact[1:] if code == "en" and fact[:2] != fact[:2].upper() else fact
+        lines[hit] = lang.t("cw.on_date", code, date=when, fact=fact)
+        dated.add(hit)
+    return lines, left
+
+
+BARE_YES_NO = re.compile(r"^\s*(yes|no|y|n|haan|han|ha|nahi+n?|nahin|हाँ|हां|नहीं|ji|जी)\s*[.!]?\s*$", re.I)
+
+
+def answer_facts(g: "GeneralFacts", code: str = "en") -> List[str]:
+    """Answers the volunteer was told, as fact lines for the letter and the DLSA statement: "No written
+    notice was given before the disconnection (as told by the person)." Never "Don't know", a bare yes or
+    no, or an answer that fills another part (what the person wants, who it is, the consumer number)."""
+    out = []
+    for q, a in g.answers:
+        a = clean(a, 300)
+        if not a or NO_ANSWER.search(a) and len(a.split()) <= 3 or BARE_YES_NO.match(a):
+            continue
+        if fills(q) in ("outcome", "person", "reference"):
+            continue
+        line = a[:1].upper() + a[1:]
+        out.append(f"{line.rstrip('. ')} {lang.t('cw.as_told', code)}.")
+    return out
+
+
 def build_facts(reading: GeneralReading, answers: List[Tuple[str, str]], still_to_ask: List[str],
                 facts: Dict[str, object], today: date) -> GeneralFacts:
     sections = [f"IPC {o.ipc_section} = BNS {o.bns_section}: {o.offence}" for o in reading.sections]
@@ -1003,8 +1063,9 @@ def _summary(g: "GeneralFacts", code: str) -> str:
     out += [f"- {a}" for a in dict.fromkeys(urgent + flags) if a.casefold().rstrip(".।") not in said]
     out.append("")
 
+    happened, timeline_left = merged_facts(g, code)  # a fact and its date line said once
     out.append(t("sum.what_happened"))
-    out += [f"- {x}" for x in g.what_happened] or [f"- {t('sum.not_clear')}"]
+    out += [f"- {x}" for x in happened] or [f"- {t('sum.not_clear')}"]
     if g.sections:
         out.append(f"- {t('sum.sections_label')} " + "; ".join(g.sections))
     out += [f"- {t('sum.asked', q=q, a=a)}" for q, a in g.answers]
@@ -1012,9 +1073,9 @@ def _summary(g: "GeneralFacts", code: str) -> str:
 
     out += [t("sum.outcome"), f"- {g.outcome or t('sum.wants_none')}", ""]
 
-    if g.timeline or g.coming_dates:
+    if timeline_left or g.coming_dates:
         out.append(t("sum.timeline"))
-        out += [f"- {w}: {what}" for w, what in g.timeline]
+        out += [f"- {w}: {what}" for w, what in timeline_left]
         out += [f"- {t('sum.coming_up', when=w, what=what)}" for w, what in g.coming_dates]
         out.append("")
 
@@ -1145,10 +1206,10 @@ def _lawyer_lines(g: "GeneralFacts", code: str) -> List[str]:
 def _step_lines(g: "GeneralFacts", eligibility, code: str) -> List[str]:
     import casework
     steps = casework.next_steps(g, eligibility, _approved_points(g), g.research_state, date.fromisoformat(g.today),
-                                code, document=True)
+                                code, document=True, case_approved=bool(getattr(g, "approved", False)))
     out = []
     for i, s in enumerate(steps, 1):
-        text = s.text
+        text = ("✓ " + s.text) if s.done else s.text  # done: the supervisor's check, once approved
         if s.due:
             text = with_date(s.text, lang.t("cw.by_date" if not s.suggested else "cw.by_date_suggested", code,
                                             date=lang.show_date(s.due, code)))
@@ -1188,6 +1249,7 @@ def make_summary_draft(g: GeneralFacts, ai_model: Optional[str], code: str = "en
 
 def make_case_file(case_id: str, facts: dict, approved_on: date) -> str:
     g = GeneralFacts.from_dict(facts)
+    g.approved = True  # written at approval: the supervisor's check is done
     eligibility = check_eligibility(g.facts)
     follow_up = approved_on + timedelta(days=7)
     lines = [f"# Case {case_id}", "",

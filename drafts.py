@@ -244,7 +244,10 @@ RULES_DATES = "dates were calculated by rule-based code from the statute"
 APPROVAL_BLANK = "approved by the supervisor on [date]."
 
 
-RULE_KEYS = {RULES_DATES: "disclosure.rules_dates",
+# The complaint letter with legal points from official websites (research), approved one by one
+RULES_RESEARCH = ("free legal aid eligibility was checked by rule-based code from our verified files; legal points were "
+                  "found on official websites with AI assistance and approved one by one by the supervisor")
+RULE_KEYS = {RULES_DATES: "disclosure.rules_dates", RULES_RESEARCH: "disclosure.rules_research",
              "free legal aid eligibility was checked by rule-based code from our verified files":
                  "disclosure.rules_eligibility"}
 DISCLOSURE_STARTS = [DISCLOSURE_START, "\u092f\u0939 \u0921\u094d\u0930\u093e\u092b\u093c\u094d\u091f \u0915\u0948\u0938\u0947 \u092c\u0928\u093e:"]

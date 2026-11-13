@@ -267,6 +267,23 @@ def documents_needed(g, approved: List[dict], code: str = "en") -> Tuple[List[st
     return general._not_held(items, g.documents_held), "plain"
 
 
+def facts_from_record(record: dict):
+    """A saved case (tracker record) as GeneralFacts, so the case file uses the same rules as the intake."""
+    facts = {k: (v.get("value") if isinstance(v, dict) else v) for k, v in (record.get("facts") or {}).items()}
+    return general.GeneralFacts(
+        person="", what_happened=list(record.get("summary", [])), timeline=[], coming_dates=[],
+        issues=[tuple(i) for i in record.get("issues", [])], sections=[], documents_held=list(record.get("documents_held", [])),
+        answers=[tuple(a) for a in record.get("answers", [])], still_to_ask=[], facts=facts, today=date.today().isoformat())
+
+
+def case_file_documents(record: dict, code: str = "en") -> List[str]:
+    """The documents still to collect, for the case file: the same list (and function) as the intake
+    screen, with the Section 12 self-declaration line when the person qualifies through a group."""
+    g = facts_from_record(record)
+    held = {d.casefold() for d in g.documents_held}
+    return [d for d in document_checklist(g, list(record.get("research_points", [])), code) if d.casefold() not in held]
+
+
 def document_checklist(g, approved: List[dict], code: str = "en") -> List[str]:
     """Every document for this case, once each, in this order: what the story says the person has, the
     list for this kind of problem from our files (or the plain list), and documents named in approved
@@ -337,8 +354,8 @@ def next_steps(g, eligibility, approved: List[dict], research_state: str, today:
     for p in [p for p in approved if p.get("kind") == "time_limit"]:
         steps.append(Step(p["text"], None, False, _source_line(p)))
     if kind not in ("custody", "fraud") and not routes:
-        waiting_text = (t("sum.research_pending", n=getattr(g, "research_pending", 0)) if document
-                        and getattr(g, "research_pending", 0) else t("cw.step_waiting"))  # the summary document
+        waiting_text = (t("cw.step_check_research") if document and getattr(g, "research_pending", 0)
+                        else t("cw.step_waiting"))  # the summary document: the count is under the lawyer's questions
         steps.append(Step(waiting_text if research_state == "waiting" else t("cw.step_research_failed")
                           if research_state == "failed" else t("cw.step_no_research")))
     if eligibility.status == "eligible":
@@ -356,7 +373,8 @@ def next_steps(g, eligibility, approved: List[dict], research_state: str, today:
 def _source_line(p: dict) -> str:
     if p.get("source_line"):
         return p["source_line"]
-    return "Source: " + "; ".join(f"{s['title']} ({s['url']})" for s in p.get("sources", []))
+    import research
+    return research.source_line(p.get("sources", []))
 
 
 # ---------- the letters (only facts of the case and approved points) ----------
@@ -388,6 +406,21 @@ ROUTE_WORDS = re.compile(r"\bcomplain|\blodge|\bregister|\bfile[ds]?\b|\bapply\b
 WANTS_LINE = re.compile(r"\b(wants?|would like|asks? for|is asking|requests?|hopes?|chahti|chahta|chahte)\b|चाहत", re.I)
 
 
+# In the DLSA statement the person is "the applicant"
+APPLICANT = re.compile(r"\b[Tt]he person (?:needing|seeking) help\b|^[Tt]he person\b|(?<=\. )The person\b")
+
+
+WANTS_LEAD = re.compile(r"^\s*(?:the\s+\w+(?:\s+\w+)?|she|he|they|the person)\s+(?:wants?|would like|is asking for|asks for)"
+                        r"\s+(?:to\s+(?:have\s+|get\s+)?)?", re.I)
+
+
+def request_text(outcome: str) -> str:
+    """"The widow wants the electricity reconnected..." -> "the electricity reconnected...": the request
+    itself, after "The person requests:" / "The applicant wants:"."""
+    text = WANTS_LEAD.sub("", outcome or "").strip()
+    return text[:1].lower() + text[1:] if text and text[:2] != text[:2].upper() else text
+
+
 def papers_only(documents: List[str]) -> List[str]:
     return [d for d in documents if d and not NOT_A_PAPER.search(d)]
 
@@ -401,8 +434,9 @@ def is_rule(p: dict) -> bool:
 
 
 def _source_title(p: dict) -> str:
-    titles = [s.get("title", "") for s in p.get("sources", []) if s.get("title")]
-    return titles[0] if titles else _source_line(p).replace("Source: ", "")
+    import research
+    labels = research.source_labels(p.get("sources", []))
+    return labels[0][0] if labels else _source_line(p).replace("Source: ", "")
 
 
 def approved_text(p: dict, code: str = "en") -> str:
@@ -418,28 +452,13 @@ def approved_text(p: dict, code: str = "en") -> str:
     return lang.t("cw.approved_by_on", code, name=name, date=when)
 
 
-def letter_facts(g) -> List[str]:
-    """The facts in the letter: no line that only restates the request (it goes under "The person
-    requests"), and no timeline line whose date a fact already gives."""
-    lines = [s for s in g.what_happened if not (g.outcome and WANTS_LINE.search(s))]
-    said = " ".join(lines).casefold()
-    dated = [(w, x) for w, x in g.timeline if not (w and w.casefold() in said)]
-    # a fact that tells the same event as a dated line: the dated line says it better (no repeat)
-    lines = [s for s in lines if not any(_same_event(s, x) for _, x in dated)]
-    return [f"- {s}" for s in lines] + [f"- {w}: {x}" for w, x in dated]
-
-
-_FILLER = {"the", "a", "an", "was", "were", "is", "has", "had", "been", "by", "of", "to", "on", "her", "his", "their",
-           "she", "he", "they", "person", "seeking", "help", "department", "off"}
-
-
-def _same_event(fact: str, dated: str) -> bool:
-    """The fact line says nothing the dated line doesn't ("The department cut off the connection" /
-    "1 October 2026: The connection was cut off"). A fact that adds anything ("despite bills being paid on
-    time") is kept."""
-    wa = {w for w in re.findall(r"[a-z]+", fact.casefold()) if w not in _FILLER}
-    wb = {w for w in re.findall(r"[a-z]+", dated.casefold()) if w not in _FILLER}
-    return bool(wa and wb) and len(wa & wb) / len(wa) >= 0.8
+def letter_facts(g, code: str = "en") -> List[str]:
+    """The facts in the letter: each event once, with its date in it; no line that only restates the
+    request (it goes under "The person requests"); then what the volunteer was told in answers."""
+    lines, left = general.merged_facts(g, code)
+    lines = [s for s in lines if not (g.outcome and WANTS_LINE.search(s))]
+    return [f"- {s}" for s in lines] + [f"- {a}" for a in general.answer_facts(g, code)] + \
+        [f"- {w}: {x}" for w, x in left]
 
 
 def complaint_letter(g, approved: List[dict], issue: str, ai_model: Optional[str], code: str = "en") -> str:
@@ -464,18 +483,19 @@ def complaint_letter(g, approved: List[dict], issue: str, ai_model: Optional[str
     heading = t("cw.basis_kept") if unchecked else t("cw.basis_approved") if points else t("cw.basis_facts_only")
     text = drafts.fill(_template("complaint_letter.md", code), [
         (b["subject"], t("cw.letter_subject", problem=issue)),
-        (b["facts"], "\n".join(letter_facts(g)) or t("cw.letter_no_facts")),
+        (b["facts"], "\n".join(letter_facts(g, code)) or t("cw.letter_no_facts")),
         (b["rules"], (t("cw.rules_title") + "\n" + "\n".join(rules) + "\n") if rules else ""),
         (b["documents"], held),
         (b["reference"], reference),
-        (b["request"], g.outcome or t("cw.letter_request_blank")),
+        (b["request"], request_text(g.outcome) or t("cw.letter_request_blank")),
         # "Where to send it" only when no route point says it already (it would only repeat the first one)
         (b["route"], "" if routes else "- " + t("cw.where_to_send", route=t("cw.letter_route_blank"))),
         (b["heading"], heading),
         (b["basis"], "\n".join(basis) or t("cw.letter_no_basis")),
     ])
     text = re.sub(r"\n{3,}", "\n\n", text)
-    return drafts.add_disclosure(text, ai_model, rules=general.RULES_USED, code=code)
+    rules = drafts.RULES_RESEARCH if points else general.RULES_USED  # legal points from official websites
+    return drafts.add_disclosure(text, ai_model, rules=rules, code=code)
 
 
 OFFICE_TYPES = ("wages", "electricity", "water", "ration", "land")  # an office type we can name in plain words
@@ -509,12 +529,19 @@ def dlsa_application(g, eligibility, issue: str, ai_model: Optional[str], code: 
     Name, address and phone stay as blanks to fill by hand."""
     group = next((lang.t(f"group.{key}", code) for key, _ in general.GROUPS if g.facts.get(key) is True), None)
     income = g.facts.get("annual_income")
-    statement = " ".join(g.what_happened)[:700]
+    lines, left = general.merged_facts(g, code)
+    lines = lines + general.answer_facts(g, code) + [f"{w}: {x}" for w, x in left]
+    statement = APPLICANT.sub(lambda m: "The applicant" if m.group(0)[0] == "T" else "the applicant",
+                              " ".join(x.rstrip() if x.rstrip().endswith((".", "।")) else x.rstrip() + "."
+                                       for x in lines))[:900]
+    income_text = (lang.t("cw.income_not_needed", code, group=group) if group else
+                   (f"about ₹{int(income) // 12:,}" if code == "en" else f"लगभग ₹{int(income) // 12:,}")
+                   if income is not None else ("[to be confirmed]" if code == "en" else "[पुष्टि होनी है]"))
     if code == "hi":
         rep = [("[हाँ — बताएँ: महिला / बच्चा / अनुसूचित जाति / अनुसूचित जनजाति / दिव्यांग व्यक्ति / हिरासत में व्यक्ति / "
                 "औद्योगिक कामगार / मानव तस्करी या आपदा का शिकार] [नहीं]", f"हाँ — {group}" if group else
                 "[हाँ — बताएँ] [नहीं]"),
-               ("[₹ ___]", f"लगभग ₹{int(income) // 12:,}" if income is not None else "[पुष्टि होनी है]"),
+               ("[₹ ___]", income_text),
                ("[जैसे धारा 479 BNSS के तहत रिहाई का आवेदन करने के लिए वकील / रोके गए पैसे छुड़ाने के लिए वकील / "
                 "क़ानूनी सलाह]", f"क़ानूनी सलाह और मदद: {issue}"),
                ("[दो से पाँच वाक्य: क्या हुआ, कब, कौन सी अदालत या थाना, केस या FIR नंबर, आवेदक को अभी क्या चाहिए।]",
@@ -525,11 +552,11 @@ def dlsa_application(g, eligibility, issue: str, ai_model: Optional[str], code: 
         rep = [("[Yes — specify: woman / child / SC / ST / person with disability / person in custody / industrial "
                 "workman / victim of trafficking or disaster] [No]", f"Yes — {group}" if group else
                 "[Yes — specify] [No]"),
-               ("[₹ ___]", f"about ₹{int(income) // 12:,}" if income is not None else "[to be confirmed]"),
+               ("[₹ ___]", income_text),
                ("[e.g. a lawyer to apply for release under Section 479 BNSS / a lawyer to apply for release of frozen "
                 "money / legal advice]", f"legal advice and help with: {issue}"),
                ("[Two to five sentences: what happened, when, which court or police station, case or FIR number, "
-                "what the applicant needs now.]", (statement + (f" The applicant wants: {g.outcome}." if g.outcome
+                "what the applicant needs now.]", (statement + (f" The applicant wants: {request_text(g.outcome).rstrip('.')}." if g.outcome
                                                                else "")) or "[Two to five sentences]"),
                ("[FIR copy / court order / chargesheet / bank letters / complaint acknowledgement / identity proof]",
                 "; ".join(papers_only(g.documents_held)) or "[list of documents]")]

@@ -524,8 +524,13 @@ def next_step(record: Optional[dict], status: str, case_id: str, base: Path = HE
     if status in APPROVED_STATUSES:
         tl = _here(timeline.load, case_id, base=base)
         step = timeline.next_due(timeline.steps_of(tl), today or date.today()) if tl else None
-        if status == store.APPROVED:  # approved, not yet handed over
-            return NEXT_HANDOVER, step.due if step else None, None
+        if status == store.APPROVED:  # approved, not yet handed over: due 7 days after the approval
+            due = step.due if step and step.due else None
+            if not due:
+                approved_on = (tl or {}).get("created") or _approval_date(case_id, base)
+                due = (date.fromisoformat(approved_on[:10]) + timedelta(days=DEFAULT_FOLLOW_UP_DAYS)).isoformat() \
+                    if approved_on else None
+            return NEXT_HANDOVER, due, None
         if step:
             return step.title, step.due, step
         return "", None, None
@@ -536,6 +541,15 @@ def next_step(record: Optional[dict], status: str, case_id: str, base: Path = HE
 
 
 next_step_of = next_step
+
+
+def _approval_date(case_id: str, base: Path) -> str:
+    """The date the supervisor approved the case (from its audit record), or ""."""
+    try:
+        record = audit.read_record(case_id, base=base) or {}
+    except Exception:
+        return ""
+    return audit.summary_row(record)["decision_on"][:10] if record else ""
 
 
 def volunteers(record: Optional[dict]) -> List[str]:

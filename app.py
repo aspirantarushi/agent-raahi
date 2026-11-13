@@ -221,11 +221,9 @@ def intake_done_here() -> str:
 def intake_done_card(case_id: str):
     record = tracker.load(case_id) or {}
     with st.container(border=True, key="done-card"):
-        st.success(t("intake.done_card", case_id=case_id), icon=":material/task_alt:")
-        n = record.get("next") or {}
-        if n:
-            st.caption(t("intake.done", step=next_step_words(n["step"], None),
-                         due=show_date(date.fromisoformat(n["due"])) if n.get("due") else "-"))
+        due = (record.get("next") or {}).get("due")  # one line: who has it, and by when
+        st.success(t("intake.done_card_due", case_id=case_id, due=show_date(date.fromisoformat(due))) if due
+                   else t("intake.done_card", case_id=case_id), icon=":material/task_alt:")
         with st.container(horizontal=True, gap="small"):
             next_action(t("intake.next_case"), key="done-next", icon=":material/note_add:", on_click=start_case)
             st.button(t("intake.open_tracker"), key="done-tracker", icon=":material/list_alt:",
@@ -1531,7 +1529,7 @@ def research_points_for_volunteer(record: dict):
         key = f"rsv-{record['id']}-{p['id']}"
         with st.container(border=True, key=f"rsp-{record['id']}-{p['id']}"):
             st.checkbox(f"{research.KINDS[p['kind']]}: {p['text']}", key=key)
-            st.markdown("  \n".join(f":material/link: [{html.escape(s['title'])}]({s['url']})" for s in p["sources"]))
+            st.markdown("  \n".join(f":material/link: [{html.escape(label)}]({url})" for label, url in research.source_labels(p["sources"])))
             for w in p.get("warnings", []):
                 (st.error if w["kind"] == "replaced" else st.warning)(
                     warning_text(w), icon=":material/gavel:" if w["kind"] == "replaced" else ":material/rule:")
@@ -3489,7 +3487,7 @@ def research_point_view(record: dict, p: dict):
         st.markdown(document.to_html(p["text"]), unsafe_allow_html=True)
     else:
         st.markdown(html.escape(p["text"]))
-    st.markdown("  \n".join(f":material/link: [{html.escape(s['title'])}]({s['url']})" for s in p["sources"]))
+    st.markdown("  \n".join(f":material/link: [{html.escape(label)}]({url})" for label, url in research.source_labels(p["sources"])))
     for w in p.get("warnings", []):
         if w["kind"] == "replaced":
             st.error(warning_text(w), icon=":material/gavel:")
@@ -4278,7 +4276,11 @@ def case_file_view(case_id: str, record: dict, editable: bool = True):
         out.append(f'<p>{e(t("cf.held"))} {e(", ".join(held))}</p>')
     categories = [i[0] for i in record.get("issues", [])] or (
         ["arrest_or_custody"] if record.get("case_type") == "Undertrial" else ["other"])
-    for _, items, source in general.document_lists(categories, held, record.get("summary", [])):
+    if record.get("case_type") == general.CASE_TYPE:  # the same list as the intake screen (one function)
+        lists = [(None, casework.case_file_documents(record, code()), "")]
+    else:
+        lists = general.document_lists(categories, held, record.get("summary", []))
+    for _, items, source in lists:
         if items:
             out.append(f'<p>{e(t("cf.to_collect"))} '
                        f'{e(", ".join(lang.strings(code()).get(f"doc:{x}", x) for x in items))}</p>')
@@ -4295,7 +4297,7 @@ def case_file_view(case_id: str, record: dict, editable: bool = True):
     if record.get("research_points"):
         out.append(f'<h4>{e(t("cf.research"))}</h4><ul>' + "".join(
             f"<li>{e(research.KINDS[p['kind']])}: {e(p['text'][:400])} "
-            f"{ui.tag(t('cf.research_tag', on=p['approved_on']))}<br><em>{e(research.source_line(p['sources']))}</em></li>"
+            f"{ui.tag(casework.approved_text(p, code()))}<br><em>{e(research.source_line(p['sources']))}</em></li>"
             for p in record["research_points"]) + "</ul>")
     if record.get("notes"):
         out.append(f'<h4>{e(t("cf.notes"))}</h4><ul>' + "".join(

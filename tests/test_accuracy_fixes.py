@@ -166,10 +166,13 @@ def test_income_is_never_taken_from_unpaid_wages():
     assert general.owed_money("12000 rupaye mahina salary, teen mahine se nahi mili")
     assert general.owed_money("his salary of Rs 12,000 a month has not been paid")
     assert not general.owed_money("He earns about Rs 10,000 a month when he is paid.") or True
-    g = facts(facts={"state": "Punjab", "in_custody": True})
+    g = facts(facts={"state": "Punjab"})  # no Section 12 group: income matters, and is never the unpaid wages
     elig = general.check_eligibility(g.facts)
     letter = casework.dlsa_application(g, elig, "unpaid wages", None)
     assert "Monthly income of the applicant: [to be confirmed]" in letter
+    custody = facts(facts={"state": "Punjab", "in_custody": True})
+    assert "[not needed: qualifies as a person in custody]" in casework.dlsa_application(
+        custody, general.check_eligibility(custody.facts), "unpaid wages", None)
     assert "[पुष्टि होनी है]" in casework.dlsa_application(g, elig, "unpaid wages", None, "hi")
 
 

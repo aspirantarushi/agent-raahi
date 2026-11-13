@@ -1362,5 +1362,11 @@
  "ledger.f.has_reference_number": "Has a consumer or application number",
  "signin.t1": "Volunteers sign in here to see every case in one list: its status, the next step, who acted last, and when it is due.",
  "signin.t2": "Open a case to log a visit, update a step, or record that an approved draft was handed in.",
- "signin.t3": "Cases are listed by case number and code only. Names of people seeking help are never stored."
+ "signin.t3": "Cases are listed by case number and code only. Names of people seeking help are never stored.",
+ "cw.on_date": "On {date}, {fact}",
+ "cw.as_told": "(as told by the person)",
+ "cw.income_not_needed": "[not needed: qualifies as {group}]",
+ "cw.step_check_research": "Check the research points and the draft letter.",
+ "disclosure.rules_research": "free legal aid eligibility was checked by rule-based code from our verified files; legal points were found on official websites with AI assistance and approved one by one by the supervisor",
+ "intake.done_card_due": "Intake finished. Case {case_id} is with the supervisor (due {due})."
 }
