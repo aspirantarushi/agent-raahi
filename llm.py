@@ -293,13 +293,18 @@ def _generate_json(prompt: str, schema: dict, extra_parts: Optional[list] = None
         text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
         return json.loads(text), used
     except (KeyError, IndexError, TypeError, ValueError):
-        record_failures([{"model": used, "error": UNREADABLE, "code": None}], "gave up: the form opened instead")
+        record_failures([{"model": used, "error": UNREADABLE, "code": None}], f"gave up: {FORM_OPENED}")
         raise AIUnavailable("AI reading failed: the answer could not be read.") from None
 
 
-def _generate(body: dict, fallback=None) -> Tuple[dict, str]:
+FORM_OPENED = "the form opened instead"          # reading a story: the volunteer fills the form by hand
+BACKUP_SEARCH = "research used the backup search"  # research: the official-sites search (Tavily) is used instead
+
+
+def _generate(body: dict, fallback=None, then: str = FORM_OPENED) -> Tuple[dict, str]:
     """Send a request with the retries (2, 4, 8 s, then the backup model), then the fallback if given
-    (("groq:<model>", call) for reading stories). Returns (answer, model)."""
+    (("groq:<model>", call) for reading stories). Returns (answer, model). then: what the app does when
+    every try fails, as written in the problems log."""
     key = api_key()
     if not key and not fallback:
         raise AIUnavailable("AI reading is not set up yet (no GEMINI_API_KEY).")
@@ -334,9 +339,9 @@ def _generate(body: dict, fallback=None) -> Tuple[dict, str]:
             failed_hard = failed_hard or failed
     if used is None:
         if failed_hard is not None and not fallback:
-            record_failures(attempts, "gave up: the form opened instead")
+            record_failures(attempts, f"gave up: {then}")
             raise failed_hard
-        record_failures(attempts, "gave up after every try: the form opened instead")
+        record_failures(attempts, f"gave up after every try: {then}")
         raise AIUnavailable(BUSY_MESSAGE, busy=True)
     record_failures(attempts, f"answered by {used} after {len(attempts)} failed tries")
     return data, used
@@ -762,7 +767,8 @@ def research_issue(state: str, issue: str) -> ResearchRaw:
     prompt = RESEARCH_PROMPT.format(state=state, issue=issue, today=_today())
     body = {"contents": [{"role": "user", "parts": [{"text": prompt}]}],
             "tools": [{"google_search": {}}], "generationConfig": {"temperature": 0}}
-    data, model = _generate(body)
+    # if every try fails, research.run uses the backup search (official sites only) when it is set up
+    data, model = _generate(body, then=BACKUP_SEARCH if tavily_key() else "research did not work")
     try:
         candidate = data["candidates"][0]
         brief = "".join(p.get("text", "") for p in candidate["content"]["parts"] if not p.get("thought"))

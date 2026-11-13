@@ -570,7 +570,7 @@ def test_questions_already_answered_are_dropped_and_missing_ones_added():
     r = general.check_general_answer(told, UPI)
     assert r.outcome == "to get her money back" and not any("want" in q for q in r.questions)
     facts = general.build_facts(r, [], r.questions, r.facts, TODAY)
-    assert "What the person wants\n- to get her money back" in general.summary_body(facts)
+    assert "What the person wants\n- To get her money back" in general.summary_body(facts)
 
 
 def test_prompt_asks_for_outcome_years_and_age():

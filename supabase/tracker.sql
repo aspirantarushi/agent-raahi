@@ -12,7 +12,7 @@
 create table if not exists public.raahi_records (
   kind        text        not null check (kind in ('pending', 'drafts', 'cases', 'audit', 'timelines', 'tracker',
                                                    'eval_sessions', 'problems', 'impact', 'research',
-                                                   'knowledge_added')),
+                                                   'knowledge_added', 'practice_snapshot')),
   id          text        not null check (id ~ '^[A-Za-z0-9_.-]{1,80}$'),
   body        text        not null check (length(body) <= 200000),
   updated_at  timestamptz not null default now(),
@@ -36,9 +36,11 @@ revoke all on public.raahi_records from anon, authenticated, public;
 grant select, insert, update, delete on public.raahi_records to service_role;
 -- (no policies on purpose: with row level security on, nobody but the server's secret key gets in)
 
--- Tables made before "Research this issue": allow its two kinds of record (safe to run again).
+-- Tables made earlier: allow the newer kinds of record ("Research this issue", and the Practice Clinic's
+-- snapshot for "Reset the Practice Clinic"). Safe to run again.
 alter table public.raahi_records drop constraint if exists raahi_records_kind_check;
 alter table public.raahi_records add constraint raahi_records_kind_check check (kind in ('pending', 'drafts',
-  'cases', 'audit', 'timelines', 'tracker', 'eval_sessions', 'problems', 'impact', 'research', 'knowledge_added'));
+  'cases', 'audit', 'timelines', 'tracker', 'eval_sessions', 'problems', 'impact', 'research', 'knowledge_added',
+  'practice_snapshot'));
 
 create index if not exists raahi_records_kind on public.raahi_records (kind, id);

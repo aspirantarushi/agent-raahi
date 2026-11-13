@@ -33,6 +33,7 @@ import guides
 import home
 import intake
 import lang
+import practice
 import bhashini
 import llm
 import multilingual
@@ -1358,7 +1359,7 @@ def case_cards(g, eligibility, approved, kind, code_, case_for=None):
     today = date.fromisoformat(g.today)
     u = casework.urgency(g, today, code_)
     glance = [kv(t("cw.g_problem"), rich("; ".join(n for _, n in g.issues) or t("cw.not_stated"))),
-              kv(t("cw.g_wants"), rich(g.outcome or t("cw.not_stated"))),
+              kv(t("cw.g_wants"), rich(casework.wants_text(g.outcome) or t("cw.not_stated"))),
               kv(t("cw.g_how_long"), rich(casework.duration_text(g, today, code_) or t("cw.not_known_yet"))),
               kv(t("cw.g_urgency"), f'<b class="{"urgent" if u.level != "normal" else ""}">{e(" ".join(u.reasons))}</b>'
                  if u.level != "normal" else rich(" ".join(u.reasons)))]
@@ -3252,6 +3253,42 @@ def supervisor_screen():
         evaluation_scoring_box()
         impact_box()
         problems_box()
+        if practice.is_practice():  # never shown (or usable) in a real clinic
+            practice_reset_box()
+
+
+def practice_reset_box():
+    """Practice Clinic only: put every practice case back to how it was when the snapshot was taken."""
+    st.markdown(f"#### {html.escape(t('pr.title'))}")
+    manifest = practice.latest()
+    if not manifest:
+        st.caption(t("pr.no_snapshot"))
+        return
+    when = show_stamp(manifest["taken_at"])
+    st.caption(t("pr.caption", when=when, n=sum(manifest.get("counts", {}).values())))
+    resets = manifest.get("resets") or []
+    if resets:
+        st.caption(t("pr.last_reset", when=show_stamp(resets[-1]["at"]), by=resets[-1]["by"]))
+    if not st.session_state.get("pr-confirm"):
+        st.button(t("pr.button"), key="pr-start", icon=":material/restart_alt:",
+                  on_click=lambda: st.session_state.update({"pr-confirm": True}))
+        return
+    st.warning(t("pr.confirm", when=when), icon=":material/warning:")
+    with st.container(horizontal=True, gap="small", key="pr-buttons"):
+        st.button(t("pr.yes"), key="pr-yes", type="primary", on_click=reset_practice_clinic)
+        st.button(t("pr.cancel"), key="pr-cancel", on_click=lambda: st.session_state.update({"pr-confirm": False}))
+
+
+def reset_practice_clinic():
+    st.session_state["pr-confirm"] = False
+    try:
+        practice.reset(supervisor_name())
+    except (practice.PracticeError, storage.StorageError, ValueError) as err:
+        st.session_state["supervisor_flash"] = str(err)
+        return
+    st.session_state.pop("sup-open", None)
+    st.session_state["supervisor_flash_info"] = t("pr.done", when=show_stamp(practice.latest()["taken_at"]),
+                                                  by=supervisor_name())
 
 
 def problems_box():
@@ -5260,13 +5297,20 @@ SAFE_ICONS = ["verified_user", "menu_book", "lock", "help", "balance", "rule"]
 NAV = [("Home", "home"), ("New case", "new"), ("My cases", "tracker"), ("Learn", "learn"), ("Supervisor", "supervisor")]
 
 
+def nav_label(screen: str) -> str:
+    """The menu name of a screen: "New case" until a case is open, then "Current case"."""
+    if screen == "New case" and not st.session_state.get("case_id"):
+        return t("ui.new_case.title")
+    return t(f"screen.{screen}")
+
+
 def top_bar(current: str):
     """Logo, the top navigation, one small EN · हिंदी switch and "Start a case". The same on every screen."""
     with st.container(key="topbar", horizontal=True, vertical_alignment="center", gap="medium"):
         st.markdown(ui.brand(t("app.name")), unsafe_allow_html=True)
         with st.container(key="topnav", horizontal=True, vertical_alignment="center", gap=None):
             for screen, key in NAV:
-                st.button(t(f"screen.{screen}"), key=f"nav-{key}", type="tertiary", on_click=go, args=(screen,))
+                st.button(nav_label(screen), key=f"nav-{key}", type="tertiary", on_click=go, args=(screen,))
         with st.container(key="topmenu"):  # phones: the menu folded behind one button
             st.button(t("nav.menu"), key="topmenu-btn", icon=":material/close:" if st.session_state.get("menu_open")
                       else ":material/menu:", on_click=toggle, args=("menu_open",))
@@ -5277,7 +5321,7 @@ def top_bar(current: str):
     if st.session_state.get("menu_open"):
         with st.container(key="phonemenu"):
             for screen, key in NAV:
-                st.button(t(f"screen.{screen}"), key=f"navm-{key}", type="tertiary", on_click=go, args=(screen,),
+                st.button(nav_label(screen), key=f"navm-{key}", type="tertiary", on_click=go, args=(screen,),
                           width="stretch")
             st.button(t("nav.start"), key="navm-start", type="primary", on_click=ask_start_case,
                       width="stretch")  # phones: "Start a case" lives in the menu (hidden from the top bar)

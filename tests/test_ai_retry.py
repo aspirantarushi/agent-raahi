@@ -6,6 +6,7 @@ import io
 import json
 import socket
 import urllib.error
+from pathlib import Path
 
 import pytest
 from streamlit.testing.v1 import AppTest
@@ -152,3 +153,20 @@ def test_any_case_form_opens_when_the_ai_is_busy(monkeypatch):
 def test_hindi_busy_message():
     import lang
     assert lang.t("ui.ai_busy", "hi") and lang.t("ui.ai_busy", "hi") != lang.t("ui.ai_busy")
+
+
+def test_the_log_says_what_happened_after_giving_up(ai):
+    """Research that hits the limit on every try moves to the backup search (never "the form opened");
+    a story that can't be read opens the form. (Real research calls are switched off in tests, so the research
+    call is checked in the code itself.)"""
+    ai["script"] = [busy(llm.DAILY_LIMIT, 429)] * 8
+    with pytest.raises(llm.AIUnavailable):
+        llm._generate({"contents": []}, then=llm.BACKUP_SEARCH)
+    assert ai["logged"][-1][1] == "gave up after every try: research used the backup search"
+    ai["script"] = [busy(llm.DAILY_LIMIT, 429)] * 8
+    with pytest.raises(llm.AIUnavailable):
+        ask()
+    assert ai["logged"][-1][1] == "gave up after every try: the form opened instead"
+    source = (Path(__file__).resolve().parents[1] / "llm.py").read_text(encoding="utf-8")
+    research = source[source.index("def research_issue(state"):source.index("def split_brief")]
+    assert "_generate(body, then=BACKUP_SEARCH if tavily_key() else" in research

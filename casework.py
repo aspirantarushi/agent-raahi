@@ -38,6 +38,8 @@ TYPE_WORDS = [  # the first match wins: an electricity case that mentions "paid 
     ("electricity", ["electric", "bijli", "power cut", "power supply", "meter", "disconnect", "transformer",
                      "lineman", "बिजली"]),
     ("water", ["water supply", "water connection", "tap water", "pani ka", "पानी"]),
+    ("pension", ["pension", "pensioner", "widow pension", "old-age pension", "old age pension", "vridha", "vidhwa",
+                 "पेंशन", "वृद्धावस्था", "विधवा"]),
     ("ration", ["ration", "pds", "food grain", "rashan", "राशन"]),
     ("wages", ["wage", "salary", "salaries", "contractor", "employer", "mazdoori", "thekedar", "मज़दूरी", "मजदूरी",
                "वेतन"]),
@@ -56,6 +58,8 @@ def problem_type(g: "general.GeneralFacts") -> str:
             t = CATEGORY_TYPES[category]
             if t == "electricity" and _matches(g, dict(TYPE_WORDS)["water"]) and not _matches(g, dict(TYPE_WORDS)["electricity"]):
                 return "water"
+            if t == "ration" and _matches(g, dict(TYPE_WORDS)["pension"]):
+                return "pension"  # welfare, but a pension: its own papers (never a ration card receipt)
             return t
     for t, words in TYPE_WORDS:
         if _matches(g, words):
@@ -184,6 +188,10 @@ PROBLEM_EVENT = re.compile(r"\bcut|disconnect|stopp?ed|not (been )?paid|unpaid|r
 ORDINARY_EVENT = re.compile(r"\b(was|were|had been|has been) paid\b|\bpaid (on time|in full)\b|\bbill (was )?paid\b", re.I)
 
 
+RELATIVE_WHEN = re.compile(r"^\s*(after|before|around|about|approximately|approx\.?|from|since|by|till|until|early|"
+                           r"late|mid|end of|beginning of)\b|के बाद|से पहले|के आसपास|लगभग|के अंत|की शुरुआत", re.I)
+
+
 def duration_text(g, today: date, code: str = "en") -> Optional[str]:
     """"Going on for", matching the facts: the period the story states (if any) and the first dated
     event, for example "3 months, as the story says; salary stopped on 30 September 2026". Without a
@@ -204,8 +212,9 @@ def duration_text(g, today: date, code: str = "en") -> Optional[str]:
         what = what[:1].lower() + what[1:] if code == "en" and what[:2] != what[:2].upper() else what
         if stated:
             parts.append(lang.t("cw.dur_event", code, what=what.rstrip("."), when=when))
-        else:
-            parts.append(lang.t("cw.dur_since", code, about=duration(g, today, code, since=anchor[0]),
+        else:  # "after April 2026" already says when: never "since after April 2026"
+            key = "cw.dur_relative" if RELATIVE_WHEN.search(when) else "cw.dur_since"
+            parts.append(lang.t(key, code, about=duration(g, today, code, since=anchor[0]),
                                 what=what.rstrip("."), when=when))
     return "; ".join(parts) or None
 
@@ -253,6 +262,7 @@ DOCUMENTS_BY_TYPE = {
     "electricity": ["cw.doc.bill", "cw.doc.receipts", "cw.doc.notice", "cw.doc.complaint_numbers"],
     "water": ["cw.doc.water_bill", "cw.doc.receipts", "cw.doc.notice", "cw.doc.complaint_numbers"],
     "ration": ["cw.doc.ration_receipt", "cw.doc.refusal", "cw.doc.family_list"],
+    "pension": ["cw.doc.pension_order", "cw.doc.passbook", "cw.doc.last_payment", "cw.doc.office_reply"],
     "wages": ["cw.doc.appointment", "cw.doc.payslips", "cw.doc.attendance", "cw.doc.bank", "cw.doc.messages_employer"],
     "family": ["cw.doc.marriage", "cw.doc.birth", "cw.doc.medical", "cw.doc.messages", "cw.doc.notices"],
     "land": ["cw.doc.ownership", "cw.doc.tax", "cw.doc.notices"],
@@ -486,11 +496,20 @@ WANTS_LEAD = re.compile(r"^\s*(?:the\s+\w+(?:\s+\w+)?|she|he|they|the person)\s+
                         r"\s+(?:to\s+(?:have\s+|get\s+)?)?", re.I)
 
 
+WANTS_LEAD_HI = re.compile(r"^\s*(?:वे|वह|व्यक्ति|पीड़ित|आवेदक)\s+चाहत(?:ी|े|ा)\s+(?:है|हैं)\s+कि\s+")
+
+
 def request_text(outcome: str) -> str:
     """"The widow wants the electricity reconnected..." -> "the electricity reconnected...": the request
     itself, after "The person requests:" / "The applicant wants:"."""
-    text = WANTS_LEAD.sub("", outcome or "").strip()
+    text = WANTS_LEAD_HI.sub("", WANTS_LEAD.sub("", outcome or "")).strip()
     return text[:1].lower() + text[1:] if text and text[:2] != text[:2].upper() else text
+
+
+def wants_text(outcome: str) -> str:
+    """For the "What the person wants" field: the request itself, never "The person wants ..." inside it."""
+    text = request_text(outcome)
+    return text[:1].upper() + text[1:] if text else ""
 
 
 def papers_only(documents: List[str]) -> List[str]:

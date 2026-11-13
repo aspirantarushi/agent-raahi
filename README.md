@@ -10,6 +10,32 @@ Every draft is checked and approved by a supervising lawyer before it is used.
 **Status: a prototype, ready for a pilot.** Practice data only: do not enter real cases. The app says
 so on every story box ("Prototype: practice data only. Do not enter real cases.").
 
+## Try the Practice Clinic
+
+**Live app: <https://agent-raahi.streamlit.app>.** It runs as the *Agent Raahi Practice Clinic*: every story and
+case in it is fictional. Please never type a real person's details.
+
+| Sign in as | Passcode or password |
+| --- | --- |
+| A volunteer (Case tracker, Start a case) | clinic passcode **`volunteerpassword`** |
+| The supervisor (Supervisor page) | supervisor password **`supervisorpassword`** |
+
+These are practice passwords only, used nowhere else.
+
+**A 3-minute path**
+1. **Start a case**, sign in with the clinic passcode and any volunteer name, for example "Volunteer X".
+2. Paste one story from [docs/practice_run/stories.md](docs/practice_run/stories.md) into the story box and press
+   **Read the story**. Answer the questions it asks (or press *Don't know*).
+3. Press **Run research** (choose the state first), then **Draft the letter**, then **Make the drafts**, and
+   **Send to supervisor**.
+4. Open **Supervisor** and sign in with the supervisor password and a *different* name, for example "Supervisor"
+   (the person who sent a case can never approve it). Open the case under "Waiting for you", tick the research
+   points you agree with, and press **Approve drafts**.
+5. Open **Case tracker** to see the case, its next step and its due date.
+
+The evaluation of the AI on test cases is in [docs/EVALUATION_RESULTS.md](docs/EVALUATION_RESULTS.md), and the
+practice run with five volunteers on 13 November 2026 in [docs/PRACTICE_RUN.md](docs/PRACTICE_RUN.md).
+
 ## Content files
 
 Version 1 content for the legal aid agent (Code for a Billion, Timely Justice track). Researched on 2 November 2026. Nothing here has been checked by a lawyer yet: every entry says "Lawyer checked: no" until it is.

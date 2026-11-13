@@ -44,6 +44,7 @@ FILES: Dict[str, Tuple[str, str]] = {
     "eval_sessions": ("evaluation/sessions", ".json"),
     "research": ("research", ".json"),                # AI research briefs (waiting / reviewed by the supervisor)
     "knowledge_added": ("knowledge_added", ".json"),  # approved research saved as knowledge entries
+    "practice_snapshot": ("practice_snapshot", ".json"),  # Practice Clinic only: the saved practice cases (practice.py)
 }
 # kind -> file for logs (one entry per line)
 LOGS: Dict[str, str] = {

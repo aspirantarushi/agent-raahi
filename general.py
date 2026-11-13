@@ -1087,7 +1087,8 @@ def _summary(g: "GeneralFacts", code: str) -> str:
     out += [f"- {t('sum.asked', q=q, a=a)}" for q, a in g.answers]
     out.append("")
 
-    out += [t("sum.outcome"), f"- {g.outcome or t('sum.wants_none')}", ""]
+    import casework
+    out += [t("sum.outcome"), f"- {casework.wants_text(g.outcome) or t('sum.wants_none')}", ""]
 
     if timeline_left or g.coming_dates:
         out.append(t("sum.timeline"))

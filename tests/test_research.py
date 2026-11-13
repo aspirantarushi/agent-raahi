@@ -189,7 +189,7 @@ def test_bihar_points_without_an_official_source_are_dropped(tmp_path, fake_ai):
 def test_only_state_and_issue_are_sent_never_numbers(monkeypatch):
     monkeypatch.setattr(llm, "research_issue", REAL_RESEARCH)
     bodies = []
-    monkeypatch.setattr(llm, "_generate", lambda body: (bodies.append(body) or (
+    monkeypatch.setattr(llm, "_generate", lambda body, **k: (bodies.append(body) or (
         {"candidates": [{"content": {"parts": [{"text": "brief"}]},
                          "groundingMetadata": {"groundingChunks": [{"web": {"uri": R + "a", "title": "x"}}]}}]},
         "gemini-test")))

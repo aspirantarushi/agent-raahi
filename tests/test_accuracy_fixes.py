@@ -198,12 +198,12 @@ def test_notes_language_is_detected(text, found):
 def test_summary_says_each_thing_once():
     g = facts(outcome="his unpaid wages paid", facts={"state": "Punjab", "woman": True})
     text = general.summary_body(g)
-    assert text.count("his unpaid wages paid") == 1 and "What the person wants\n- his unpaid wages paid" in text
+    assert text.lower().count("his unpaid wages paid") == 1 and "What the person wants\n- His unpaid wages paid" in text
     assert text.count("Urgency") == 1 and "URGENT\n" not in text
     sources = [line.strip() for line in text.splitlines() if line.strip().startswith("Source:")]
     assert len(sources) == len(set(sources))
     hi = general.summary_body_hi(g)
-    assert hi.count("his unpaid wages paid") == 1
+    assert hi.lower().count("his unpaid wages paid") == 1
 
 
 def test_a_date_goes_before_the_full_stop():
