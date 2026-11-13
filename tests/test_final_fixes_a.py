@@ -372,3 +372,22 @@ def test_a_fact_is_dropped_only_when_the_dated_line_says_it_all():
     assert "- The electricity department cut off the electricity connection." not in lines      # a repeat
     assert any("despite bills being paid on time" in line for line in lines)                      # adds a fact
     assert "- 1 October 2026: The electricity connection was cut off." in lines
+
+
+# ---------- Case tracker sign-in: its own side panel ----------
+
+@pytest.mark.parametrize("code", ["en", "hi"])
+def test_tracker_sign_in_says_what_the_tracker_is_for(monkeypatch, code):
+    monkeypatch.setenv("CLINIC_PASSCODE", "practice-pass-123")
+    for screen, mine, other in (("My cases", "t", "v"), ("New case", "v", "t")):
+        at = AppTest.from_file("../app.py", default_timeout=30)
+        at.session_state["screen"] = screen
+        at.session_state["ui_lang"] = code
+        at.run()
+        ok(at)
+        assert at.title[0].value == lang.t("gate.title", code)                      # title and form unchanged
+        assert any(i.key == "gate-pass" for i in at.text_input)
+        [side] = [m.value for m in at.markdown if 'class="signin-side"' in m.value]
+        for n in (1, 2, 3):
+            assert lang.t(f"signin.{mine}{n}", code).replace("'", "&#x27;") in side, (screen, n)
+            assert lang.t(f"signin.{other}{n}", code).replace("'", "&#x27;") not in side, (screen, n)

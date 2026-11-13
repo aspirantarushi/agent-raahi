@@ -3865,9 +3865,11 @@ def clinic_sign_in():
     st.session_state.update(clinic_ok=True, volunteer=tracker.clean_text(name, 40), **{"gate-pass": ""})
 
 
-def clinic_gate():
+def clinic_gate(screen: str = "New case"):
+    """The volunteer sign-in. Its side panel says what the screen behind it is for: Case tracker has its
+    own (signin.t1-t3); Current case and the rest use signin.v1-v3."""
     page_title(t("gate.title"), helplines=False)
-    with signin_columns("v"), st.container(key="signin-card"):
+    with signin_columns("t" if screen == "My cases" else "v"), st.container(key="signin-card"):
         st.caption(t("gate.caption"))
         with st.form("gate-form", enter_to_submit=True, border=False):  # Enter signs in
             st.text_input(t("gate.passcode"), type="password", key="gate-pass")
@@ -4799,6 +4801,6 @@ if st.session_state.get("supervisor_ok"):
 if choice in ("Home", "Learn", "Practice", "Supervisor") or clinic_ok():
     SCREENS[choice]()  # Supervisor has its own sign-in (the supervisor password only)
 else:
-    clinic_gate()  # every other screen needs the clinic passcode (when one is set)
+    clinic_gate(choice)  # every other screen needs the clinic passcode (when one is set)
 st.markdown(ui.footer(t("app.name"), [t("footer.open_source"), t("footer.built_on")], t("footer.privacy")),
             unsafe_allow_html=True)

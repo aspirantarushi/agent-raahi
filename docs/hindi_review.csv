@@ -1467,6 +1467,9 @@ i18n/hi.json · tfact.has_reference_number,Has a consumer or application number,
 i18n/hi.json · ledger.f.essential_service_cut,Electricity or water cut off now,अभी बिजली या पानी कटा हुआ है,screen text,,
 i18n/hi.json · ledger.f.unofficial_payment_demand,Asked for an unofficial payment,अनौपचारिक भुगतान माँगा गया,screen text,,
 i18n/hi.json · ledger.f.has_reference_number,Has a consumer or application number,उपभोक्ता या आवेदन संख्या है,screen text,,
+i18n/hi.json · signin.t1,"Volunteers sign in here to see every case in one list: its status, the next step, who acted last, and when it is due.","स्वयंसेवक यहाँ साइन इन करके सभी केस एक सूची में देख सकते हैं: स्थिति, अगला क़दम, आख़िरी बार किसने काम किया, और कब तक करना है।",screen text,,
+i18n/hi.json · signin.t2,"Open a case to log a visit, update a step, or record that an approved draft was handed in.","किसी केस को खोलकर मुलाक़ात दर्ज करें, क़दम अपडेट करें, या दर्ज करें कि मंज़ूर ड्राफ़्ट जमा कर दिया गया।",screen text,,
+i18n/hi.json · signin.t3,Cases are listed by case number and code only. Names of people seeking help are never stored.,यहाँ केस सिर्फ़ केस नंबर और कोड से दिखते हैं। मदद माँगने वालों के नाम कभी सेव नहीं होते।,screen text,,
 case_notes_hi.txt,(fake practice story; check that it reads naturally),"अभ्यास केस (कोई असली व्यक्ति नहीं)।
 बोलने वाली: एक विचाराधीन क़ैदी की बड़ी बहन।
 उसके भाई को 15 मार्च 2024 को गिरफ़्तार किया गया था। अपराध फ़रवरी 2024 में हुआ था।

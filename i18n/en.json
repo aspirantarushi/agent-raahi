@@ -1359,5 +1359,8 @@
  "tfact.has_reference_number": "Has a consumer or application number",
  "ledger.f.essential_service_cut": "Electricity or water cut off now",
  "ledger.f.unofficial_payment_demand": "Asked for an unofficial payment",
- "ledger.f.has_reference_number": "Has a consumer or application number"
+ "ledger.f.has_reference_number": "Has a consumer or application number",
+ "signin.t1": "Volunteers sign in here to see every case in one list: its status, the next step, who acted last, and when it is due.",
+ "signin.t2": "Open a case to log a visit, update a step, or record that an approved draft was handed in.",
+ "signin.t3": "Cases are listed by case number and code only. Names of people seeking help are never stored."
 }
