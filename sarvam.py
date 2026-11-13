@@ -75,7 +75,9 @@ def _wav(audio: bytes):
 def _to_wav(params, frames: bytes) -> bytes:
     out = io.BytesIO()
     with wave.open(out, "wb") as w:
-        w.setnchannels(params.nchannels), w.setsampwidth(params.sampwidth), w.setframerate(params.framerate)
+        w.setnchannels(params.nchannels)
+        w.setsampwidth(params.sampwidth)
+        w.setframerate(params.framerate)
         w.writeframes(frames)
     return out.getvalue()
 

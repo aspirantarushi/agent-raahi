@@ -2452,7 +2452,10 @@ def due_this_week_box():
         st.caption(t("ui.cases.nothing_due"))
     for r in sorted(pending, key=lambda r: r["due"]):
         line = f"**{show_date(date.fromisoformat(r['due']))}** · {t('ui.case')} {r['id']} · {next_step_text(r)}"
-        (st.error(t("tl.overdue") + " · " + line) if r["overdue"] else st.info(line))
+        if r["overdue"]:
+            st.error(t("tl.overdue") + " · " + line)
+        else:
+            st.info(line)
     for case_id, s, state in items:
         line = f"**{show_date(s.due_date())}** · {t('ui.case')} {case_id} · {step_title(s)} ({step_label(s)})"
         if state == timeline.OVERDUE:

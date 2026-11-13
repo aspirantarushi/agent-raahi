@@ -21,5 +21,8 @@ headingFontWeights = [700, 700, 600, 600, 600, 600]
 [client]
 toolbarMode = "minimal"             # no "Deploy" button or developer menu
 
+[runner]
+magicEnabled = false            # a stray expression never prints to the page
+
 [server]
 enableStaticServing = false
