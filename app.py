@@ -1770,7 +1770,7 @@ def research_box(uncovered: list, state):
         case_id = st.session_state.get("case_id")
         for r in (research.for_case(case_id) if case_id else []):
             if r["status"] == research.WAITING:
-                st.info(t("rs.pending", issue=r["issue"], on=r["asked_at"][:10]), icon=":material/hourglass_top:")
+                st.info(t("rs.pending", issue=r["issue"], on=show_stamp(r["asked_at"][:10])), icon=":material/hourglass_top:")
         st.session_state.setdefault("rs-issue", uncovered[0])
         st.session_state.setdefault("rs-state", state if state in general.state_names() else None)
         c1, c2 = st.columns([2, 1])
@@ -2818,7 +2818,7 @@ def evaluation_panel():
     session = evaluation.load(sid)
     c = evaluation.case(session["case"])
     st.info(t("eval.active", sid=sid, case=c["id"], method=t("eval.method." + session["method"]),
-              started=session["started"].replace("T", " ")))
+              started=show_stamp(session["started"])))
     st.markdown(f"**{t('eval.story')}**")
     st.code(c["story"], language=None, wrap_lines=True)
     if session["method"] == evaluation.BY_HAND:
@@ -3499,22 +3499,6 @@ def problems_summary(problems: list) -> str:
     return " · ".join(parts) or t("ui.sup.problems_earlier", n=len(problems))
 
 
-def decide_research_point(research_id: str, point_id: str):
-    key = f"rsd-{research_id}-{point_id}"
-    choice = st.session_state.get(key)
-    decision = {"Approve": research.APPROVE, "Edit then approve": research.EDIT, "Reject": research.REJECT}.get(choice)
-    if own_work(research_id.rsplit(".r", 1)[0]):  # checked again on saving, not only on screen
-        st.session_state["supervisor_flash"] = t("ui.sup.own_draft")
-        return
-    try:
-        point = research.decide(research_id, point_id, decision, st.session_state.get(f"rse-{research_id}-{point_id}"),
-                                by=supervisor_name())
-    except (research.ResearchFailed, storage.StorageError, ValueError) as err:
-        st.session_state["supervisor_flash"] = str(err)
-        return
-    st.session_state["supervisor_flash"] = t("rs.decided", point=point_id, status=point["status"])
-
-
 def letter_rebuild_needed(record: dict, locked: bool = False) -> bool:
     """Every research point is decided: the supervisor rebuilds the letter from the approved points (a
     button, not by itself) before the draft can be approved. True while that is still to do."""
@@ -3559,24 +3543,6 @@ def save_research_knowledge(research_id: str, point_id: str):
     st.session_state["supervisor_flash"] = t("rs.k_saved", id=entry["id"], state=entry["state"])
 
 
-def research_point_view(record: dict, p: dict):
-    st.markdown(f"**{p['id']} · {research.KINDS[p['kind']]}** {status_chip_text(p['status'])}", unsafe_allow_html=True)
-    if p.get("volunteer") == research.LEFT_OUT:
-        st.warning(t("rs.sup_left_out", reason=p.get("volunteer_reason") or t("rs.no_reason")), icon=":material/remove_done:")
-    elif p.get("volunteer") == research.KEPT:
-        st.caption(t("rs.sup_kept"))
-    if p["kind"] == "letter":  # a draft letter from research: shown as a page, like every draft
-        st.markdown(document.to_html(p["text"]), unsafe_allow_html=True)
-    else:
-        st.markdown(html.escape(p["text"]))
-    st.markdown("  \n".join(f":material/link: [{html.escape(label)}]({url})" for label, url in research.source_labels(p["sources"])))
-    for w in p.get("warnings", []):
-        if w["kind"] == "replaced":
-            st.error(warning_text(w), icon=":material/gavel:")
-        else:
-            st.warning(warning_text(w), icon=":material/rule:")
-
-
 def warning_text(w: dict) -> str:
     """A research warning in the screen's language (the saved English text if it is an older record)."""
     try:
@@ -3593,29 +3559,208 @@ def warning_text(w: dict) -> str:
     return w["text"]
 
 
-def research_decision(r: dict, p: dict, locked: bool = False):
-    """Approve / Edit then approve / Reject for one point. A point naming a replaced law cannot be
-    approved as it is: only edited (to the current law) or rejected."""
-    options = ["Approve", "Edit then approve", "Reject"]
-    if research.blocked(p):
-        options.remove("Approve")
-        st.caption(t("rs.edit_needed"))
-    choice = st.radio(t("rs.decision"), options, index=None, horizontal=True, key=f"rsd-{r['id']}-{p['id']}",
-                      format_func=lambda c: t({"Approve": "rs.approve", "Edit then approve": "rs.edit",
-                                               "Reject": "rs.reject"}[c]), disabled=locked)
-    if choice == "Edit then approve":
-        st.text_area(t("rs.edit_label"), value=p["text"], key=f"rse-{r['id']}-{p['id']}", height=120)
-    st.button(t("rs.save"), key=f"rss-{r['id']}-{p['id']}", type="primary", disabled=locked or choice is None,
-              on_click=decide_research_point, args=(r["id"], p["id"]))
-    if locked:
-        why_disabled(t("ui.sup.own_draft"))
-    elif choice is None:
-        why_disabled(t("why.rs_choice"))
+# ---------- the supervisor's research checklist: one list, one button ----------
+
+KIND_KEYS = {"route": "rs.kind.route", "documents": "rs.kind.documents", "time_limit": "rs.kind.time_limit",
+             "how_to_file": "rs.kind.how_to_file"}
+MD_SPECIAL = re.compile(r"([\\`*_\[\]$<>#|~])")
 
 
-def status_chip_text(status: str) -> str:
-    kind = "approved" if status.startswith("approved") else "sent-back" if status == "rejected" else "waiting"
-    return ui.chip(kind, status)
+def md_plain(text: str) -> str:
+    """Text shown as it is in a widget label (no bold, links or maths from stray * [ ] $)."""
+    return MD_SPECIAL.sub(r"\\\1", text or "")
+
+
+def kind_label(kind: str) -> str:
+    return t(KIND_KEYS[kind]) if kind in KIND_KEYS else research.KINDS.get(kind, kind)
+
+
+def rs_ticked(r: dict, p: dict) -> bool:
+    """Ticked = approve. Ticked at first for the points the volunteer kept, unticked for those left out."""
+    return bool(st.session_state.setdefault(f"rsx-{r['id']}-{p['id']}", p.get("volunteer") != research.LEFT_OUT))
+
+
+def rs_edited(r: dict, p: dict) -> str:
+    """The supervisor's edited text ("" when not edited). Kept outside the text box, so it stays when the box is closed."""
+    text = " ".join((st.session_state.get(f"rsedv-{r['id']}-{p['id']}") or "").split())
+    return text if text and text != " ".join(p["text"].split()) else ""
+
+
+def keep_edit(key: str):
+    st.session_state[key.replace("rse-", "rsedv-", 1)] = st.session_state.get(key, "")
+
+
+def toggle_flag(key: str):
+    st.session_state[key] = not st.session_state.get(key)
+
+
+def rs_reject_reason(r: dict, p: dict) -> str:
+    """Why an unticked point is rejected: the supervisor's quick choice ("Other": a short text), or, for a
+    point the volunteer left out and the supervisor leaves out too, the volunteer's reason."""
+    get = st.session_state.get
+    kb = f"{r['id']}-{p['id']}"
+    choice = get(f"rsr-{kb}")
+    if choice == "other":
+        return (get(f"rsrt-{kb}") or "").strip()
+    if choice:
+        return t(f"rs.why_left.{choice}")
+    if p.get("volunteer") == research.LEFT_OUT and (p.get("volunteer_reason") or "").strip():
+        return t("rs.sup_left_reason", reason=p["volunteer_reason"].strip())
+    return ""
+
+
+def rs_checklist_state(r: dict, waiting: list) -> tuple:
+    """(approved, rejected, [what still stops the save])."""
+    import replaced_laws
+    approved, rejected, no_reason, needs_edit = 0, 0, 0, 0
+    for p in waiting:
+        if rs_ticked(r, p):
+            approved += 1
+            edited = rs_edited(r, p)
+            if (research.blocked(p) and not edited) or (edited and replaced_laws.still_relies_on_old(edited)):
+                needs_edit += 1
+        else:
+            rejected += 1
+            no_reason += not rs_reject_reason(r, p)
+    problems = ([t("why.rs_reason_missing", n=no_reason)] if no_reason else []) + \
+               ([t("why.rs_edit_needed", n=needs_edit)] if needs_edit else [])
+    return approved, rejected, problems
+
+
+def research_row(r: dict, p: dict, locked: bool):
+    """One point: the tick box with its text, a small kind tag and the source links, then "Edit" (opens the text
+    in place) and, when unticked, the reason for rejecting it."""
+    kb = f"{r['id']}-{p['id']}"
+    edited = rs_edited(r, p)
+    text = edited or p["text"]
+    with st.container(key=f"rs-row-{kb}"):
+        if locked:  # someone else must decide: the point only, no tick box
+            st.markdown(html.escape(text))
+        else:
+            rs_ticked(r, p)
+            st.checkbox(md_plain(text), key=f"rsx-{kb}")
+        links = " · ".join(f'<a href="{html.escape(url)}" target="_blank" rel="noopener">{html.escape(label)}</a>'
+                           for label, url in research.source_labels(p["sources"]))
+        st.markdown(f'<div class="rs-meta">{ui.tag(kind_label(p["kind"]))}'
+                    + (f' <span class="tag edited">{html.escape(t("rs.edited"))}</span>' if edited else "")
+                    + (f' <span class="rs-src">{ui.icon("link")} {links}</span>' if links else "") + "</div>",
+                    unsafe_allow_html=True)
+        if p.get("volunteer") == research.LEFT_OUT:
+            st.caption(t("rs.sup_left_why", reason=p.get("volunteer_reason") or t("rs.no_reason")))
+        for w in p.get("warnings", []):
+            (st.error if w["kind"] == "replaced" else st.warning)(
+                warning_text(w), icon=":material/gavel:" if w["kind"] == "replaced" else ":material/rule:")
+        if locked:
+            return
+        if research.blocked(p) and not edited:
+            st.caption(t("rs.edit_needed"))
+        open_key = f"rso-{kb}"
+        st.button(t("rs.edit_close") if st.session_state.get(open_key) else t("rs.edit_link"), key=f"rsedit-{kb}",
+                  type="tertiary", icon=":material/edit:", on_click=toggle_flag, args=(open_key,))
+        if st.session_state.get(open_key):
+            st.session_state.setdefault(f"rse-{kb}", st.session_state.get(f"rsedv-{kb}") or p["text"])
+            st.text_area(t("rs.edit_label"), key=f"rse-{kb}", height=110, on_change=keep_edit, args=(f"rse-{kb}",))
+        if not st.session_state.get(f"rsx-{kb}"):
+            if p.get("volunteer") == research.LEFT_OUT and (p.get("volunteer_reason") or "").strip():
+                return  # left out by the volunteer and by the supervisor: the volunteer's reason stands
+            st.radio(t("rs.reject_reason"), LEFT_OUT_CHOICES, index=None, horizontal=True, key=f"rsr-{kb}",
+                     format_func=lambda c: t(f"rs.why_left.{c}"))
+            if st.session_state.get(f"rsr-{kb}") == "other":
+                st.text_input(t("rs.why_left.other_text"), key=f"rsrt-{kb}", max_chars=200)
+
+
+def decided_row(r: dict, p: dict):
+    """A point already decided: its text, tag, sources and the decision (who, when, why)."""
+    with st.container(key=f"rs-row-{r['id']}-{p['id']}"):
+        st.markdown(html.escape(p["text"]))
+        links = " · ".join(f'<a href="{html.escape(url)}" target="_blank" rel="noopener">{html.escape(label)}</a>'
+                           for label, url in research.source_labels(p["sources"]))
+        st.markdown(f'<div class="rs-meta">{ui.tag(kind_label(p["kind"]))}'
+                    + (f' <span class="rs-src">{ui.icon("link")} {links}</span>' if links else "") + "</div>",
+                    unsafe_allow_html=True)
+        when = show_date(date.fromisoformat(p["decided_on"])) if p.get("decided_on") else ""
+        line = t(f"rs.decided.{'rejected' if p['status'] == 'rejected' else 'edited' if 'editing' in p['status'] else 'approved'}",
+                 by=p.get("decided_by") or audit.SUPERVISOR, on=when)
+        if p.get("reject_reason"):
+            line += " " + t("rs.decided.reason", reason=p["reject_reason"])
+        st.caption(line)
+        if p in savable_points(r):
+            knowledge_save_control(r, p)
+
+
+def research_checklist(r: dict, locked: bool = False, letter: bool = False):
+    """One research brief as one list in one box (like the volunteer's): ticked = approve, "Edit" = edit then
+    approve, unticked = reject with a reason; the volunteer's left-out points folded below; one button saves
+    every decision (one audit entry per point) and, for a waiting draft, rebuilds the letter."""
+    points = [p for p in r["points"] if p.get("kind") != "letter"]  # never the AI's own letter
+    waiting = [p for p in points if p["status"] == research.WAITING]
+    with st.container(border=True, key=f"rs-review-{r['id']}"):
+        if waiting:
+            st.warning(t("rs.volunteer_label"), icon=":material/pending:")
+        st.caption(t("rs.sup_caption", by=r["asked_by"], on=show_date(date.fromisoformat(r["asked_at"][:10])),
+                     found=r["sources_found"], official=r["sources_official"], dropped=len(r["dropped"])))
+        if waiting and not locked:
+            st.markdown(f'<p class="rs-list-head">{html.escape(t("rs.sup_list_head"))}</p>', unsafe_allow_html=True)
+        kept = [p for p in waiting if p.get("volunteer") != research.LEFT_OUT]
+        left = [p for p in waiting if p.get("volunteer") == research.LEFT_OUT]
+        for p in kept:
+            research_row(r, p, locked)
+        if left:
+            with st.expander(t("rs.sup_left_title", n=len(left)), icon=":material/remove_done:"):
+                for p in left:
+                    research_row(r, p, locked)
+        for p in [p for p in points if p["status"] != research.WAITING]:
+            decided_row(r, p)
+        if r["dropped"]:
+            with st.expander(f"{t('rs.dropped')} ({len(r['dropped'])})"):
+                for d in r["dropped"]:
+                    st.markdown(f"- {html.escape(d['text'][:200])} _({d['reason']})_")
+        if not waiting:
+            return
+        if locked:
+            why_disabled(t("ui.sup.own_draft"))
+            return
+        approved, rejected, problems = rs_checklist_state(r, waiting)
+        st.button(t("rs.save_all" if letter else "rs.save_all_no_letter", a=approved, r=rejected),
+                  key=f"rs-save-{r['id']}", type="primary", icon=":material/task_alt:", disabled=bool(problems),
+                  on_click=save_research_checklist, args=(r["id"], letter))
+        for problem in problems:
+            why_disabled(problem)
+
+
+def save_research_checklist(research_id: str, letter: bool):
+    """Save every decision in the list (with the supervisor's name and the date), then rebuild the letter
+    from the approved points only (or take it out to a facts-only letter if every point is rejected)."""
+    case_id = research_id.rsplit(".r", 1)[0]
+    if own_work(case_id):  # checked again on saving, not only on screen
+        st.session_state["supervisor_flash"] = t("ui.sup.own_draft")
+        return
+    try:
+        r = research.load(research_id)
+    except (research.ResearchFailed, storage.StorageError, ValueError) as err:
+        st.session_state["supervisor_flash"] = str(err)
+        return
+    waiting = [p for p in r["points"] if p.get("kind") != "letter" and p["status"] == research.WAITING]
+    approved, rejected, problems = rs_checklist_state(r, waiting)
+    if problems:
+        st.session_state["supervisor_flash"] = problems[0]
+        return
+    by = supervisor_name()
+    try:
+        for p in waiting:
+            if rs_ticked(r, p):
+                edited = rs_edited(r, p)
+                research.decide(research_id, p["id"], research.EDIT if edited else research.APPROVE, edited or None, by=by)
+            else:
+                research.decide(research_id, p["id"], research.REJECT, by=by, reason=rs_reject_reason(r, p))
+    except (research.ResearchFailed, storage.StorageError, ValueError) as err:
+        st.session_state["supervisor_flash"] = str(err)
+        return
+    rebuilt = letter and not any(b["status"] == research.WAITING for b in research.for_case(case_id))
+    if rebuilt:
+        add_letter_to_pending(case_id, r["issue"])
+    st.session_state["supervisor_flash_info"] = t("rs.saved_all" if rebuilt else "rs.saved_all_no_letter",
+                                                  a=approved, r=rejected)
 
 
 def research_review_box():
@@ -3632,27 +3777,12 @@ def research_review_box():
     for r in records:
         with st.expander(t("rs.sup_row", case_id=r["case_id"], state=r["state"], issue=r["issue"]), expanded=True,
                          icon=":material/travel_explore:"):
-            st.warning(research.LABEL, icon=":material/pending:")
-            st.caption(t("rs.sup_caption", by=r["asked_by"], on=r["asked_at"][:10], found=r["sources_found"],
-                         official=r["sources_official"], dropped=len(r["dropped"])))
-            for p in [p for p in r["points"] if p.get("kind") != "letter"]:  # never the AI's own letter
-                with st.container(border=True):
-                    research_point_view(r, p)
-                    if p["status"] == research.WAITING:
-                        research_decision(r, p, own_work(r["case_id"]))
-                    elif p in savable_points(r):
-                        knowledge_save_control(r, p)
-            if r["dropped"]:
-                with st.expander(f"{t('rs.dropped')} ({len(r['dropped'])})"):
-                    for d in r["dropped"]:
-                        st.markdown(f"- {html.escape(d['text'][:200])} _({d['reason']})_")
+            research_checklist(r, own_work(r["case_id"]))
     for r in decided:
         with st.expander(t("rs.sup_row", case_id=r["case_id"], state=r["state"], issue=r["issue"]),
                          icon=":material/travel_explore:"):
             for p in savable_points(r):
-                with st.container(border=True):
-                    research_point_view(r, p)
-                    knowledge_save_control(r, p)
+                decided_row(r, p)
 
 
 def savable_points(r: dict) -> list:
@@ -3705,7 +3835,7 @@ def changed_after_approval_box():
     st.subheader(t("sup.changed_title", n=len(records)))
     for record in records:
         r = record["review_needed"]
-        with st.expander(t("sup.changed_row", case_id=record["id"], v=r["version"], by=r["by"], on=r["since"][:10]),
+        with st.expander(t("sup.changed_row", case_id=record["id"], v=r["version"], by=r["by"], on=show_stamp(r["since"][:10])),
                          expanded=True, icon=":material/history:"):
             case_file_view(record["id"], record, editable=False)
             st.button(t("sup.mark_reviewed"), key=f"reviewed-{record['id']}", type="primary",
@@ -3746,22 +3876,14 @@ def delete_case_box():
             (st.success if msg[0] == "ok" else st.error)(msg[1])
 
 
-def review_research_inside(case_id: str, locked: bool = False) -> bool:
-    """Research points for this case, decided in the same review. True while any is still undecided."""
+def review_research_inside(record: dict, locked: bool = False) -> bool:
+    """Research points for this case, decided in the same review (one checklist per research brief).
+    True while any is still undecided."""
+    case_id = record["id"]
     briefs = research.for_case(case_id)
     waiting = [r for r in briefs if r["status"] == research.WAITING]
     for r in [r for r in briefs if r["status"] == research.WAITING or savable_points(r)]:
-        if r["status"] == research.WAITING:
-            st.warning(research.LABEL, icon=":material/pending:")
-        st.caption(t("rs.sup_caption", by=r["asked_by"], on=r["asked_at"][:10], found=r["sources_found"],
-                     official=r["sources_official"], dropped=len(r["dropped"])))
-        for p in [p for p in r["points"] if p.get("kind") != "letter"]:  # never the AI's own letter
-            with st.container(border=True):
-                research_point_view(r, p)
-                if p["status"] == research.WAITING:
-                    research_decision(r, p, locked)
-                elif p in savable_points(r):
-                    knowledge_save_control(r, p)
+        research_checklist(r, locked, letter=record.get("case_type") == general.CASE_TYPE)
     if waiting:
         st.info(t("rs.decide_first"), icon=":material/lock:")
     return bool(waiting)
@@ -3810,16 +3932,16 @@ def review_case(record: dict):
     case_id = record["id"]
     own = own_work(case_id, record)
     with st.expander(t("ui.sup.case_row", case_id=case_id, kind=case_type_label(record["case_type"]),
-                       sent=record["submitted"].replace("T", " ")), expanded=True):
+                       sent=show_stamp(record["submitted"])), expanded=True):
         if own:  # first, before anything can be decided: every decision below is locked
             st.error(t("ui.sup.own_draft"), icon=":material/block:")
         for h in record.get("history", []):
-            st.caption(t("ui.sup.resent", when=h["resent"].replace("T", " "), reason=h["sent_back_reason"]))
+            st.caption(t("ui.sup.resent", when=show_stamp(h["resent"]), reason=h["sent_back_reason"]))
         supervisor_case_cards(record)
         for n, part in enumerate(casework.split_bundle(record["draft"])):  # the same page previews as the volunteer's
             with st.container(border=True, key=f"sup-draft-{case_id}-{n}"):
                 document_view(part.strip(), f"sup-{case_id}-{n}", f"{case_id} draft {n + 1}")
-        blocked = review_research_inside(case_id, locked=own) or letter_rebuild_needed(record, locked=own)
+        blocked = review_research_inside(record, locked=own) or letter_rebuild_needed(record, locked=own)
         if record.get("readiness"):
             rows = [r for r in record["readiness"] if r["key"] != "send_reason"]
             unticked = [r for r in rows if r.get("note") == readiness.NOT_TICKED]
@@ -4270,8 +4392,8 @@ def conflicts_block(case_id) -> bool:
         st.error(t("abstain.title", reason=t("abstain.earlier_vs_new", fact=fact,
                                               earlier=show_fact_value(c["fact"], earlier["value"]),
                                               new=show_fact_value(c["fact"], new["value"]))))
-        st.caption(t("abstain.earlier_vs_new_who", earlier_by=earlier["by"], earlier_on=earlier["on"][:10],
-                     new_by=new["by"], new_on=new["on"][:10]) + " " + t("abstain.needed.earlier_vs_new"))
+        st.caption(t("abstain.earlier_vs_new_who", earlier_by=earlier["by"], earlier_on=show_stamp(earlier["on"][:10]),
+                     new_by=new["by"], new_on=show_stamp(new["on"][:10])) + " " + t("abstain.needed.earlier_vs_new"))
         b1, b2 = st.columns(2)
         b1.button(t("abstain.keep_earlier", value=show_fact_value(c["fact"], earlier["value"])),
                   key=f"keep-earlier-{c['fact']}", on_click=resolve_conflict, args=(case_id, c["fact"], "earlier"))
@@ -4347,7 +4469,7 @@ def case_file_view(case_id: str, record: dict, editable: bool = True):
     facts = record.get("facts", {})
     out.append("<ul>" + "".join(
         f"<li>{e(any_fact_label(f))}: <b>{e(show_fact_value(f, x['value']))}</b> "
-        f"{ui.tag(t('cf.added', on=x['on'][:10], by=x['by']))}</li>" for f, x in facts.items()) + "</ul>"
+        f"{ui.tag(t('cf.added', on=show_stamp(x['on'][:10]), by=x['by']))}</li>" for f, x in facts.items()) + "</ul>"
         if facts else f'<p class="case-sub">{e(t("cf.no_facts"))}</p>')
     missing = still_missing(record)
     out.append(f'<h4>{e(t("cf.missing"))}</h4>')
@@ -4376,7 +4498,7 @@ def case_file_view(case_id: str, record: dict, editable: bool = True):
         n = record["next"]
         out.append(f'<p class="case-sub">{e(n["step"])}'
                    + (f" · {e(t('cf.due', due=show_date(date.fromisoformat(n['due']))))}" if n.get("due") else "")
-                   + f' {ui.tag(t("cf.added", on=n["on"][:10], by=n["by"]))}</p>')
+                   + f' {ui.tag(t("cf.added", on=show_stamp(n["on"][:10]), by=n["by"]))}</p>')
     if record.get("research_points"):
         out.append(f'<h4>{e(t("cf.research"))}</h4><ul>' + "".join(
             f"<li>{e(research.KINDS[p['kind']])}: {e(p['text'][:400])} "
@@ -4384,7 +4506,7 @@ def case_file_view(case_id: str, record: dict, editable: bool = True):
             for p in record["research_points"]) + "</ul>")
     if record.get("notes"):
         out.append(f'<h4>{e(t("cf.notes"))}</h4><ul>' + "".join(
-            f"<li>{e(n['text'])} {ui.tag(t('cf.added', on=n['on'][:10], by=n['by']))}</li>"
+            f"<li>{e(n['text'])} {ui.tag(t('cf.added', on=show_stamp(n['on'][:10]), by=n['by']))}</li>"
             for n in reversed(record["notes"])) + "</ul>")
     out.append(f'<h4>{e(t("cf.visits"))}</h4>')
     visits = record.get("visits", [])
@@ -4412,7 +4534,7 @@ def case_file_view(case_id: str, record: dict, editable: bool = True):
     tags = []
     if record.get("camp"):
         tags.append(ui.tag(t("camp.tagged", camp=tracker.camp_label(record["camp"]))))
-    tags.append(ui.tag(t("cf.last", by=record.get("last_by", ""), at=(record.get("last_at") or "").replace("T", " "))))
+    tags.append(ui.tag(t("cf.last", by=record.get("last_by", ""), at=show_stamp(record.get("last_at") or ""))))
     out.append(f'<p style="margin-top:14px">{" ".join(tags)}</p>')
     st.markdown('<div class="cf">' + "".join(out) + "</div>", unsafe_allow_html=True)
     for c in tracker.open_conflicts(record):

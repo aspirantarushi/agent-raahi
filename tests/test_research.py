@@ -273,14 +273,14 @@ def test_research_on_screen(monkeypatch, fake_ai):
     at.text_input(key="sup-name").set_value("Supervisor S")  # then the name or initials
     at.button(key="sup-name-go").click().run()
     assert not any(r.key == f"action-{case_id}" for r in at.radio)  # no approve until the points are decided
-    assert any("left this point out of the letter. Reason: the forum is for a later step" in w.value for w in at.warning)
-    for point, choice in (("p1", "Approve"), ("p2", "Reject")):  # (no AI letter item to decide)
-        at.radio(key=f"rsd-{rid}-{point}").set_value(choice).run()
-        at.button(key=f"rss-{rid}-{point}").click().run()
+    assert any("The volunteer's reason: the forum is for a later step" in c.value for c in at.caption)
+    # one checklist: p1 (kept by the volunteer) ticked, p2 (left out) unticked; the volunteer's reason stands
+    assert at.checkbox(key=f"rsx-{rid}-p1").value is True and at.checkbox(key=f"rsx-{rid}-p2").value is False
+    save = at.button(key=f"rs-save-{rid}")
+    assert save.label == "Save decisions and rebuild the letter (1 approved, 1 rejected)" and not save.disabled
+    save.click().run()                                              # saves both and rebuilds the letter
     assert not at.exception, at.exception[0].stack_trace
-    # not by itself: the supervisor rebuilds the letter from the approved points before approving
-    assert not any(r.key == f"action-{case_id}" for r in at.radio)
-    at.button(key=f"rebuild-{case_id}").click().run()
+    assert not any(b.key == f"rebuild-{case_id}" for b in at.button)
     packet = store.get_pending(case_id)["draft"]
     assert packet.count("DRAFT — to be checked by a lawyer") == 3   # the letter, rebuilt from the approved points
     letter = next(p for p in casework.split_bundle(packet) if "Complaint about" in p)

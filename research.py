@@ -364,9 +364,9 @@ def waiting(base: Path = HERE) -> List[dict]:
 # ---------- the supervisor's decisions ----------
 
 def decide(research_id: str, point_id: str, decision: str, text: Optional[str] = None, base: Path = HERE,
-           today: Optional[date] = None, by: str = "") -> dict:
-    """Approve, edit (then approve) or reject one point. Approved points go into the case with their
-    sources. Every decision is in the audit record."""
+           today: Optional[date] = None, by: str = "", reason: str = "") -> dict:
+    """Approve, edit (then approve) or reject one point (a rejection may carry the supervisor's short reason).
+    Approved points go into the case with their sources. Every decision is in the audit record."""
     if decision not in (APPROVE, EDIT, REJECT):
         raise ResearchFailed("Choose approve, edit or reject.")
     today = today or date.today()
@@ -390,6 +390,8 @@ def decide(research_id: str, point_id: str, decision: str, text: Optional[str] =
         point["warnings"] = [w for w in point.get("warnings", []) if w["kind"] != "replaced"]
     point.update(status={APPROVE: "approved", EDIT: "approved after editing", REJECT: "rejected"}[decision],
                  decided_on=today.isoformat(), decided_by=_norm(by)[:40] or audit.SUPERVISOR)
+    if decision == REJECT and _norm(reason):
+        point["reject_reason"] = privacy.redact(_norm(reason))[0][:200]
     if decision != REJECT:
         case = tracker.load(record["case_id"], base)
         if case is not None:
@@ -405,6 +407,8 @@ def decide(research_id: str, point_id: str, decision: str, text: Optional[str] =
     details = f"{research_id} {point_id} ({KINDS[point['kind']]})"
     if decision == EDIT:
         details += f": {point['original']} -> {point['text']}"
+    if point.get("reject_reason"):
+        details += f": {point['reject_reason']}"
     audit.add_event(record["case_id"], f"research point {point['status']}", _norm(by)[:40] or audit.SUPERVISOR, details,
                     base=base, role="supervisor" if by else "")
     return point

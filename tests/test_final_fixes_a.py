@@ -257,7 +257,8 @@ def test_own_research_locks_every_decision(monkeypatch, tmp_path):
                      "warnings": []}]}])
     at = supervisor_screen(monkeypatch, name=" Volunteer A ")
     assert at.error[0].value == "You sent this draft, so another supervisor must approve it."
-    assert at.radio(key=f"rsd-{case_id}.r1-p1").disabled and at.button(key=f"rss-{case_id}.r1-p1").disabled
+    assert not any(str(c.key).startswith("rsx-") for c in at.checkbox)          # no tick boxes,
+    assert not any(str(b.key).startswith("rs-save-") for b in at.button)         # no save button
 
 
 def test_sent_with_a_reason_and_plain_audit_words():

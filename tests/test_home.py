@@ -94,7 +94,9 @@ def test_learn_section_four_cards_with_icons(at):
     assert '<section id="learn-basics" class="sec center learn">' in html
     for icon in ["volunteer_activism", "gavel", "quiz"]:
         assert f'<div class="card guide"><span class="mi" aria-hidden="true">{icon}</span><h3>' in html
-    assert '<div class="card guide soon-card"><span class="mi" aria-hidden="true">phishing</span><span class="soon">Coming soon</span>' in html
+    assert ('<div class="card guide soon-card"><span class="mi" aria-hidden="true">phishing</span>'
+            '<h3>Online fraud: the first hours <span class="soon">Coming soon</span></h3>') in html  # the pill beside the title
+    assert [b.label for b in at.button if str(b.key).startswith("home-learn-")] == ["Open guide", "Open guide"]
     assert at.button(key="nav-practice").icon == ":material/quiz:"
     at.button(key="nav-practice").click().run()
     assert at.session_state["screen"] == "Practice"   # public, like Learn; the timing tool is on Supervisor

@@ -93,7 +93,7 @@ div[class*="st-key-case-card-"] { background: var(--card); border: 1px solid var
 .card .num { font-size: 13px; font-weight: 700; color: var(--teal); letter-spacing: .02em; }
 .card .mi { font-size: 28px; color: var(--teal); }
 .grid { display: grid; gap: 20px; }
-.grid.how { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+.grid.how { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }  /* wide enough for "acknowledgement." */
 .grid.safe { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
 
 /* ---------- sections: eyebrow, heading, generous spacing ---------- */
@@ -739,4 +739,52 @@ div[class*="st-key-case-card-"], div[class*="st-key-review-"] > div, .st-key-sig
   .st-key-phonemenu { display: flex !important; background: var(--card); border: 1px solid var(--line);
     border-radius: 16px; padding: 6px; margin-bottom: 8px; }
   .st-key-phonemenu button { justify-content: flex-start !important; min-height: 44px; }
+}
+
+/* ---------- Final fixes D: never a box inside a box ----------
+   A card (any of the boxed styles) inside another card gets no border, shadow, background or extra padding:
+   it is part of the outer card. The draft "paper" (.docpage) and fold-outs keep their own look. */
+:is(.infocard, .card, .st-key-check-col, .st-key-drafts-box, .st-key-research-panel, .st-key-send-card,
+    .st-key-legal-aid-screen, .st-key-done-card, [data-testid="stForm"], div[class*="st-key-case-card-"],
+    div[class*="st-key-review-"] > div, .st-key-signin-wide, div[class*="st-key-learn-card-"], .st-key-guide-page,
+    .st-key-case-panel, .st-key-research-box, .st-key-continuebox, .st-key-scanbox, .st-key-camp-form,
+    .st-key-leave-box, div[class*="st-key-edit-box-"], div[class*="st-key-close-box-"], div[class*="st-key-sup-draft-"],
+    .st-key-f-calc-card, div[class*="st-key-rs-review-"])
+  :is([data-testid="stVerticalBlock"], [data-testid="stForm"], .card, .infocard) {
+  border: 0 !important; box-shadow: none !important; background: transparent !important; padding: 0 !important;
+  border-radius: 0 !important; }
+
+/* Learn cards: icon top-left, title, text, then the button at the same height in every card */
+div[class*="st-key-learn-card-"] { justify-content: flex-start !important; }
+div[class*="st-key-learn-card-"] > div:last-child { margin-top: 0; padding-top: 0; }
+div[class*="st-key-learn-card-"] > div:has(.stButton) { margin-top: auto !important; padding-top: 10px; }
+div[class*="st-key-learn-card-"] .card.guide { gap: 10px; }
+.card.guide .mi { align-self: flex-start; }
+.card.guide h3 .soon { display: inline-block; vertical-align: 3px; margin-left: 6px; font-size: 12px !important;
+  font-weight: 600; padding: 2px 9px; border-radius: 999px; background: var(--sand); color: var(--muted);
+  line-height: 1.5; white-space: nowrap; }
+.card.guide.soon-card p, .card.guide.soon-card h3 { color: var(--muted) !important; }
+
+/* Supervisor: research points as one checklist (one row per point, a thin line between rows) */
+div[class*="st-key-rs-review-"] div[class*="st-key-rs-row-"] { border-top: 1px solid var(--line) !important;
+  padding-top: 10px !important; gap: .45rem !important; }  /* a row line, not a box (beats the box-in-box rule) */
+div[class*="st-key-rs-row-"] > div { margin: 0 !important; }
+div[class*="st-key-rs-row-"] [data-testid="stMarkdownContainer"] { margin: 0 !important; }
+div[class*="st-key-rs-row-"] [data-testid="stCheckbox"] p { font-size: 16px; line-height: 1.5; color: var(--ink); }
+.rs-list-head { font-weight: 600; margin: 4px 0 8px 0 !important; line-height: 1.45; }
+.rs-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-left: 28px; font-size: 14px;
+  line-height: 1.9; min-height: 1.9em; }
+.rs-meta .tag.edited { background: var(--sand); color: var(--ink); }
+.rs-meta .rs-src { color: var(--muted); overflow-wrap: anywhere; }
+.rs-meta .rs-src .mi { font-size: 16px; vertical-align: -3px; }
+div[class*="st-key-rs-row-"] [data-testid="stCaptionContainer"],
+div[class*="st-key-rs-row-"] div[class*="st-key-rsedit-"] { margin-left: 28px; }
+div[class*="st-key-rsedit-"] button { min-height: 28px !important; padding: 0 !important; font-size: 14px !important; }
+div[class*="st-key-rsedit-"] button p { font-size: 14px !important; text-decoration: underline; }
+div[class*="st-key-rs-save-"] { margin-top: 8px; }
+@media (max-width: 640px) {
+  .rs-meta, div[class*="st-key-rs-row-"] [data-testid="stCaptionContainer"],
+  div[class*="st-key-rs-row-"] div[class*="st-key-rsedit-"] { margin-left: 0; }
+  .rs-meta { flex-direction: column; align-items: flex-start; }
+  div[class*="st-key-rs-save-"] button { width: 100% !important; }
 }
