@@ -64,7 +64,7 @@ def test_approve_drafts_with_undecided_points_they_are_not_in_the_letter(monkeyp
     code = tracker.load(case_id)["code"]                                    # the list shows the case code
     row = next(m.value for m in at.markdown if 'class="sup-row' in m.value and code in m.value)
     assert "Drafts already approved" in row and "1 research point" in row
-    assert any("already approved. Points you decide now are not added to that letter." in i.value for i in at.info)
+    assert any("already approved. Points you decide now are not added to that letter." in c.value for c in at.caption)
     assert any('<span class="tag undecided">Not decided</span>' in m.value for m in at.markdown)
 
 
@@ -124,8 +124,8 @@ def test_research_without_drafts_shows_inside_its_case_card(monkeypatch, fake_ai
     assert any(s.value == "Waiting for you (1)" for s in at.subheader)
     code = tracker.load(case_id)["code"]                                    # the list shows the case code
     row = next(m.value for m in at.markdown if 'class="sup-row' in m.value and code in m.value)
-    assert "No drafts yet" in row
-    assert any(i.value == "No drafts sent yet by the volunteer." for i in at.info)
+    assert "Research only — no drafts yet" in row and "Drafts ready" not in row
+    assert any(c.value == "The volunteer has not sent drafts yet." for c in at.caption)
     assert at.checkbox(key=f"rsx-{rid}-p1").value is True                   # the research step as usual
     save = at.button(key=f"rs-save-{rid}")
     assert save.label == "Save point decisions (1 approved, 0 rejected, 1 not decided)"

@@ -1513,7 +1513,6 @@ i18n/hi.json · rs.all_skipped,{n} points name a replaced law: edit them to the 
 i18n/hi.json · rs.all_skipped.one,1 point names a replaced law: edit it to the current law first.,1 बिंदु बदले जा चुके क़ानून का नाम लेता है: पहले उसे मौजूदा क़ानून के अनुसार बदलें।,screen text,,
 i18n/hi.json · why.rs_nothing_to_save,"Tick a point, or choose a reason to reject one, first.","पहले किसी बिंदु पर टिक करें, या उसे अस्वीकार करने का कारण चुनें।",screen text,,
 i18n/hi.json · ui.sup.approve_note,"Approving saves the point decisions ({a} approved, {r} rejected, {u} not decided), rebuilds the letter from the approved points only, then approves the drafts.","मंज़ूर करने पर बिंदुओं के फ़ैसले सेव होंगे ({a} मंज़ूर, {r} अस्वीकार, {u} पर फ़ैसला नहीं), पत्र सिर्फ़ मंज़ूर बिंदुओं से दोबारा बनेगा, फिर ड्राफ़्ट मंज़ूर होंगे।",screen text,,
-i18n/hi.json · sup.no_drafts_yet,No drafts sent yet by the volunteer.,स्वयंसेवक ने अभी कोई ड्राफ़्ट नहीं भेजा है।,screen text,,
 i18n/hi.json · sup.drafts_approved_before,The drafts for this case are already approved. Points you decide now are not added to that letter.,इस केस के ड्राफ़्ट पहले ही मंज़ूर हो चुके हैं। अब तय किए गए बिंदु उस पत्र में नहीं जुड़ेंगे।,screen text,,
 i18n/hi.json · aud.ev.approved,Drafts approved,ड्राफ़्ट मंज़ूर,screen text,,
 i18n/hi.json · ui.sup.audit_all_fold,All cases (audit records),सभी केस (ऑडिट रिकॉर्ड),screen text,,
@@ -1526,7 +1525,6 @@ i18n/hi.json · sup.chip.points.one,1 research point,1 शोध बिंदु
 i18n/hi.json · sup.chip.drafts,Drafts ready,ड्राफ़्ट तैयार,screen text,,
 i18n/hi.json · sup.chip.unticked,Sent with {n} items not ticked,{n} चीज़ें बिना टिक के भेजी गईं,screen text,,
 i18n/hi.json · sup.chip.unticked.one,Sent with 1 item not ticked,1 चीज़ बिना टिक के भेजी गई,screen text,,
-i18n/hi.json · sup.chip.no_drafts,No drafts yet,अभी कोई ड्राफ़्ट नहीं,screen text,,
 i18n/hi.json · sup.chip.approved_before,Drafts already approved,ड्राफ़्ट पहले ही मंज़ूर,screen text,,
 i18n/hi.json · sup.step1,Understand the case,केस समझें,screen text,,
 i18n/hi.json · sup.step2,Check the research points,शोध के बिंदु जाँचें,screen text,,
@@ -1534,7 +1532,6 @@ i18n/hi.json · sup.step3,Decide on the drafts,ड्राफ़्ट पर �
 i18n/hi.json · sup.step2_note,"Tick = approve, untick = reject (a reason is needed). Your ticks are applied when you decide on the drafts in the next step; points not decided stay out of the letter.","टिक = मंज़ूर, टिक हटाएँ = अस्वीकार (कारण ज़रूरी)। आपके टिक अगले क़दम में ड्राफ़्ट पर फ़ैसला करते समय लागू होते हैं; जिन बिंदुओं पर फ़ैसला नहीं हुआ, वे पत्र से बाहर रहते हैं।",screen text,,
 i18n/hi.json · sup.step2_note_no_drafts,No drafts yet: save your point decisions here. Points not decided stay for later.,"अभी कोई ड्राफ़्ट नहीं: बिंदुओं के फ़ैसले यहीं सेव करें। जिन पर फ़ैसला नहीं हुआ, वे बाद के लिए रहते हैं।",screen text,,
 i18n/hi.json · sup.u_cards,Section 479 case: the dates and facts are in the Section 479 note (in the drafts below).,धारा 479 का केस: तारीख़ें और तथ्य धारा 479 नोट में हैं (नीचे ड्राफ़्ट में)।,screen text,,
-i18n/hi.json · sup.no_cards_yet,The case cards come with the drafts; the volunteer has not sent them yet.,केस कार्ड ड्राफ़्ट के साथ आते हैं; स्वयंसेवक ने अभी उन्हें नहीं भेजा है।,screen text,,
 i18n/hi.json · sup.tab.summary,Case summary,केस सारांश,screen text,,
 i18n/hi.json · sup.tab.letter,Letter,पत्र,screen text,,
 i18n/hi.json · sup.tab.application,Legal aid application,क़ानूनी सहायता आवेदन,screen text,,
@@ -1545,6 +1542,11 @@ i18n/hi.json · sup.approve_drafts,Approve drafts,ड्राफ़्ट म�
 i18n/hi.json · sup.edit_then_approve,Edit then approve,बदलकर मंज़ूर करें,screen text,,
 i18n/hi.json · sup.send_back_open,Send back to the volunteer,स्वयंसेवक को वापस भेजें,screen text,,
 i18n/hi.json · sup.send_back,Send back,वापस भेजें,screen text,,
+i18n/hi.json · ui.sup.case_head_research,Case {case_id} · {kind} · research run {sent} by {by} · drafts not sent yet,केस {case_id} · {kind} · {by} ने {sent} को शोध किया · ड्राफ़्ट अभी नहीं भेजे गए,screen text,,
+i18n/hi.json · ui.sup.case_head_approved,Case {case_id} · {kind} · research run {sent} by {by} · drafts already approved,केस {case_id} · {kind} · {by} ने {sent} को शोध किया · ड्राफ़्ट पहले ही मंज़ूर,screen text,,
+i18n/hi.json · sup.chip.research_only,Research only — no drafts yet,सिर्फ़ शोध — अभी कोई ड्राफ़्ट नहीं,screen text,,
+i18n/hi.json · sup.no_drafts_line,The volunteer has not sent drafts yet.,स्वयंसेवक ने अभी ड्राफ़्ट नहीं भेजे हैं।,screen text,,
+i18n/hi.json · sup.still_missing,Still missing,अभी बाक़ी,screen text,,
 case_notes_hi.txt,(fake practice story; check that it reads naturally),"अभ्यास केस (कोई असली व्यक्ति नहीं)।
 बोलने वाली: एक विचाराधीन क़ैदी की बड़ी बहन।
 उसके भाई को 15 मार्च 2024 को गिरफ़्तार किया गया था। अपराध फ़रवरी 2024 में हुआ था।

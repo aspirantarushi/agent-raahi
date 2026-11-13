@@ -99,3 +99,31 @@ def test_phone_layout_rules():
     phone = css[css.index("Final fixes E: Supervisor page"):]
     assert 'div[class*="st-key-sup-row-"] { flex-direction: column !important;' in phone          # list rows stack
     assert 'div[class*="st-key-sup-decide-"] { flex-direction: column !important;' in phone       # buttons stack
+
+
+def test_research_only_case_is_labelled_and_built_from_the_tracker(monkeypatch, fresh):
+    """Research run, drafts not sent: the chip, heading and steps all say so (never "sent" or "Drafts ready")."""
+    case_id = tracker.open_case("General", "Volunteer A")["id"]
+    tracker.merge_facts(case_id, {"state": "Bihar", "woman": False}, "Volunteer A", "story")
+    tracker.add_summary(case_id, ["The electricity was disconnected on 2 November 2026."],
+                        [("electricity_or_water", "electricity cut off despite a paid bill")], [], "Volunteer A")
+    rid = research.run(case_id, "Bihar", ISSUE, "Volunteer A", resolve=resolve)["id"]
+    sent_case, _ = general_case(by="Volunteer B", research_too=False)        # a case whose drafts were sent
+    at = supervisor_screen(monkeypatch, name="Supervisor S", **{"sup-open": case_id})
+    rows = {m.value.split("</b>")[0]: m.value for m in at.markdown if 'class="sup-row' in m.value}
+    ro = next(v for v in rows.values() if tracker.load(case_id)["code"] in v)
+    sent = next(v for v in rows.values() if tracker.load(sent_case)["code"] in v)
+    assert "Research only — no drafts yet" in ro and "Drafts ready" not in ro
+    assert "Drafts ready" in sent and "Research only" not in sent
+    head = next(m.value for m in at.markdown if 'class="sup-case-head"' in m.value and "<style" not in m.value)
+    assert "research run" in head and "drafts not sent yet" in head and " sent " not in head.replace("not sent", "")
+    text = page(at)
+    assert 'class="infocard glance"' in text and "The electricity was disconnected on" in text  # from the tracker
+    assert "The case cards come with the drafts" not in text
+    assert any(c.value == "The volunteer has not sent drafts yet." for c in at.caption)
+    assert "Check the research points" in text and "Decide on the drafts" not in text            # no step 3
+    assert at.button(key=f"rs-save-{rid}") and not any(str(b.key).startswith("approve-") for b in at.button)
+    # the case whose drafts were sent: heading says "sent", and step 3 is there
+    at.button(key=f"sup-open-{sent_case}").click().run()
+    head = next(m.value for m in at.markdown if 'class="sup-case-head"' in m.value and "<style" not in m.value)
+    assert " sent " in head and "research run" not in head and "Decide on the drafts" in page(at)

@@ -3950,13 +3950,29 @@ def delete_case_box():
             (st.success if msg[0] == "ok" else st.error)(msg[1])
 
 
-def supervisor_case_cards(record: dict):
+def facts_from_tracker(case: dict) -> "general.GeneralFacts | None":
+    """A general case with no drafts sent: its facts rebuilt from the tracker record (the checked story lines,
+    the problem, the papers, the yes/no facts and answers), the same way "Continue a case" rebuilds them."""
+    if case.get("case_type") != general.CASE_TYPE:
+        return None
+    values = tracker.known_for_form(case)
+    reading = general.GeneralReading(what_happened=list(case.get("summary", [])),
+                                     issues=[tuple(i) for i in case.get("issues", [])],
+                                     documents_held=list(case.get("documents_held", [])), facts=dict(values))
+    missing = general.check_eligibility(values).missing
+    return general.build_facts(reading, [tuple(a) for a in case.get("answers", [])],
+                               [general.ELIGIBILITY_QUESTIONS[m] for m in missing if m in general.ELIGIBILITY_QUESTIONS],
+                               dict(values), date.today())
+
+
+def supervisor_case_cards(record: dict, g: "general.GeneralFacts | None" = None):
     """The same case cards the volunteer saw in step 3 (At a glance, Facts, Timeline, Documents, Free
-    legal aid, For the lawyer, Next steps), rebuilt from the saved facts by the same code."""
-    if record.get("case_type") != general.CASE_TYPE or not record.get("facts"):
+    legal aid, For the lawyer, Next steps), rebuilt from the saved facts by the same code (g: facts rebuilt
+    from the tracker, for a case with no drafts sent)."""
+    if g is None and (record.get("case_type") != general.CASE_TYPE or not record.get("facts")):
         return
     try:
-        g = general.GeneralFacts.from_dict(record["facts"])
+        g = g or general.GeneralFacts.from_dict(record["facts"])
         approved = research.approved_points(record["id"])
         g.research = research.items_for_summary(record["id"], g.facts.get("state"),
                                                 [n for _, n in g.issues]) if g.issues else []
@@ -4032,7 +4048,7 @@ def waiting_chips(row: dict) -> list:
         if unticked:
             chips.append(("sent-back", t("sup.chip.unticked", n=len(unticked))))
     else:
-        chips.append(("intake", t("sup.chip.approved_before" if case_drafts_approved(row["id"]) else "sup.chip.no_drafts")))
+        chips.append(("intake", t("sup.chip.approved_before" if case_drafts_approved(row["id"]) else "sup.chip.research_only")))
     return chips
 
 
@@ -4110,7 +4126,9 @@ def review_open_case(row: dict):
     own = own_work(case_id, record)
     with st.container(key=f"review-{case_id}"):
         when = show_stamp(row["when"]) if row["when"] else ""
-        st.markdown(f'<h3 class="sup-case-head">{html.escape(t("ui.sup.case_head", case_id=case_id, kind=case_type_label(row["kind"]), sent=when, by=row["by"] or "-"))}</h3>',
+        head_key = "ui.sup.case_head" if record else \
+            "ui.sup.case_head_approved" if case_drafts_approved(case_id) else "ui.sup.case_head_research"
+        st.markdown(f'<h3 class="sup-case-head">{html.escape(t(head_key, case_id=case_id, kind=case_type_label(row["kind"]), sent=when, by=row["by"] or "-"))}</h3>',
                     unsafe_allow_html=True)
         if own:  # first, before anything can be decided: no tick boxes and no decision buttons below
             st.error(t("ui.sup.own_draft"), icon=":material/block:")
@@ -4124,8 +4142,15 @@ def review_open_case(row: dict):
                 supervisor_case_cards(record)
             elif record:
                 st.caption(t("sup.u_cards"))
-            else:
-                st.caption(t("sup.no_cards_yet"))
+            else:  # no drafts sent: the cards from the case's tracker record, and what is still missing
+                case = tracker.load(case_id) or {}
+                g = facts_from_tracker(case)
+                if g:
+                    supervisor_case_cards({"id": case_id}, g)
+                    if g.still_to_ask:
+                        st.markdown(f"**{html.escape(t('sup.still_missing'))}**  \n"
+                                    + "  \n".join(f"- {html.escape(q)}" for q in g.still_to_ask))
+                st.caption(t("sup.drafts_approved_before" if case_drafts_approved(case_id) else "sup.no_drafts_line"))
             rows = [r for r in (record or {}).get("readiness") or [] if r["key"] != "send_reason"]
             unticked = [r for r in rows if r.get("note") == readiness.NOT_TICKED]
             reason = next((r["note"] for r in (record or {}).get("readiness") or [] if r["key"] == "send_reason"), "")
@@ -4150,9 +4175,7 @@ def review_open_case(row: dict):
             st.caption(t("sup.step2_note" if record else "sup.step2_note_no_drafts"))
             for r in briefs:
                 research_checklist(r, own, save=record is None)
-        if not record:
-            st.info(t("sup.drafts_approved_before" if case_drafts_approved(case_id) else "sup.no_drafts_yet"),
-                    icon=":material/draft:")
+        if not record:  # no drafts sent: no step 3
             return
 
         # Step 3 · Decide on the drafts

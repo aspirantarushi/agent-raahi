@@ -1403,7 +1403,6 @@
  "rs.all_skipped.one": "1 point names a replaced law: edit it to the current law first.",
  "why.rs_nothing_to_save": "Tick a point, or choose a reason to reject one, first.",
  "ui.sup.approve_note": "Approving saves the point decisions ({a} approved, {r} rejected, {u} not decided), rebuilds the letter from the approved points only, then approves the drafts.",
- "sup.no_drafts_yet": "No drafts sent yet by the volunteer.",
  "sup.drafts_approved_before": "The drafts for this case are already approved. Points you decide now are not added to that letter.",
  "cw.not_decided": "{n} research points were not decided and are not in this letter.",
  "cw.not_decided.one": "1 research point was not decided and is not in this letter.",
@@ -1418,7 +1417,6 @@
  "sup.chip.drafts": "Drafts ready",
  "sup.chip.unticked": "Sent with {n} items not ticked",
  "sup.chip.unticked.one": "Sent with 1 item not ticked",
- "sup.chip.no_drafts": "No drafts yet",
  "sup.chip.approved_before": "Drafts already approved",
  "sup.step1": "Understand the case",
  "sup.step2": "Check the research points",
@@ -1426,7 +1424,6 @@
  "sup.step2_note": "Tick = approve, untick = reject (a reason is needed). Your ticks are applied when you decide on the drafts in the next step; points not decided stay out of the letter.",
  "sup.step2_note_no_drafts": "No drafts yet: save your point decisions here. Points not decided stay for later.",
  "sup.u_cards": "Section 479 case: the dates and facts are in the Section 479 note (in the drafts below).",
- "sup.no_cards_yet": "The case cards come with the drafts; the volunteer has not sent them yet.",
  "sup.tab.summary": "Case summary",
  "sup.tab.letter": "Letter",
  "sup.tab.application": "Legal aid application",
@@ -1436,5 +1433,10 @@
  "sup.approve_drafts": "Approve drafts",
  "sup.edit_then_approve": "Edit then approve",
  "sup.send_back_open": "Send back to the volunteer",
- "sup.send_back": "Send back"
+ "sup.send_back": "Send back",
+ "ui.sup.case_head_research": "Case {case_id} · {kind} · research run {sent} by {by} · drafts not sent yet",
+ "ui.sup.case_head_approved": "Case {case_id} · {kind} · research run {sent} by {by} · drafts already approved",
+ "sup.chip.research_only": "Research only — no drafts yet",
+ "sup.no_drafts_line": "The volunteer has not sent drafts yet.",
+ "sup.still_missing": "Still missing"
 }
