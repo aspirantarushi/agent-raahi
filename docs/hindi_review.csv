@@ -1517,7 +1517,7 @@ i18n/hi.json · sup.drafts_approved_before,The drafts for this case are already 
 i18n/hi.json · aud.ev.approved,Drafts approved,ड्राफ़्ट मंज़ूर,screen text,,
 i18n/hi.json · ui.sup.audit_all_fold,All cases (audit records),सभी केस (ऑडिट रिकॉर्ड),screen text,,
 i18n/hi.json · ui.sup.tools,Tools,टूल,screen text,,
-i18n/hi.json · ui.sup.case_head,Case {case_id} · {kind} · sent {sent} by {by},केस {case_id} · {kind} · {by} ने {sent} को भेजा,screen text,,
+i18n/hi.json · ui.sup.case_head,Case {case_id} · Code {slip} · {kind} · {by},केस {case_id} · कोड {slip} · {kind} · {by},screen text,,
 i18n/hi.json · sup.open,Open,खोलें,screen text,,
 i18n/hi.json · sup.opened,Open now,खुला है,screen text,,
 i18n/hi.json · sup.chip.points,{n} research points,{n} शोध बिंदु,screen text,,
@@ -1542,12 +1542,14 @@ i18n/hi.json · sup.approve_drafts,Approve drafts,ड्राफ़्ट म�
 i18n/hi.json · sup.edit_then_approve,Edit then approve,बदलकर मंज़ूर करें,screen text,,
 i18n/hi.json · sup.send_back_open,Send back to the volunteer,स्वयंसेवक को वापस भेजें,screen text,,
 i18n/hi.json · sup.send_back,Send back,वापस भेजें,screen text,,
-i18n/hi.json · ui.sup.case_head_research,Case {case_id} · {kind} · research run {sent} by {by} · drafts not sent yet,केस {case_id} · {kind} · {by} ने {sent} को शोध किया · ड्राफ़्ट अभी नहीं भेजे गए,screen text,,
-i18n/hi.json · ui.sup.case_head_approved,Case {case_id} · {kind} · research run {sent} by {by} · drafts already approved,केस {case_id} · {kind} · {by} ने {sent} को शोध किया · ड्राफ़्ट पहले ही मंज़ूर,screen text,,
 i18n/hi.json · sup.chip.research_only,Research only — no drafts yet,सिर्फ़ शोध — अभी कोई ड्राफ़्ट नहीं,screen text,,
 i18n/hi.json · sup.no_drafts_line,The volunteer has not sent drafts yet.,स्वयंसेवक ने अभी ड्राफ़्ट नहीं भेजे हैं।,screen text,,
 i18n/hi.json · sup.still_missing,Still missing,अभी बाक़ी,screen text,,
-i18n/hi.json · sup.close_case,Close this case,यह केस छिपाएँ,screen text,,
+i18n/hi.json · sup.close_case,Back to the list,यह केस छिपाएँ,screen text,,
+i18n/hi.json · sup.head_no_drafts,drafts not sent yet,ड्राफ़्ट अभी नहीं भेजे गए,screen text,,
+i18n/hi.json · sup.head_approved_before,drafts already approved,ड्राफ़्ट पहले ही मंज़ूर,screen text,,
+i18n/hi.json · sup.sent_line,Sent {when},भेजा गया: {when},screen text,,
+i18n/hi.json · sup.research_line,Research run {when},शोध किया गया: {when},screen text,,
 case_notes_hi.txt,(fake practice story; check that it reads naturally),"अभ्यास केस (कोई असली व्यक्ति नहीं)।
 बोलने वाली: एक विचाराधीन क़ैदी की बड़ी बहन।
 उसके भाई को 15 मार्च 2024 को गिरफ़्तार किया गया था। अपराध फ़रवरी 2024 में हुआ था।

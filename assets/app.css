@@ -838,3 +838,6 @@ div[class*="st-key-sup-close-"] button p { text-decoration: underline; font-size
   div[class*="st-key-sup-head-"] > div:first-child { width: 100% !important; flex: 1 1 auto !important; }
   div[class*="st-key-sup-head-"] > div:last-child { align-self: flex-end; }
 }
+
+/* A list row shows only its own two parts (the text and "Open"); anything else drawn there is never shown */
+div[class*="st-key-sup-row-"] > div:nth-child(n+3) { display: none !important; }

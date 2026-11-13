@@ -1409,7 +1409,7 @@
  "aud.ev.approved": "Drafts approved",
  "ui.sup.audit_all_fold": "All cases (audit records)",
  "ui.sup.tools": "Tools",
- "ui.sup.case_head": "Case {case_id} · {kind} · sent {sent} by {by}",
+ "ui.sup.case_head": "Case {case_id} · Code {slip} · {kind} · {by}",
  "sup.open": "Open",
  "sup.opened": "Open now",
  "sup.chip.points": "{n} research points",
@@ -1434,10 +1434,12 @@
  "sup.edit_then_approve": "Edit then approve",
  "sup.send_back_open": "Send back to the volunteer",
  "sup.send_back": "Send back",
- "ui.sup.case_head_research": "Case {case_id} · {kind} · research run {sent} by {by} · drafts not sent yet",
- "ui.sup.case_head_approved": "Case {case_id} · {kind} · research run {sent} by {by} · drafts already approved",
  "sup.chip.research_only": "Research only — no drafts yet",
  "sup.no_drafts_line": "The volunteer has not sent drafts yet.",
  "sup.still_missing": "Still missing",
- "sup.close_case": "Close this case"
+ "sup.close_case": "Back to the list",
+ "sup.head_no_drafts": "drafts not sent yet",
+ "sup.head_approved_before": "drafts already approved",
+ "sup.sent_line": "Sent {when}",
+ "sup.research_line": "Research run {when}"
 }

@@ -3229,9 +3229,14 @@ def supervisor_screen():
         st.info(no_drafts_waiting_text(), icon=":material/inbox:")
     else:
         st.subheader(t("ui.sup.waiting", n=len(rows)))
-        current = waiting_list(rows)
+        # two fixed areas, made first and in this order: the list, then the open case (its cards can only
+        # ever be drawn in the second, never inside a list row)
+        list_area, case_area = st.container(key="sup-list-area"), st.container(key="sup-case-area")
+        with list_area:
+            current = waiting_list(rows)
         if current:
-            review_open_case(next(r for r in rows if r["id"] == current))
+            with case_area:
+                review_open_case(next(r for r in rows if r["id"] == current))
     changed_after_approval_box()
 
     # 2. All cases (audit records), folded
@@ -4019,28 +4024,36 @@ def draft_kind(part: str) -> str:
 
 def waiting_rows() -> list:
     """Every case waiting for the supervisor, oldest first: drafts sent for review, and cases with research
-    points to decide but no draft waiting. Each row: id, code, kind, volunteer, sent date and what needs doing."""
-    rows = []
-    for record in store.list_pending():
-        rows.append({"id": record["id"], "pending": record, "kind": record.get("case_type", ""),
-                     "by": record.get("resent_by") or record.get("sent_by", ""), "when": record.get("submitted", "")})
-    for case_id in research_only_cases():
-        briefs = [r for r in research.for_case(case_id) if r["status"] == research.WAITING]
-        case = tracker.load(case_id) or {}
-        rows.append({"id": case_id, "pending": None, "kind": case.get("case_type", ""),
-                     "by": briefs[0]["asked_by"] if briefs else "", "when": briefs[0]["asked_at"] if briefs else ""})
+    points to decide but no draft waiting. Each kind of record is read once (on the cloud every read is a
+    network call). Each row: id, code, kind, volunteer, date, whether drafts were sent, and its chips."""
+    pending = store.list_pending()
+    with_draft = {r["id"] for r in pending + store.list_pending(status=store.SENT_BACK)}
+    briefs = {}
+    for r in research.all_records():
+        briefs.setdefault(r["case_id"], []).append(r)
+    rows = [{"id": record["id"], "pending": record, "kind": record.get("case_type", ""),
+             "by": record.get("resent_by") or record.get("sent_by", ""), "when": record.get("submitted", "")}
+            for record in pending]
+    for case_id in dict.fromkeys(r["case_id"] for r in research.all_records() if r.get("status") == research.WAITING):
+        if case_id in with_draft:
+            continue  # drafts waiting (already a row), or sent back to the volunteer
+        waiting = [r for r in briefs[case_id] if r["status"] == research.WAITING]
+        rows.append({"id": case_id, "pending": None, "kind": "", "by": waiting[0]["asked_by"],
+                     "when": waiting[0]["asked_at"], "approved_before": case_drafts_approved(case_id)})
     for row in rows:
-        row["code"] = (tracker.load(row["id"]) or {}).get("code", "")
+        case = tracker.load(row["id"]) or {}
+        row["code"] = case.get("code", "")
+        row["kind"] = row["kind"] or case.get("case_type", "")
+        row["points"] = sum(p["status"] == research.WAITING and p.get("kind") != "letter"
+                            for r in briefs.get(row["id"], []) for p in r["points"])
         row["chips"] = waiting_chips(row)
     return sorted(rows, key=lambda r: r["when"])
 
 
 def waiting_chips(row: dict) -> list:
     """What needs doing, as short chips: "3 research points", "Drafts ready", "Sent with 4 items not ticked",
-    "No drafts yet" (or "Drafts already approved")."""
-    n = sum(p["status"] == research.WAITING and p.get("kind") != "letter"
-            for r in research.for_case(row["id"]) for p in r["points"])
-    chips = [("waiting", t("sup.chip.points", n=n))] if n else []
+    "Research only — no drafts yet" (or "Drafts already approved")."""
+    chips = [("waiting", t("sup.chip.points", n=row["points"]))] if row["points"] else []
     record = row["pending"]
     if record:
         chips.append(("approved", t("sup.chip.drafts")))
@@ -4049,7 +4062,7 @@ def waiting_chips(row: dict) -> list:
         if unticked:
             chips.append(("sent-back", t("sup.chip.unticked", n=len(unticked))))
     else:
-        chips.append(("intake", t("sup.chip.approved_before" if case_drafts_approved(row["id"]) else "sup.chip.research_only")))
+        chips.append(("intake", t("sup.chip.approved_before" if row.get("approved_before") else "sup.chip.research_only")))
     return chips
 
 
@@ -4135,11 +4148,12 @@ def review_open_case(row: dict):
     own = own_work(case_id, record)
     with st.container(border=True, key=f"review-{case_id}"):  # the open case, in one box
         when = show_stamp(row["when"]) if row["when"] else ""
-        head_key = "ui.sup.case_head" if record else \
-            "ui.sup.case_head_approved" if case_drafts_approved(case_id) else "ui.sup.case_head_research"
+        head = t("ui.sup.case_head", case_id=case_id, slip=row.get("code") or "-", kind=case_type_label(row["kind"]),
+                 by=row["by"] or "-")
+        if not record:  # research run, drafts not sent (or approved earlier)
+            head += " · " + t("sup.head_approved_before" if row.get("approved_before") else "sup.head_no_drafts")
         with st.container(key=f"sup-head-{case_id}", horizontal=True, vertical_alignment="top", gap="small"):
-            st.markdown(f'<h3 class="sup-case-head">{html.escape(t(head_key, case_id=case_id, kind=case_type_label(row["kind"]), sent=when, by=row["by"] or "-"))}</h3>',
-                        unsafe_allow_html=True)
+            st.markdown(f'<h3 class="sup-case-head">{html.escape(head)}</h3>', unsafe_allow_html=True)
             st.button(t("sup.close_case"), key=f"sup-close-{case_id}", type="tertiary", icon=":material/close:",
                       on_click=close_case_view)
         if own:  # first, before anything can be decided: no tick boxes and no decision buttons below
@@ -4149,6 +4163,8 @@ def review_open_case(row: dict):
 
         # Step 1 · Understand the case
         st.markdown(ui.step_band(1, t("sup.step1"), "now", ""), unsafe_allow_html=True)
+        if when:  # the date and time: when the drafts were sent, or when the research was run
+            st.caption(t("sup.sent_line" if record else "sup.research_line", when=when))
         with st.container(border=True, key=f"sup-understand-{case_id}"):
             if record and record.get("case_type") == general.CASE_TYPE:
                 supervisor_case_cards(record)
@@ -4162,7 +4178,7 @@ def review_open_case(row: dict):
                     if g.still_to_ask:
                         st.markdown(f"**{html.escape(t('sup.still_missing'))}**  \n"
                                     + "  \n".join(f"- {html.escape(q)}" for q in g.still_to_ask))
-                st.caption(t("sup.drafts_approved_before" if case_drafts_approved(case_id) else "sup.no_drafts_line"))
+                st.caption(t("sup.drafts_approved_before" if row.get("approved_before") else "sup.no_drafts_line"))
             rows = [r for r in (record or {}).get("readiness") or [] if r["key"] != "send_reason"]
             unticked = [r for r in rows if r.get("note") == readiness.NOT_TICKED]
             reason = next((r["note"] for r in (record or {}).get("readiness") or [] if r["key"] == "send_reason"), "")

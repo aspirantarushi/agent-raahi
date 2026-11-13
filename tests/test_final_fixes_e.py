@@ -116,7 +116,10 @@ def test_research_only_case_is_labelled_and_built_from_the_tracker(monkeypatch, 
     assert "Research only — no drafts yet" in ro and "Drafts ready" not in ro
     assert "Drafts ready" in sent and "Research only" not in sent
     head = next(m.value for m in at.markdown if 'class="sup-case-head"' in m.value and "<style" not in m.value)
-    assert "research run" in head and "drafts not sent yet" in head and " sent " not in head.replace("not sent", "")
+    code = tracker.load(case_id)["code"]
+    assert f"Case {case_id} · Code {code} · Any problem · Volunteer A · drafts not sent yet" in head
+    assert "November" not in head                                                  # no date in the heading
+    assert any(c.value.startswith("Research run ") for c in at.caption)           # the date is in step 1
     text = page(at)
     assert 'class="infocard glance"' in text and "The electricity was disconnected on" in text  # from the tracker
     assert "The case cards come with the drafts" not in text
@@ -126,7 +129,8 @@ def test_research_only_case_is_labelled_and_built_from_the_tracker(monkeypatch, 
     # the case whose drafts were sent: heading says "sent", and step 3 is there
     at.button(key=f"sup-open-{sent_case}").click().run()
     head = next(m.value for m in at.markdown if 'class="sup-case-head"' in m.value and "<style" not in m.value)
-    assert " sent " in head and "research run" not in head and "Decide on the drafts" in page(at)
+    assert "drafts not sent yet" not in head and "Decide on the drafts" in page(at)
+    assert any(c.value.startswith("Sent ") for c in at.caption)
 
 
 def test_open_case_in_one_box_and_close_returns_to_the_list(monkeypatch, fresh):
@@ -135,7 +139,7 @@ def test_open_case_in_one_box_and_close_returns_to_the_list(monkeypatch, fresh):
     heads = [m.value for m in at.markdown if 'class="sup-case-head"' in m.value and "<style" not in m.value]
     assert len(heads) == 1 and at.button(key=f"approve-{case_id}")                # heading .. decision buttons
     close = at.button(key=f"sup-close-{case_id}")
-    assert close.label == "Close this case"
+    assert close.label == "Back to the list"
     close.click().run()
     assert not any('class="sup-case-head"' in m.value and "<style" not in m.value for m in at.markdown)
     assert at.subheader[0].value == "Waiting for you (1)"                           # the list stays
@@ -146,3 +150,47 @@ def test_open_case_in_one_box_and_close_returns_to_the_list(monkeypatch, fresh):
     assert 'div[class*="st-key-review-"][data-testid="stVerticalBlock"] { background: var(--card) !important;\n  border: 2px solid var(--line2)' in css
     rule = css[css.index("never a box inside a box"):]
     assert 'div[class*="st-key-review-"])' in rule[:2000]                             # no second border inside
+
+
+def row_blocks(node, found=None):
+    """Every list row (the block holding a "sup-row" line), with all it holds."""
+    found = [] if found is None else found
+    kids = list(getattr(node, "children", {}).values())
+    if any("class=\"sup-row" in str(getattr(k, "value", "")) for k in kids):
+        found.append(kids)
+    for k in kids:
+        row_blocks(k, found)
+    return found
+
+
+def all_text(nodes):
+    out = []
+    for n in nodes:
+        out.append(str(getattr(n, "value", "")))
+        out += all_text(list(getattr(n, "children", {}).values()))
+    return " ".join(out)
+
+
+def test_a_list_row_never_contains_case_cards(monkeypatch, fresh):
+    """Every row type, with a case open and with none open: a row holds only its line and its "Open" button."""
+    research_only = tracker.open_case("General", "Volunteer D")["id"]
+    tracker.merge_facts(research_only, {"state": "Bihar", "woman": True}, "Volunteer D", "story")
+    tracker.add_summary(research_only, ["The electricity was disconnected on 2 November 2026."],
+                        [("electricity_or_water", "electricity cut off despite a paid bill")], [], "Volunteer D")
+    research.run(research_only, "Bihar", ISSUE, "Volunteer D", resolve=resolve)
+    sent, _ = general_case(by="Volunteer A")                                    # drafts sent, with research
+    back, _ = general_case(by="Volunteer B")
+    store.reject(back, "add the dates", by="Supervisor S")                     # sent back: not in the list
+    at = supervisor_screen(monkeypatch, name="Supervisor S", **{"sup-open": research_only})
+    for state in ("research-only open", "drafts case open", "none open"):
+        if state == "drafts case open":
+            at.button(key=f"sup-open-{sent}").click().run()
+        if state == "none open":
+            at.button(key=next(b.key for b in at.button if str(b.key).startswith("sup-close-"))).click().run()
+        rows = row_blocks(at.main)
+        assert len(rows) == 2, state                                            # the sent-back case is not a row
+        for kids in rows:
+            assert len(kids) == 2 and kids[1].type == "button", state           # the line and "Open", nothing else
+            assert "infocard" not in all_text(kids) and "has not sent drafts" not in all_text(kids), state
+    css = (ROOT / "assets" / "app.css").read_text(encoding="utf-8")
+    assert 'div[class*="st-key-sup-row-"] > div:nth-child(n+3) { display: none !important; }' in css
