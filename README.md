@@ -108,8 +108,8 @@ All of it on fictional cases; none of it is a real deployment.
 
 ## How it was built
 
-By a non-programmer using Claude Code inside AgentFoundry (Developer mode), prompt by prompt, with every change
-tested and reviewed. Python and Streamlit, deployed on Streamlit Community Cloud; Supabase (Mumbai) for the
+Built entirely by a team of non-programmers using Claude Code inside AgentFoundry (Developer mode), prompt by prompt, with every change tested and reviewed. 988 automated tests pass.
+Python and Streamlit, deployed on Streamlit Community Cloud; Supabase (Mumbai) for the
 clinic's records; Google Gemini for reading stories, with Groq as the backup; Tavily as the backup search for
 official websites; Sarvam AI for speech to text.
 
@@ -140,7 +140,7 @@ Step-by-step setup for the cloud: [docs/GO_ONLINE.md](docs/GO_ONLINE.md). Tests:
 
 ## Licence and credits
 
-MIT licence ([LICENSE](LICENSE)). Built for Code for a Billion by Arushi, with Claude Code. Legal content is
+MIT licence ([LICENSE](LICENSE)). Built for Code for a Billion by a team of non-programmers, with Claude Code. Legal content is
 drawn from official sources listed in [docs/CONTENT.md](docs/CONTENT.md).
 
-Demo video: [link to be added]
+Demo video: https://youtu.be/bo7AEsoNzYQ
