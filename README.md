@@ -122,7 +122,8 @@ More detail on the content files, safeguards, languages and the lawyer's checkli
 Limits and next steps:
 - **Lawyer review** of every knowledge file before real use.
 - **A partner pilot** with a legal aid clinic, with consent, before any real case.
-- **A paid AI tier** before real cases (the free daily limit was reached in the practice run).
+- **Works on free AI tiers.** A clinic can start on Gemini's free tier with no code changes. The live demo uses the
+  paid tier, capped at ₹500 a month, because the free daily limit ran out during the practice run.
 - **More languages** via Bhashini (built, waiting for access); English and Hindi today.
 - **The online-fraud guide:** written, not yet in the app (Coming soon).
 
