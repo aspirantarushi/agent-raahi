@@ -17,8 +17,8 @@ approves every draft before it is used. Built for Code for a Billion (Timely Jus
 
 - **5.64 crore cases are pending in Indian courts** (Rajya Sabha written reply citing National Judicial Data
   Grid data, July 2026; [report](https://telanganatoday.com/more-than-5-64-crore-cases-pending-across-indian-courts-rs)).
-- **73.5% of the 5.3 lakh people in Indian prisons are undertrials**, and prisons are at **120.8% occupancy**
-  (NCRB, Prison Statistics India 2023; [report](https://theprint.in/india/drop-in-inmates-additions-but-indian-prisons-120-full-delhi-jails-most-overcrowded-at-200-ncrb-data/2754893)).
+- **About 73% of the 5.11 lakh people in Indian prisons are undertrials**, and prisons are at **112.7% occupancy**
+  (NCRB, Prison Statistics India 2024; [report](https://www.drishtiias.com/daily-updates/daily-news-analysis/prison-statistics-india-report-2024/print_manually)).
 - **16,60,249 people received free legal aid in 2025–26** (Lok Sabha written reply, 13 March 2026;
   [report](https://www.newkerala.com/news/a/over-166-lakh-people-received-free-legal-aid-470.htm)).
 
@@ -28,7 +28,9 @@ checked it.
 
 ## Try the Practice Clinic
 
-**Live app: <https://agent-raahi.streamlit.app>.** It runs as the *Agent Raahi Practice Clinic*: every story and
+**Live app: <https://agent-raahi.streamlit.app>** · **Demo video (2 min): <https://youtu.be/bo7AEsoNzYQ>**
+
+The app runs as the *Agent Raahi Practice Clinic*: every story and
 case in it is fictional. Please never type a real person's details.
 
 | Sign in as | Passcode or password |
@@ -85,7 +87,7 @@ decision: the jail superintendent must apply and the court decides.
   in every draft, for the person to fill in by hand.
 - **Official sources only:** legal points come from our verified files (each with its Source line) or from
   official websites; anything else is dropped.
-- **Supervisor approval:** nothing is saved or used until the supervisor approves it; self-approval is blocked.
+- **Supervisor approval:** nothing is used or added to the case file until the supervisor approves it; self-approval is blocked.
 - **Audit record:** every step, by whom and when, for every case.
 - **Works without AI:** dates and eligibility are plain code with tests; if the AI is busy, the form opens.
 
@@ -130,8 +132,8 @@ Limits and next steps:
 ## Run it yourself
 
 ```bash
-git clone <this repository>
-cd <the folder>
+git clone https://github.com/aspirantarushi/agent-raahi.git
+cd agent-raahi
 pip install -r requirements.txt
 cp .streamlit/secrets.toml.example .streamlit/secrets.toml   # then fill in your own keys and passwords
 streamlit run app.py
