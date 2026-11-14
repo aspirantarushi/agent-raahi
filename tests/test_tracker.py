@@ -143,7 +143,7 @@ def test_visit_log(tmp_path):
 def test_camp_tag(tmp_path):
     record = opened(tmp_path)
     camp = tracker.set_camp(record["id"], "Rampur", "Patna", date(2026, 11, 2), "AS", base=tmp_path)
-    assert tracker.camp_label(camp) == "Rampur, Patna (2026-11-02)"
+    assert tracker.camp_label(camp) == "Rampur, Patna (2 November 2026)"
     with pytest.raises(tracker.TrackerError, match="village and district"):
         tracker.set_camp(record["id"], "", "Patna", date(2026, 11, 2), "AS", base=tmp_path)
 

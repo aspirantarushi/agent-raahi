@@ -220,6 +220,9 @@ def check_general_answer(raw: dict, notes: str, code: str = "en") -> GeneralRead
         if key == "in_custody" and value == "yes" and quote and not CUSTODY_WORDS.search(notes or ""):
             r.dropped.append(key)  # "in custody" only when the notes mention jail, police custody, arrest or lock-up
             continue
+        if key == "in_custody" and value == "no" and CUSTODY_WORDS.search(notes or ""):
+            r.dropped.append(key)  # the story mentions jail or arrest: never "no"; unknown, so the volunteer is asked
+            continue
         if value in ("yes", "no") and quote:
             r.facts[key] = value == "yes"
             r.evidence[key] = quote
@@ -478,11 +481,11 @@ GROUPS = [
     ("disability", "a person with a disability"),
 ]
 ELIGIBILITY_QUESTIONS = {
-    "in_custody": "Is the person needing help in jail or police custody now?",
-    "woman": "Is the person needing help a woman?",
-    "under_18": "Is the person needing help under 18?",
-    "sc_st": "Is the person needing help from a Scheduled Caste or Scheduled Tribe?",
-    "disability": "Does the person needing help have a disability?",
+    "in_custody": "Is the person in jail or police custody now?",
+    "woman": "Is the person a woman?",
+    "under_18": "Is the person under 18?",
+    "sc_st": "Is the person from a Scheduled Caste or Scheduled Tribe?",
+    "disability": "Does the person have a disability?",
     "state": "Which state or union territory does the person live in?",
     "annual_income": "What does the person earn now? (current income per month or per year, not wages they are owed)",
 }

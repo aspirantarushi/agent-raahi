@@ -3,7 +3,7 @@
 All seven parts of the Hindi and voice request are built and tested (5 November 2026).
 
 ## How it works
-- Language switch "Language / भाषा" at the top of every screen. All screen text, the safety
+- Language switch "EN · हिंदी" in the top bar of every screen. All screen text, the safety
   messages (112, 1930, 15100), the Section 479 reasons, draft phrases and the AI disclosure come
   from `i18n/en.json` and `i18n/hi.json`. To add a language, copy `en.json` (for example to
   `bn.json`), translate the values and add it to `LANGUAGES` in `lang.py`. Missing keys fall back
@@ -15,9 +15,10 @@ All seven parts of the Hindi and voice request are built and tested (5 November 
 - Notes in Hindi, Hinglish or mixed are read by the AI and checked by plain code (Hindi and
   Hinglish month names, आईपीसी / बीएनएस, Hindi state names, amounts like "10 हज़ार").
 - Privacy: Devanagari digits and numbers split by spaces are removed before anything reaches the AI.
-- Voice: "Speak the story" records in the browser; the recording goes to Gemini only to become
-  text (Devanagari on the Hindi screen, as spoken on the English screen) and is never saved; the
-  text goes through the privacy filter into the notes box for the volunteer to correct.
+- Voice: "Speak the story" records in the browser; the recording goes to Sarvam AI (India) to become
+  text, with Gemini as the backup if Sarvam fails (Devanagari on the Hindi screen, as spoken on the English
+  screen). It is never saved; the text goes through the privacy filter into the story box for the volunteer
+  to correct.
 - Drafts: the volunteer chooses the draft language. A Hindi draft keeps "DRAFT — to be checked by
   a lawyer" as its first line, then the Hindi line and the translation label.
 
@@ -55,7 +56,8 @@ When an entry or template is checked, change "Hindi translation checked: no" to 
 ## Known limits
 - The follow-up question from the sentence table ("ask_to_decide") and the offence names come from
   `knowledge/sentence_table.csv` and stay in English in Hindi drafts.
-- Name spotting relies on capital letters, which Devanagari doesn't have; for Hindi notes the
-  "no names" tick box is the safeguard.
+- Name spotting uses lists of common Indian first names and surnames in English letters and in Devanagari
+  (since 11 November 2026), so it works without capital letters; names it doesn't know can still slip
+  through, so the "no names" tick box remains the safeguard.
 - Case files, audit records and the supervisor's audit view stay in English.
 - Steps in a general summary's timeline are saved in English and shown in Hindi where hi.json has them.

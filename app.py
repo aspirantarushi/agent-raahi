@@ -3300,7 +3300,7 @@ def problems_box():
         st.markdown(problems_summary(problems))
         with st.expander(t("ui.sup.problems_details", n=len(problems))):
             for p in problems:
-                st.markdown(f"- **{p['time'].replace('T', ' ')}** · {t('ui.case')} {p['case_id']} · {p['where']}: "
+                st.markdown(f"- **{show_stamp(p['time'])}** · {t('ui.case')} {p['case_id']} · {p['where']}: "
                             f"{p['text']}" + (f" _({t('ui.sup.removed')} {p['removed']})_" if p.get("removed") else ""))
 
 
@@ -3927,7 +3927,7 @@ def knowledge_added_box():
     with st.expander(t("rs.k_title", n=len(entries)), icon=":material/library_books:"):
         st.caption(t("rs.k_export_caption"))
         for e in entries:
-            approved = t("rs.approved_by", name=research.approved_by(e), date=e.get("approved_on") or e["checked"])
+            approved = t("rs.approved_by", name=research.approved_by(e), date=show_stamp(e.get("approved_on") or e["checked"]))
             st.markdown(f"- **{html.escape(e['heading'])}** ({e['state']}) · {ui.tag(approved)}  \n"
                         f"  {html.escape(e['body'][:300])}  \n  _Source: {html.escape(e['source'])} ({e['link']})_",
                         unsafe_allow_html=True)
@@ -4883,7 +4883,7 @@ def case_file_view(case_id: str, record: dict, editable: bool = True):
         out.append(f'<h4>{e(t("ed.history"))}</h4><ul>' + "".join(
             f"<li>{e(change_field_label(c['field']))}: {e(show_change_value(c['field'], c['old']))} → "
             f"<b>{e(show_change_value(c['field'], c['new']))}</b> "
-            f"{ui.tag(ed['time'].replace('T', ' ') + ' · ' + ed['by'] + ' · ' + t('cf.version', v=ed.get('version', 1)))}</li>"
+            f"{ui.tag(show_stamp(ed['time']) + ' · ' + ed['by'] + ' · ' + t('cf.version', v=ed.get('version', 1)))}</li>"
             for ed in reversed(record["edits"]) for c in ed["changes"]) + "</ul>")
     tags = []
     if record.get("camp"):

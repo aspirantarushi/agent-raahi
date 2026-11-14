@@ -6,8 +6,9 @@ It never contains a password or key: only the **names** of the settings. The val
 
 ## Before you start (check once)
 
-1. **The Supabase table exists.** Supabase > project `legal-aid-agent` > Table Editor: you should see
-   `raahi_records`. If not: SQL Editor > New query > paste all of `supabase/tracker.sql` > Run.
+1. **The Supabase table exists.** Supabase > your project (here: "Code for a Billion") > Table Editor: you should see
+   `raahi_records`. If not: SQL Editor > New query > paste all of `supabase/tracker.sql` > Run. (A table made
+   before 14 November 2026: run the file again, it is safe; it allows the Practice Clinic's snapshot record.)
 2. **The latest code is on GitHub** (`aspirantarushi/agent-raahi`, branch `main`).
 3. **Your values are at hand.** Open `.env` and `.streamlit/secrets.toml` on your Mac. You will copy
    the values from there into the Secrets box. Do not paste them into a chat, an email or GitHub.
@@ -58,7 +59,7 @@ What each one is:
 |---|---|---|
 | `SUPERVISOR_PASSWORD` | the supervisor's password (approving drafts) | `.streamlit/secrets.toml` |
 | `CLINIC_PASSCODE` | the passcode volunteers type to sign in | `.streamlit/secrets.toml` |
-| `CLINIC_NAME` | the clinic name printed on case slips | `.streamlit/secrets.toml` |
+| `CLINIC_NAME` | the clinic name printed on case slips; a name containing "Practice" (for example "Agent Raahi Practice Clinic") also turns on "Reset the Practice Clinic" for the supervisor | `.streamlit/secrets.toml` |
 | `SUPABASE_URL` | the Supabase project address (`https://....supabase.co`) | `.streamlit/secrets.toml` |
 | `SUPABASE_SECRET_KEY` | the Supabase **secret** key (starts with `sb_secret_`) | `.streamlit/secrets.toml` |
 | `GEMINI_API_KEY` | the Google AI Studio key | `.env` |
@@ -84,11 +85,12 @@ edit, **Save**. The app restarts within a minute.
 1. Open the app address on your phone and on a laptop. Home loads.
 2. **No red "Not ready for real cases" notice at the top.** That notice means the Supabase settings
    are missing or mistyped: anything saved would be lost when the app restarts.
-3. New case > "Volunteer sign-in" with the clinic passcode and a name > paste a practice story (from `practice_stories/`) >
-   Read the story. If it reads, the Gemini key works.
+3. New case > "Volunteer sign-in" with the clinic passcode and a name > paste a practice story (from
+   `docs/practice_run/stories.md`) > Read the story. If it reads, the Gemini key works.
 4. Send it to the supervisor. In Supabase > Table Editor > `raahi_records` you should see new rows.
-5. Supervisor > "Supervisor sign-in" with the supervisor password only > the practice case is waiting. Reject it with the reason "practice" (or
-   delete it in "Delete a case").
+5. Supervisor > "Supervisor sign-in" with the supervisor password, then a name different from the volunteer's >
+   the practice case is under "Waiting for you". Press "Send back to the volunteer" with the reason "practice"
+   (or delete it in Tools > "Delete a case").
 6. Print or open a case slip and scan its QR code with a phone camera: it should open the app's
    address (if `APP_URL` is right).
 
@@ -104,7 +106,9 @@ edit, **Save**. The app restarts within a minute.
   longer. The free server is small; a handful of volunteers at once is fine, a big camp with many
   phones at the same moment may feel slow.
 - **AI limits are shared.** Everyone uses the same Gemini key, so a busy day reaches the free daily
-  limit sooner. The app then tries the backup model and Groq, and says when the AI is busy.
+  limit sooner. Reading a story then tries the backup model and Groq, and says when the AI is busy;
+  research uses the backup search (Tavily, official sites only). In the practice run of 13 November 2026 the
+  free daily limit was reached: use a paid AI tier before real cases.
 - **Voice ("Speak the story").** Works online: the browser asks once for microphone permission (the
   app is on `https://`, which browsers require). On iPhone use Safari; inside WhatsApp's own browser
   the microphone may be blocked: open the link in Chrome or Safari instead.

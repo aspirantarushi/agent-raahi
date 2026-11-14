@@ -1,4 +1,6 @@
-"""Every call to the online database (Supabase) lives in this file.
+"""Not used: kept for a later multi-clinic version.
+
+Every call to the online database (Supabase) lives in this file.
 
 Plain HTTPS with Python's built-in tools, no extra library.
 Settings come from the environment or the .env file (kept out of git):

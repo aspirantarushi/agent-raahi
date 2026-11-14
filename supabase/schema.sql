@@ -1,3 +1,4 @@
+-- Not used: kept for a later multi-clinic version.
 -- Legal aid agent: database setup for Supabase (Postgres).
 -- Paste the whole file into Supabase > SQL Editor > New query, and click Run. Safe to run once.
 --

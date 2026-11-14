@@ -84,4 +84,5 @@ def test_story_box_has_no_practice_line_and_no_gap(monkeypatch):
     for path in ("i18n/en.json", "i18n/hi.json", "README.md"):
         words = (ROOT / path).read_text(encoding="utf-8")
         assert "in this pilot" not in words and "इस पायलट" not in words
-    assert "prototype, ready for a pilot" in (ROOT / "README.md").read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "Status: a prototype" not in readme and "## Try the Practice Clinic" in readme   # the final README

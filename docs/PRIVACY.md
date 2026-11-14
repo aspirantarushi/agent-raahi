@@ -2,6 +2,9 @@
 
 > **Prototype: practice data only. No real person's data has been entered.**
 > Every story, case and draft in this app and in this repository is made up for practice.
+> The live app runs as the *Agent Raahi Practice Clinic*. Its two passcodes are published in the README on
+> purpose so anyone can try it: they are practice-only, used nowhere else, and protect fictional data only.
+> A real clinic sets its own passcode and supervisor password in the host's secret settings.
 
 ## In short
 
@@ -54,7 +57,8 @@ name or initials they type after the supervisor password.
 | Audit records | `audit/` | when, the AI model used, the facts the AI read, what changed and who did it, who sent, approved, sent back, closed, reopened or deleted it |
 | Problem reports | `problems/` | short reports with a case number and date; AI failures (time, error type, provider and model, outcome; never case text, recordings or keys) |
 | Evaluation sessions | `evaluation/sessions/` | practice evaluation only (fictional cases) |
-| Impact log | `impact/` | only for real cases a partner organisation has given permission to log (see the README) |
+| Impact log | `impact/` | only for real cases a partner organisation has given permission to log (see docs/CONTENT.md) |
+| Practice snapshot | `practice_snapshot/` | Practice Clinic only: a copy of the fictional practice cases, so the supervisor can reset the Practice Clinic; never in a real clinic |
 | Keys and passwords | `.env`, `.streamlit/secrets.toml` / host secret settings | Gemini, Groq, Tavily and Sarvam keys, clinic passcode, supervisor password, Supabase secret key; never uploaded to git |
 
 All these folders, `.env` and the secrets file are kept out of git.
@@ -112,7 +116,8 @@ What each AI service receives:
   cases, facts, visit logs and slips) and add to cases. Change the passcode when a volunteer leaves.
 - **Supervisor:** the Supervisor page has its own sign-in with the supervisor password only, then the
   supervisor's name or initials, which is recorded on every approval, edit-and-approve, send-back,
-  close, reopen and deletion. A supervisor cannot approve a draft they sent or last resent. The
+  close, reopen and deletion, and on each research point they approve or reject. A supervisor cannot approve
+  a draft they sent or last resent, or decide research points they asked for. The
   supervisor sign-in also opens the volunteer screens for that session.
 - **Wrong passwords:** after 5 wrong supervisor passwords (or 5 wrong clinic passcodes) that sign-in is
   locked for 5 minutes (counted per browser and, with a higher limit of 20, per network address).

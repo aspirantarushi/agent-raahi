@@ -6,7 +6,7 @@
 2. This file keeps a point only if the words it comes from are backed by search results (Google's
    grounding data, never links the AI writes itself) whose real address is on an allowed official
    site. Points without one, and points that predict an outcome, are dropped (and counted).
-3. The brief is saved as "AI research, not yet checked: for supervisor approval". The supervisor
+3. The brief is saved as "Research points (AI, from official websites), not yet checked by a lawyer". The supervisor
    approves, edits or rejects each point. Only approved points go into the case and its drafts,
    with their sources. An approved point can be saved as a knowledge entry for that state (kept in
    the shared database; export_markdown() writes them in the knowledge/ format to add by hand).
@@ -31,7 +31,7 @@ import store
 import tracker
 
 HERE = Path(__file__).resolve().parent
-LABEL = "AI research, not yet checked: for supervisor approval"
+LABEL = "Research points (AI, from official websites), not yet checked by a lawyer"
 FAILED = "Research didn't work this time. Ask NALSA's free helpline 15100."
 WAITING, REVIEWED = "waiting for the supervisor", "reviewed"
 APPROVE, EDIT, REJECT = "approve", "edit", "reject"

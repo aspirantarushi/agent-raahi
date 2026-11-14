@@ -464,7 +464,15 @@ def set_camp(case_id: str, village: str, district: str, on: date, by: str, base:
 
 
 def camp_label(camp: Optional[dict]) -> str:
-    return f"{camp['village']}, {camp['district']} ({camp['date']})" if camp else ""
+    """ "Harpur, Vaishali (13 November 2026)": the date written out, as everywhere people read it."""
+    if not camp:
+        return ""
+    try:
+        import lang
+        when = lang.show_date(date.fromisoformat(str(camp["date"])[:10]))
+    except (ValueError, TypeError):
+        when = camp["date"]
+    return f"{camp['village']}, {camp['district']} ({when})"
 
 
 # ---------- status, next step, the tracker list ----------

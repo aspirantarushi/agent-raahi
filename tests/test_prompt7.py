@@ -97,14 +97,14 @@ def test_the_database_allows_the_snapshot_record():
 
 def test_try_the_practice_clinic_and_no_judges():
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    top = readme[:readme.index("## Content files")]
+    top = readme[:readme.index("## What Agent Raahi does")]
     assert "## Try the Practice Clinic" in top and "https://agent-raahi.streamlit.app" in top
     assert "`volunteerpassword`" in top and "`supervisorpassword`" in top and "fictional" in top
     assert "docs/EVALUATION_RESULTS.md" in top and "docs/PRACTICE_RUN.md" in top
     assert lang.t("signin.practice_hint") == "Trying the Practice Clinic? The practice passcodes are in the README."
     assert lang.t("signin.practice_hint", "hi") == "Practice Clinic आज़मा रहे हैं? अभ्यास के पासकोड README में हैं।"
     found = subprocess.run(["git", "grep", "-n", "-i", "judges", "--", "README.md", "docs", "i18n", "*.py",
-                            ":!docs/hindi_review.csv"], cwd=ROOT, capture_output=True, text=True).stdout
+                            ":!docs/hindi_review.csv", ":!tests"], cwd=ROOT, capture_output=True, text=True).stdout
     assert found == "", found
 
 

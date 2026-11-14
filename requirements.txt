@@ -1,5 +1,7 @@
 # Installed by Streamlit Community Cloud (choose Python 3.12 there) and by `pip install -r requirements.txt`.
 # Every version is pinned: these are the versions the tests pass with.
+# Not listed on purpose: playwright, used only by scripts/screenshots*.py to take screenshots; the app does
+# not need it (install it separately: pip install playwright, then playwright install).
 
 # Used by the app's own code
 streamlit==1.50.0

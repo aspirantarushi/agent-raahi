@@ -163,7 +163,7 @@ def test_grounding_redirect_is_read_without_opening_the_site(monkeypatch):
 
 def test_bihar_points_without_an_official_source_are_dropped(tmp_path, fake_ai):
     case_id, record = bihar_research(tmp_path, fake_ai)
-    assert record["label"] == "AI research, not yet checked: for supervisor approval"
+    assert record["label"] == "Research points (AI, from official websites), not yet checked by a lawyer"
     assert record["status"] == research.WAITING and record["id"] == f"{case_id}.r1"
     kept = {p["kind"] + ":" + p["text"]: p for p in record["points"]}
     assert list(kept) == ["route:Write first to the Assistant Engineer of the supply sub-division.",

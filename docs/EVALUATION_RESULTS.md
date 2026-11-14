@@ -1,5 +1,12 @@
 # Evaluation results: 10 practice cases (test set)
 
+**Counts from 9–11 November 2026, on an earlier version of the app.** On 14 November 2026 the evaluation script
+was run again on the current code: the AI answered every run, but the script still follows the November 11 flow
+(research and drafts made by themselves), while the app now waits for the volunteer to press "Run research",
+"Draft the letter" and "Make the drafts". Its new transcripts therefore have no drafts and cannot be scored
+against the answer key, so the counts below are kept as they were. The status of every problem found is updated
+in "Problems found" below.
+
 Run on 9 November 2026 (first run) and repeated on 11 November 2026 (second run, used to check that the
 results hold). After two fixes (a person's name in the story; month-only offence dates), cases 2, 5 and 9
 were run again on 11 November 2026 (third run); their rows below use that run, the other cases the first.
@@ -132,7 +139,9 @@ Met = M, partly = P, not met = N.
    shown on the question screens, so it disappeared when no question was asked; it is now also shown in
    the "check every field" box.
 
-## Problems found but not fixed (for you to decide)
+## Problems found (status on 14 November 2026)
+
+Each problem is kept, with what has happened to it since.
 
 Needs your permission (these are in templates/ or knowledge/):
 
@@ -141,40 +150,61 @@ Needs your permission (these are in templates/ or knowledge/):
    labelled "AI research, not yet checked by a lawyer", but the heading line is wrong. The line is in
    `templates/complaint_letter.md` (line 31). Suggested fix: a blank for that line, filled by code with
    "approved by the supervisor" or "ticked by the volunteer, not yet checked by a lawyer".
+   **Fixed on 13 November 2026 (commit 7b5d258):** the letter now says "these points kept by the volunteer
+   (each needs the supervisor's approval)" until the supervisor decides, and "approved by the supervisor" only
+   for approved points.
 2. **The source line under every Section 479 result says "BNS, 2023, Section 305"**, whatever the
    offence, because the knowledge entry "How to work out the Section 479 dates" uses BNS 305 as its
    example (`knowledge/undertrial_bail.md`). Confusing on a 318(4) or 384 case.
+   **Still open:** it needs a change in `knowledge/undertrial_bail.md`, which waits for your permission.
 
 Bigger changes (not clear-cut bug fixes):
 
 3. **Contradictions are not checked in "Any case"** (case 6). The contradiction checks exist only in
    the Section 479 check, and even there only the custody date was named.
+   **Still open.** (The Case tracker now stops a case when two volunteers record different facts, but
+   contradictions inside one story are still not named.)
 4. **Only the first section is used in the Section 479 check** (case 5), so the IPC 506 deciding
    question is never asked, and the draft says "and other sections [___]" although IPC 506 is known.
-5. ~~Month-only offence dates~~ (fixed on 11 November 2026: see above).
+   **Still open:** the app warns that more than one section was found and leaves the blank for the lawyer.
+5. ~~Month-only offence dates~~ **Fixed on 11 November 2026 (commits 7e74430 and cde050d):** see above.
 6. **"Going on for" starts at the oldest dated event**, even an earlier conviction: case 5 showed
    "about 8 years (since 2019: convicted once before)", case 6 "about 6 years (since 2021: his last
    sentence)".
+   **Fixed on 13 November 2026 (commit b0cc151):** "Going on for" now counts from when the problem began (an
+   arrest, a cut, a stop), not from an earlier event such as a past conviction. On 14 November 2026 a rate of pay
+   ("Rs 600 a day") also stopped being read as a period.
 7. **"Any case" drafts a DLSA application even when the person has a legal aid lawyer** (cases 2, 3, 4).
+   **Still open:** the application is made for anyone who qualifies; the supervisor can leave it out.
 8. **Cyber fraud bank rule not shown** (case 7): the 3-working-days rule from `knowledge/cyber_fraud.md`
    is not used in the Any flow. The answer key expects it; the cyber module was dropped from the planned pilot.
-9. ~~Names are only checked in the drafts~~ (fixed on 11 November 2026: names in the story are flagged).
+   **Still open:** the online-fraud guide and rules are written, but not yet in the app ("Coming soon").
+9. ~~Names are only checked in the drafts~~ **Fixed on 11 November 2026 (commit 7e74430):** names in the story are flagged.
    Still true: a name typed in the story is sent to the AI before the warning appears; names cannot be
-   removed automatically, and the volunteer is told not to type them.
+   removed automatically, and the volunteer is told not to type them. **That part is still open.**
 10. **Answer key older than the research flow** (cases 8 and 9): it expects no law to be named, but
     research from official sources now names the current law, labelled as not yet checked. The key
-    may need updating.
+    may need updating. **Still open** (the answer key has not been changed).
 11. **Research details:** the Hindi-app run of case 8 had a research point "an appeal must be filed
     within thirty days" ticked by default (about appeals, not a first application); research points
     show in English in the Hindi app; some research link titles from labour.gov.in PDFs are garbled
     ("रोिगार", "अजधसूचना").
+    **Still open,** all three. (Since 13 November 2026, commit fdf8ed6, link titles that are file names are
+    cleaned, but garbled Hindi from PDFs is not; the supervisor now decides every point and sees its source.)
 12. **Small wording issues:** case 8's English draft keeps "कल रात" ("last night") in the timeline; case 9's
     letter says "I request: wants his money"; case 2's documents list "The person has: FIR" when the
     story only says what section the FIR is under; case 6's timeline shows "arrested under [law
     reference removed: ask a lawyer]" (the deliberate rule that strips the AI's law references).
+    **Partly fixed:** "I request: wants his money" was fixed on 14 November 2026 (commit "Final check before
+    submission"), and "what the person wants" no longer repeats "The person wants". **Still open:** Hindi
+    words left in an English timeline, and "The person has: FIR". The "[law reference removed]" text is
+    deliberate.
 13. **The UPI ID in case 7 was not removed** (the key says "probably"; it is the fraudster's ID).
+    **Still open:** only phone, Aadhaar and email addresses are removed automatically.
 
 ## Test results
+
+Final check before submission (14 November 2026): 988 passed, 21 skipped.
 
 After the 11 November fixes (names in the story; month-only offence dates): 828 passed, 21 skipped.
 New tests: `tests/test_names.py` and `tests/test_offence_month.py`.

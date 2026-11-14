@@ -190,4 +190,6 @@ def test_live_groq_reads_the_hindi_practice_story(monkeypatch):
     reading = llm.read_general_notes(notes, output_lang="hi")
     assert reading.model == GROQ
     checked = general.check_general_answer(reading.answer, reading.notes_sent)
-    assert checked.what_happened and checked.facts.get("in_custody") is True
+    # the story says the brother is in jail: "in custody" is yes, or unknown (then the volunteer is asked); never "no"
+    assert checked.what_happened and checked.facts.get("in_custody") is not False
+    assert checked.facts.get("in_custody") is True or "in_custody" in checked.dropped

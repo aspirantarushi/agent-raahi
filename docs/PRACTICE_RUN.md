@@ -55,11 +55,67 @@ research and now reads "research used the backup search".)
 
 ## What volunteers told us
 
-[to fill]
+Each volunteer filled in a short anonymous form after the run (five forms; no supervisor form was returned).
+Ratings: 1 = strongly disagree, 5 = strongly agree.
 
-- [to fill]
-- [to fill]
-- [to fill]
+| Statement | A | B | C | D | E | Average |
+|---|---|---|---|---|---|---|
+| It was easy to use | 5 | 5 | 4 | 4 | 4 | 4.4 |
+| It would save me time | 5 | 4 | 5 | 5 | 5 | 4.8 |
+| I'd trust the drafts after a lawyer's check | 4 | 4 | 3 | 3 | 3 | 3.4 |
+| It was clear what to do next | 4 | 4 | 4 | 3 | 4 | 3.8 |
+| I'd recommend it to my clinic | 5 | 5 | 5 | 5 | 5 | 5.0 |
+
+### In their own words (spelling lightly corrected)
+
+What they liked most:
+- "Ease of case handover from one volunteer to the next." (Volunteer A)
+- "AI researches from official sources only; looking forward to the Learn section." (Volunteer B)
+- "Saves a lot of time, especially when there are too many cases in a camp; cases tagged to one camp; looks like a
+  very thoughtfully designed app." (Volunteer C)
+- "Takes care of most of the repetitive work, leaving us free to take on more cases and help more people."
+  (Volunteer D)
+- "A much-needed helper tool for legal aid clinics and NGOs that are overworked and under-resourced." (Volunteer E)
+
+What confused them:
+- "The AI pointers to be approved for the draft — the process was confusing and can be simplified." (Volunteer D)
+
+What was missing:
+- "An explanation of why something is the next step." (Volunteer B)
+
+### What we take from this (our reading, not the volunteers' words)
+
+- **Time and repetitive work:** four of five strongly agreed it would save them time (average 4.8), and two
+  comments (C, D) say the same in their own words. The parts that do this are the agent's few targeted questions
+  (median 1 per case), the drafts made from the checked facts, and the 4.4-minute median from reading a story to
+  sending it.
+- **Camps and handover:** two comments (A, C) point to features built for camp work: the case slip with a code
+  and QR so the next volunteer continues where the last stopped, and camp tags that group a day's cases. These
+  were not suggested by us on the form; volunteers named them unprompted.
+- **Official sources:** Volunteer B valued that research comes only from official websites. This is a design
+  rule (an allow-list of government sites; every point shows its source and needs the supervisor's approval).
+- **Trust:** trust in the drafts was the lowest score (3.4; three volunteers answered 3). We read this as healthy
+  caution, and it matches how the app is meant to be used: every draft says "DRAFT — to be checked by a lawyer",
+  and nothing is relied on until the supervisor approves it. Raising trust needs a lawyer's review of our
+  knowledge files and a supervised pilot, not more AI.
+- **Clarity of next steps (3.8):** Volunteer D found approving the research points confusing. After the run that
+  step was redesigned: one tick list with "Approve all points", the drafts can be approved with points
+  undecided, and the supervisor sees one case at a time in three steps. Volunteer B asked why each next step
+  comes next; this is not built yet and is listed below as next work.
+- **All five would recommend it to their clinic (5/5).**
+
+### What these numbers do not show
+
+Five volunteers, one practice session, fictional cases, and forms written by the people who used it the same
+day. These are early impressions, not research results, and they do not show real outcomes for people seeking
+help.
+
+### Next, from this feedback
+
+- A one-line "why" under each next step (Volunteer B).
+- The Learn section's next guides (Volunteer B looked forward to it).
+- A lawyer's review of the knowledge files and a supervised pilot with a partner clinic, to earn trust in the
+  drafts.
 
 ## What we changed after the practice run
 

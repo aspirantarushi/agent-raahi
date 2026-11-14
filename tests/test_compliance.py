@@ -92,7 +92,18 @@ def test_template_blanks_are_unaffected():
 
 # ---------- 2. No risk scoring ----------
 
-@pytest.mark.parametrize("path", ["README.md", "CLAUDE.md"])
+def test_safety_by_design_in_the_readme():
+    """The README (rewritten for a first-time reader) says what the tool never does, and what AI is used for."""
+    text = (ROOT / "README.md").read_text(encoding="utf-8")
+    section = " ".join(text.split("## Safety by design")[1].split("\n## ")[0].split())
+    for words in ["bail chances", "flight risk", "re-offending", "credibility", "DRAFT — to be checked by a lawyer",
+                  "self-approval is blocked", "AI never decides", "eligibility, dates or outcomes"]:
+        assert words in section, words
+    flat = " ".join(text.split())
+    assert "never a release decision" in flat and "Regulations for Use of AI in Courts, 2026" in flat
+
+
+@pytest.mark.parametrize("path", ["CLAUDE.md"])
 def test_never_do_section_in_docs(path):
     text = (ROOT / path).read_text(encoding="utf-8")
     assert "## What this tool will never do" in text

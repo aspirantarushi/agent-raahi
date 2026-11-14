@@ -392,7 +392,7 @@ def test_screen_eligibility_questions_when_needed(pretend_ai, monkeypatch):
     counter = next(m.value for m in at.markdown if 'class="q-count"' in m.value)
     assert "Question 2 of 3" in counter  # 1 AI question + the legal aid screen + the state
     labels = [r.label for r in at.radio if str(r.key).startswith("la-")]
-    assert "Is the person needing help in jail or police custody now?" in labels and "Is the person needing help a woman?" in labels
+    assert "Is the person in jail or police custody now?" in labels and "Is the person a woman?" in labels
     assert any(n.key == "la-income" for n in at.number_input)   # no group is Yes yet: the income box shows
     at.radio(key="la-in_custody").set_value("No")
     at.radio(key="la-woman").set_value("Yes").run()

@@ -165,6 +165,14 @@ def gen_untranslated(text: str) -> bool:
     return general.untranslated(text, "", "en")
 
 
+ARTICLE_NUMBERS = {"a", "an", "ek", "एक"}
+# "a day" / "ek mahina" is a period only after one of these (or with "se" after it): "for a day", "pichhle ek mahine"
+PERIOD_BEFORE = re.compile(r"(?:\b(?:for|over|past|last|pichhle|pichle|since)|पिछले)\s*$", re.I)
+PERIOD_AFTER = re.compile(r"^\s*(?:se\b|से)", re.I)
+# a rate, never a period: "Rs 600 a day", "₹500 a month", "600 rupaye a day", "do sau rupaye din"
+AMOUNT_BEFORE = re.compile(r"(?:\brs\.?|₹|\binr|\brupees?|\brupaye|\brupay|रुपये|रुपए|\bsau|सौ|\d)[\s,./-]*(?:per\s*)?$", re.I)
+
+
 def stated_period(g) -> Optional[Tuple[int, str]]:
     """A length of time the story itself states ("not paid for three months", "teen mahine se"):
     (3, "month"). None if the story states none. Relative dates ("5 weeks ago") are not periods."""
@@ -176,7 +184,12 @@ def stated_period(g) -> Optional[Tuple[int, str]]:
                 continue
             if is_age(text, m):  # "62 saal ki vidhwa", "a 62-year-old widow": an age, not a period
                 continue
+            before = text[max(0, m.start() - 20):m.start()]
+            if AMOUNT_BEFORE.search(before):  # "Rs 600 a day": a rate of pay, not how long it has gone on
+                continue
             word = m.group(1).casefold()
+            if word in ARTICLE_NUMBERS and not (PERIOD_BEFORE.search(before) or PERIOD_AFTER.match(text[m.end():])):
+                continue  # "a day" alone is not a period; "for a day", "ek mahine se" are
             n = int(word) if word.isdigit() else NUMBER_WORDS.get(word)
             if n:
                 return n, UNITS[m.group(2).casefold()]
@@ -492,7 +505,7 @@ WANTS_LINE = re.compile(r"\b(wants?|would like|asks? for|is asking|requests?|hop
 APPLICANT = re.compile(r"\b[Tt]he person (?:needing|seeking) help\b|^[Tt]he person\b|(?<=\. )The person\b")
 
 
-WANTS_LEAD = re.compile(r"^\s*(?:the\s+\w+(?:\s+\w+)?|she|he|they|the person)\s+(?:wants?|would like|is asking for|asks for)"
+WANTS_LEAD = re.compile(r"^\s*(?:(?:the\s+\w+(?:\s+\w+)?|she|he|they|the person)\s+)?(?:wants?|would like|is asking for|asks for)"
                         r"\s+(?:to\s+(?:have\s+|get\s+)?)?", re.I)
 
 
